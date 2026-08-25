@@ -9,13 +9,13 @@ antes de investir semanas aprofundando só um deles.
 
 ## M0 — Núcleo compartilhado
 
-- `Vec3`/`Vec2` (posição, direção, uv), `Rgb` em float
-- `Camera` (`Perspective`, `Orthographic`)
-- `Light` (`Point`, `Directional`, `Ambient`)
-- `Primitive` (`Triangle`, `Mesh`, `Sphere`) com `Material` embutido
-- `Parameters` agrupado por estágio (raster, clipping, texturing, acceleration, ray tracing, output)
-- trait `Renderer` + `RenderResult`/`RenderPass` (mapa de buffers)
-- saída em PPM/PNG (sem lógica de shading ainda)
+- [x] `Vec3`/`Vec2` (posição, direção, uv), `Rgb` em float
+- [x] `Camera` (`Perspective`, `Orthographic`)
+- [x] `Light` (`Point`, `Directional`, `Ambient`)
+- [x] `Primitive` (`Triangle`, `Mesh`, `Sphere`) com `Material` embutido
+- [x] `Parameters` agrupado por estágio (raster, clipping, texturing, acceleration, ray tracing, output)
+- [x] trait `Renderer` + `RenderResult`/`RenderPass` (mapa de buffers)
+- [x] saída em PPM/PNG (sem lógica de shading ainda)
 
 ## M0.5 — Esqueleto fino nos dois modos
 
