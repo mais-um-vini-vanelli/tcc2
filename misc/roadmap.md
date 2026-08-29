@@ -1,11 +1,7 @@
 # Roadmap
 
 Ordem macro segue a metodologia já registrada no TCC1: protótipo de
-rasterização antes do protótipo de ray tracing. A única inserção em relação a
-um roadmap puramente sequencial é o M0.5 — um esqueleto fino nos dois modos,
-logo após o núcleo compartilhado, pra validar cedo que a mesma `Scene`/trait
-`Renderer` (ver [design_api.md](design_api.md)) serve pros dois pipelines
-antes de investir semanas aprofundando só um deles.
+rasterização antes do protótipo de ray tracing.
 
 ## M0 — Núcleo compartilhado
 
@@ -19,10 +15,10 @@ antes de investir semanas aprofundando só um deles.
 
 ## M0.5 — Esqueleto fino nos dois modos
 
-- `Rasterizer`: um triângulo, sem clipping, sem shading, cor sólida
-- `RayTracer`: uma esfera, sem sombra, sem reflexo, cor sólida
-- os dois lendo a mesma `Scene`, sem atalhos específicos de modo
-- checar se algum campo da `Scene`/`Parameters` só faz sentido pra um dos dois (sinal de que o design precisa ajustar)
+- [x] `Rasterizer`: um triângulo, sem clipping, sem shading, cor sólida
+- [x] `RayTracer`: uma esfera, sem sombra, sem reflexo, cor sólida
+- [x] os dois lendo a mesma `Scene`, sem atalhos específicos de modo
+- [x] checar se algum campo da `Scene`/`Parameters` só faz sentido pra um dos dois (sinal de que o design precisa ajustar)
 
 ## M1 — Rasterização a fundo
 

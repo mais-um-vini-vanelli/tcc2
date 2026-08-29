@@ -150,3 +150,25 @@ impl Neg for Vec3 {
         Vec3::new(-self.x, -self.y, -self.z)
     }
 }
+
+/// Raio: origem e direção
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Ray {
+    pub origin: Vec3,
+    pub direction: Vec3,
+}
+
+impl Ray {
+    /// A direção é normalizada na construção.
+    pub fn new(origin: Vec3, direction: Vec3) -> Self {
+        Ray {
+            origin,
+            direction: direction.normalized(),
+        }
+    }
+
+    /// Devolve o ponto que está a t unidades da origem do raio.
+    pub fn at(self, t: f32) -> Vec3 {
+        self.origin + self.direction * t
+    }
+}

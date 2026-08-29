@@ -48,13 +48,13 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    write_ppm("gradiente.ppm", &imagem)?;
+    write_ppm("./renders/gradiente.ppm", &imagem)?;
 
     println!(
         "cena: {} objeto(s), {} luz(es)",
         scene.objects.len(),
         scene.lights.len(),
     );
-    println!("gravado gradiente.ppm ({w}x{h})");
+    println!("gravado ./renders/gradiente.ppm ({w}x{h})");
     Ok(())
 }
