@@ -55,11 +55,6 @@ fn renderiza(
 ) -> std::io::Result<()> {
     let resultado = renderer.render(scene, params, &RenderPass::SHARED);
 
-    let produzidos: Vec<_> = RenderPass::SHARED
-        .iter()
-        .filter(|p| renderer.supports(**p))
-        .collect();
-
     let imagem = resultado.color().unwrap();
     write_ppm(arquivo, imagem)?;
 

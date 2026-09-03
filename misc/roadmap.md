@@ -22,10 +22,10 @@ rasterização antes do protótipo de ray tracing.
 
 ## M1 — Rasterização a fundo
 
-- edge functions (Pineda) com bounding box por triângulo
-- clipping de polígonos (Sutherland-Hodgman) contra o frustum
-- z-buffer / teste de profundidade
-- coordenadas baricêntricas com correção de perspectiva
+- [x] edge functions (Pineda) com bounding box por triângulo
+- [x] clipping de polígonos (Sutherland-Hodgman) contra o frustum, em espaço de câmera
+- [x] z-buffer / teste de profundidade (`RenderPass::Depth` já sai do rasterizador)
+- [x] coordenadas baricêntricas com correção de perspectiva
 - suporte a `Mesh` (não só `Triangle` solto)
 - backface culling
 - `wireframe` e `msaa` como toggles de `RasterOptions`
