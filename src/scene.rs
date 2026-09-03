@@ -275,6 +275,18 @@ impl Primitive {
         }
     }
 
+    /// Malha sem normais nem uv.
+    /// As faces são trios consecutivos de `indices`, cada índice apontando pra uma entrada de `vertices`.
+    pub fn mesh(vertices: Vec<Vec3>, indices: Vec<u32>, material: Material) -> Self {
+        Primitive::Mesh {
+            vertices,
+            indices,
+            normals: None,
+            uvs: None,
+            material,
+        }
+    }
+
     pub fn sphere(center: Vec3, radius: f32, material: Material) -> Self {
         Primitive::Sphere {
             center,

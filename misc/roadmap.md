@@ -25,9 +25,9 @@ rasterização antes do protótipo de ray tracing.
 - [x] edge functions (Pineda) com bounding box por triângulo
 - [x] clipping de polígonos (Sutherland-Hodgman) contra o frustum, em espaço de câmera
 - [x] z-buffer / teste de profundidade (`RenderPass::Depth` já sai do rasterizador)
-- [x] coordenadas baricêntricas com correção de perspectiva
-- suporte a `Mesh` (não só `Triangle` solto)
-- backface culling
+- [x] coordenadas baricêntricas com correção de perspectiva (`perspective_correct`)
+- [x] suporte a `Mesh` (não só `Triangle` solto)
+- [x] backface culling (`backface_cull`)
 - `wireframe` e `msaa` como toggles de `RasterOptions`
 
 ## M2 — Texturização
