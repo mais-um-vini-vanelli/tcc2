@@ -14,6 +14,7 @@ use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
 use crate::parameters::Parameters;
 use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
 use crate::scene::{Camera, Material, Scene};
+use crate::transform::Transform;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Rasterizer;
@@ -43,17 +44,17 @@ impl Renderer for Rasterizer {
         let perspectiva = matches!(scene.camera, Camera::Perspective { .. });
 
         for objeto in &scene.objects {
-            let malha = objeto.tessellate();
+            let malha = objeto.geometry.tessellate();
 
             for indice in 0..malha.face_count() {
                 let Some(face) = malha.face(indice) else {
                     continue;
                 };
 
-                let triangulo = face.map(|v| Vertex {
-                    position: para_camera(&scene.camera, base, v.position),
-                    ..v
-                });
+                // Local -> mundo -> câmera. Aqui o rasterizador transforma a
+                // *geometria*; o ray tracer resolve o mesmo problema no sentido
+                // contrário, transformando o raio.
+                let triangulo = face.map(|v| transforma(v, objeto.transform, &scene.camera, base));
 
                 let poligono = if params.clipping.enabled {
                     recorta(triangulo, &planos, &mut stats)
@@ -93,7 +94,7 @@ impl Renderer for Rasterizer {
                         &mut resultado,
                         [a, b, c],
                         area,
-                        &malha.material,
+                        &objeto.material,
                         perspectiva,
                         params,
                         &mut stats,
@@ -104,6 +105,20 @@ impl Renderer for Rasterizer {
 
         resultado.stats = stats;
         resultado
+    }
+}
+
+// Teoria: transform.md#o-transform
+fn transforma(
+    vertice: Vertex,
+    transform: Transform,
+    camera: &Camera,
+    base: (Vec3, Vec3, Vec3),
+) -> Vertex {
+    Vertex {
+        position: para_camera(camera, base, transform.apply_point(vertice.position)),
+        normal: transform.apply_normal(vertice.normal),
+        uv: vertice.uv,
     }
 }
 

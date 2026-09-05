@@ -10,7 +10,10 @@ Os estágios que o rasterizador percorre hoje, na ordem, e as seções que
 explicam cada um:
 
 ```text
--> world space
+-> espaço local do objeto
+-> world space                     (transform.md: O transform,
+   pelo transform do objeto         A ordem das três etapas,
+                                    A normal usa a escala recíproca)
 -> camera space                    (Mundo para camera space)
 -> recorte contra o frustum        (O plano, O frustum, Recorte no plano)
    Sutherland e Hodgman (1974)

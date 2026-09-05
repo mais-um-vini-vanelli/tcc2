@@ -2,8 +2,9 @@
 //!
 //! Teoria: raytracer.md#a-pipeline
 //!
-//! Lança um raio primário por pixel, testa contra as esferas da cena e pinta o albedo
-//! do material como cor sólida.
+//! Lança um raio primário por pixel, leva o raio pro espaço local de cada
+//! objeto, testa contra as esferas da cena e pinta o albedo do material como cor
+//! sólida.
 //!
 //! `Triangle`/`Mesh`/`Cube` são ignorados por enquanto.
 
@@ -39,22 +40,24 @@ impl Renderer for RayTracer {
                 let mut mais_proximo = far;
                 let mut acertou = None;
                 for objeto in &scene.objects {
-                    let Primitive::Sphere {
-                        center,
-                        radius,
-                        material,
-                    } = objeto
-                    else {
+                    let Primitive::Sphere { center, radius } = &objeto.geometry else {
                         // Ignorando outras primitivas por enquanto
                         continue;
                     };
                     stats.primitive_tests += 1;
-                    if let Some(t) = intersecao_esfera(raio, *center, *radius)
+
+                    // Teoria: transform.md#o-raio-vai-para-o-espaco-local
+                    // O rasterizador leva a geometria pro mundo; aqui é o raio
+                    // que vem pro espaço local do objeto. Isso permite usar equações arbitrárias tipo
+                    // a da esfera pro teste de interseção.
+                    let local = objeto.transform.undo_ray(raio);
+
+                    if let Some(t) = intersecao_esfera(local, *center, *radius)
                         && t >= near
                         && t < mais_proximo
                     {
                         mais_proximo = t;
-                        acertou = Some(material.albedo);
+                        acertou = Some(objeto.material.albedo);
                     }
                 }
 
@@ -130,7 +133,7 @@ fn raio_primario(
 fn intersecao_esfera(r: Ray, centro: Vec3, raio: f32) -> Option<f32> {
     let oc = r.origin - centro;
 
-    let a = 1.0;
+    let a = r.direction.dot(r.direction);
     let b = 2.0 * oc.dot(r.direction);
     let c = oc.dot(oc) - raio * raio;
 

@@ -10,6 +10,7 @@ pub mod rasterizer;
 pub mod raytracer;
 pub mod render;
 pub mod scene;
+pub mod transform;
 
 pub mod prelude {
     pub use crate::color::Rgb;
@@ -24,5 +25,6 @@ pub mod prelude {
         BufferKind, BufferRef, ColorBuffer, RenderPass, RenderResult, RenderStats, Renderer,
         ScalarBuffer,
     };
-    pub use crate::scene::{Camera, Light, Material, Mesh, Primitive, Scene, Texture};
+    pub use crate::scene::{Camera, Light, Material, Mesh, Object, Primitive, Scene, Texture};
+    pub use crate::transform::Transform;
 }

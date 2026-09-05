@@ -31,6 +31,130 @@ rasterização antes do protótipo de ray tracing.
 - [x] backface culling (`backface_cull`)
 - `wireframe` e `msaa` como toggles de `RasterOptions`
 
+## M1.5 — Transforms e shading
+
+O modelo de iluminação escolhido (Cook-Torrance GGX com metallic/roughness ao
+lado de Lambert/Phong), o `Material` reparametrizado e as armadilhas estão em
+[design_api.md](design_api.md), seção "Modelo de iluminação".
+
+### Transforms
+
+Teoria em [teoria/transform.md](../teoria/transform.md), o primeiro arquivo de
+teoria que vale pros dois pipelines.
+
+- [x] `Object { geometry, material, transform }` e `Scene.objects: Vec<Object>`;
+  `Material` sai do `Primitive` e da `Mesh`, que passam a ser geometria pura
+- [x] `Transform { translation, rotation (Euler XYZ em graus), scale }`, com
+  identidade como `Default` — sem `Option<Transform>`
+- [x] aplicação **passo a passo** (`scale` → `rotate` → `translate`), sem `Mat4`
+- [x] `apply_normal` com escala recíproca: é a forma legível do que a inversa
+  transposta faz
+- [x] `undo_point` (a inversa, desfeita na ordem contrária)
+- [x] rasterizador transforma a **geometria**, ray tracer transforma o **raio**
+  com a inversa e devolve o resultado ao mundo — mesmo problema, sentidos
+  opostos (item 8 de [diferenciais_possiveis.md](diferenciais_possiveis.md)); a
+  `Sphere` continua analítica e ganha elipsoides sem tesselar. A direção do raio
+  local fica **sem normalizar**, pra que o `t` do acerto valha nos dois espaços
+- [x] regra de composição escrita: os campos do primitivo (`center`, `radius`,
+  `half_edge`) são geometria em espaço local, o transform do objeto vem por
+  cima
+- [ ] **escala degenerada (componente zero)**: hoje `reciproco` devolve 0, e o
+  efeito é oposto nos dois pipelines. No rasterizador o objeto colapsa num
+  plano, que é o que a escala pediu; no ray tracer `undo_ray` projeta origem e
+  direção no plano, e a interseção passa a acontecer contra a **silhueta cheia**
+  do objeto — falso positivo pra qualquer raio que passe por perto sem cruzar o
+  plano, e falso negativo pro raio paralelo ao eixo achatado (`a = d·d = 0`,
+  `t = NaN`, descartado pelo filtro `t > 0.0`). A causa é a `T` deixar de ser
+  bijetora: `p ∈ T(S) ⟺ T⁻¹(p) ∈ S` só vale pra transform inversível, e sem
+  isso o método do raio em espaço local perde a hipótese de que depende.
+  `apply_normal` sofre do mesmo mal por outro caminho — o limite certo ali é
+  ∞ (a normal fica em pé), e o 0 devolve uma normal deitada no plano, errada
+  por 90°. Remendo numérico não resolve (0, ε ou ∞ erram de formas diferentes);
+  a saída é **validar a cena na entrada** e recusar/avisar uma vez, em vez de
+  espalhar guardas. Corrigir junto a frase de
+  [teoria/transform.md](../teoria/transform.md) que diz "o objeto colapsa" sem
+  dizer que isso só vale pro rasterizador. Bom caso de teste cruzado pra M7.
+
+- `TransformOptions { method: Stepwise | Matrix }`, com `Stepwise` como padrão.
+  Os dois caminhos dão a mesma imagem: o toggle vale por leitura de código,
+  teste de equivalência e medição de tempo, não por diferença visual. O
+  caminho matricial entra junto com o refactor de
+  [refactor_matrizes.md](refactor_matrizes.md) — **e o toggle vai junto**: um
+  enum de uma variante só não é toggle de caixa branca. Ver "Refinamentos
+  vindos da implementação de M1.5" em [design_api.md](design_api.md)
+
+### Cor de saída (antes do shading)
+
+Correção do que já existe, e pré-requisito para qualquer modelo de iluminação
+render imagem parecida com a de um renderer de referência. Teoria em
+[teoria/color.md](../teoria/color.md):
+
+- [x] `Rgb::to_bytes()` codificando sRGB e `from_bytes()` decodificando — hoje o
+  valor linear vai direto pro byte do PNG, o que escurece todo meio-tom
+- [x] decodificar só o que é cor: albedo é cor, roughness/metallic/normal são
+  dado. Não precisa de campo — o `Value<T>` do material já diz qual é qual
+  (`Value<Rgb>` decodifica, `Value<f32>` e `normal_map` não). Nada a fazer aqui
+  até os mapas de M2 existirem; a distinção já está no tipo
+- [ ] `OutputOptions { exposure, tonemap: None | Reinhard | Aces }` — sem
+  tonemap, `clamped()` estoura o branco em qualquer especular forte. Aplicado só
+  no passe `Color`, e separado da codificação sRGB, que vale pra qualquer buffer
+  que vire arquivo.
+
+### Shading
+
+Em duas levas: a BRDF de Cook-Torrance é um braço de `match` numa função
+pequena, então Lambert/Blinn-Phong pode ir sozinho primeiro.
+
+Primeira leva:
+
+- `shade()` em módulo próprio (`src/shading.rs`), consumido pelos dois modos —
+  define a fronteira do código compartilhado antes de textura empilhar por cima.
+  Forma: `shade()` itera as luzes e resolve visibilidade/atenuação, e a
+  reflectância fica isolada numa função `(material, n, v, l) -> Rgb`, para a
+  BRDF nova entrar como braço de `match` sem tocar no resto
+- difuso (Lambert) e especular **Blinn-Phong** — com o vetor `h` do meio do
+  caminho, não o vetor de reflexão do Phong de 1975: é o mesmo `h` que GGX usa,
+  e é para ele que vale a relação de expoente com `roughness`. Phong clássico
+  fica como possível quinta variante depois, se valer como conteúdo
+- **(antecipado)** `Material` já reparametrizado: `roughness` e `metallic`
+  entram mesmo com só Phong lendo (o expoente sai de `roughness`, em uma linha);
+  `shininess` e `reflectivity` saem — o segundo aproveitando que ninguém lê
+  ainda
+- **(antecipado)** `Value<T> { Constant(T), Map(Texture) }` como tipo de cada
+  canal do material, com `sample(uv)` — é o que faz a textura entrar sem que o
+  `shade()` ganhe um `if` por canal, e trocar depois mexeria em toda cena de
+  exemplo
+- **(antecipado)** `Mul<Rgb>` e `lerp` no `Rgb` — Phong com luz colorida já
+  precisa da multiplicação componente a componente
+- **(antecipado)** a subseção "Cor de saída" acima, inteira
+- os tipos de `Light`: `Point` (com atenuação), `Directional`, `Ambient`
+- `ShadingOptions { model: Flat | Gouraud | Phong }`
+- amostragem de textura *nearest*, com a uv já interpolada e `Texture::texel`
+  que já existem. Mipmap, filtros e `from_file` ficam em M2; o que se ganha
+  aqui é a cena de xadrez, que é a imagem que melhor mostra
+  `perspective_correct` ligado e desligado
+
+Segunda leva:
+
+- Cook-Torrance com GGX, Smith height-correlated e Fresnel de Schlick, na
+  parametrização metallic/roughness (o subconjunto do Principled do Blender que
+  o glTF 2.0 padronizou), como quarta variante `CookTorrance`
+- `ShadingOptions.model` vira dois toggles de caixa branca num campo só: as três
+  primeiras variantes são *onde a normal é avaliada* (e expõem a resolução da
+  tesselação, hoje escondida em `RINGS`), a quarta é *qual BRDF*, sobre o mesmo
+  material
+- `Light::Hemisphere` (sky/ground por `n.y`) — sem termo de ambiente decente a
+  sombra fecha em preto chapado e nenhuma BRDF salva a imagem
+- `Material.emissive`
+
+### Refactor de matrizes
+
+Depois de shading, e opcional: troca a divisão por z por matriz de visão ×
+projeção, e o transform passo a passo por matriz de modelo. É refactor sem
+mudança de imagem, então precisa de shading pronto para ter o que comparar.
+Escopo, armadilhas e ordem em
+[refactor_matrizes.md](refactor_matrizes.md).
+
 ## M2 — Texturização
 
 - interpolação de UV por triângulo
@@ -38,6 +162,8 @@ rasterização antes do protótipo de ray tracing.
 - geração da pirâmide de mipmaps (Williams, 1983)
 - seleção de nível de mip por distância/derivada de tela
 - filtros: nearest, bilinear, trilinear
+- os mapas do material, como `Value::Map` em `albedo`, `roughness` e `metallic`, mais `normal_map`
+- tangentes por vértice, que o normal map exige e que a `Mesh` ainda não tem
 
 ## M3 — Ray tracing a fundo
 
@@ -46,7 +172,12 @@ rasterização antes do protótipo de ray tracing.
 - interseção raio-esfera (equação algébrica direta)
 - modelo recursivo de Whitted: raios de sombra, reflexão, refração
 - `max_depth` controlando a recursão
-- suporte aos três tipos de `Light` no cálculo de iluminação
+- suporte aos tipos de `Light` no cálculo de iluminação
+- reflexão sem `reflectivity`: a intensidade do raio de espelho vem do Fresnel
+  do material, e o raio só é disparado enquanto `roughness < 0.1` — acima
+  disso, Whitted não dá conta do lóbulo GGX com um raio só, e a divergência
+  entre o que a BRDF descreve e o que o modelo consegue traçar vira cena de
+  demonstração em M5
 
 ## M4 — Aceleração
 
@@ -59,7 +190,7 @@ rasterização antes do protótipo de ray tracing.
 
 - `RenderPass::Depth`, `Normal`, `Uv` implementados nos dois modos
 - ferramenta de diff de imagem entre `Rasterizer` e `RayTracer` sobre a mesma cena
-- cenas de demonstração dos pontos de divergência (sombra, esfera) do item 8 de [diferenciais_possiveis.md](diferenciais_possiveis.md)
+- cenas de demonstração dos pontos de divergência (sombra, esfera, metal áspero) do item 8 de [diferenciais_possiveis.md](diferenciais_possiveis.md)
 - toggles "caixa branca" documentados (efeito visual de cada `Parameters` ligado/desligado)
 
 ## M6 — Import e cenas
@@ -74,5 +205,8 @@ rasterização antes do protótipo de ray tracing.
 
 - aplicar a lib num exercício real de disciplina de Computação Gráfica
 - coletar feedback dos alunos/uso
-- comparar resultados com literatura/implementações consolidadas
+- comparar resultados com literatura/implementações consolidadas — a mesma cena
+  no Blender (Principled BSDF) é o padrão-ouro barato para o shading, e as
+  diferenças esperadas já estão listadas em "Modelo de iluminação" de
+  [design_api.md](design_api.md)
 - redigir conclusões do TCC2 a partir dos dados coletados

@@ -1,6 +1,9 @@
 //! Cor em ponto flutuante.
 //!
-//! Internamente a cor é `f32`. Converte pra `u8` só na saída.
+//! Internamente a cor é `f32` e **linear**. Converte pra `u8` só na saída, e
+//! é nessa conversão que a codificação sRGB entra.
+//!
+//! Teoria: color.md#linear-e-srgb
 
 use std::ops::{Add, Div, Mul};
 
@@ -24,28 +27,37 @@ impl Rgb {
         Rgb::new(v, v, v)
     }
 
+    /// A mesma função nos três canais.
+    pub fn map(self, f: impl Fn(f32) -> f32) -> Rgb {
+        Rgb::new(f(self.r), f(self.g), f(self.b))
+    }
+
     pub fn clamped(self) -> Rgb {
-        Rgb::new(
-            self.r.clamp(0.0, 1.0),
-            self.g.clamp(0.0, 1.0),
-            self.b.clamp(0.0, 1.0),
-        )
+        self.map(|c| c.clamp(0.0, 1.0))
     }
 
+    /// Pixel sRGB -> cor linear.
     pub fn from_bytes(bytes: [u8; 3]) -> Self {
-        Rgb::new(
-            bytes[0] as f32 / 255.0,
-            bytes[1] as f32 / 255.0,
-            bytes[2] as f32 / 255.0,
-        )
+        Rgb::new(bytes[0] as f32, bytes[1] as f32, bytes[2] as f32)
+            .map(|c| Self::srgb_para_linear(c / 255.0))
     }
 
+    /// Cor linear -> pixel sRGB.
     pub fn to_bytes(self) -> [u8; 3] {
-        [
-            (self.r.clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
-            (self.g.clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
-            (self.b.clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
-        ]
+        let codificada = self.clamped().map(Self::linear_para_srgb);
+        [codificada.r, codificada.g, codificada.b].map(|c| (c * 255.0 + 0.5) as u8)
+    }
+
+    // TODO: trocar pela curva sRGB completa (trecho reto + potência)
+    // Teoria: color.md#a-curva-de-transferencia
+    const GAMMA: f32 = 2.2;
+
+    fn linear_para_srgb(c: f32) -> f32 {
+        c.powf(1.0 / Self::GAMMA)
+    }
+
+    fn srgb_para_linear(c: f32) -> f32 {
+        c.powf(Self::GAMMA)
     }
 }
 

@@ -2,12 +2,13 @@
 
 use crate::color::Rgb;
 use crate::math::{Vec2, Vec3, Vertex};
+use crate::transform::Transform;
 
 #[derive(Debug, Clone)]
 pub struct Scene {
     pub camera: Camera,
     pub lights: Vec<Light>,
-    pub objects: Vec<Primitive>,
+    pub objects: Vec<Object>,
 }
 
 impl Scene {
@@ -24,8 +25,30 @@ impl Scene {
         self
     }
 
-    pub fn with_object(mut self, object: Primitive) -> Self {
+    pub fn with_object(mut self, object: Object) -> Self {
         self.objects.push(object);
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Object {
+    pub geometry: Primitive,
+    pub material: Material,
+    pub transform: Transform,
+}
+
+impl Object {
+    pub fn new(geometry: Primitive, material: Material) -> Self {
+        Object {
+            geometry,
+            material,
+            transform: Transform::default(),
+        }
+    }
+
+    pub fn with_transform(mut self, transform: Transform) -> Self {
+        self.transform = transform;
         self
     }
 }
@@ -247,18 +270,16 @@ pub struct Mesh {
     /// partir da geometria.
     pub normals: Option<Vec<Vec3>>,
     pub uvs: Option<Vec<Vec2>>,
-    pub material: Material,
 }
 
 impl Mesh {
     /// Malha sem normais nem uv.
-    pub fn new(vertices: Vec<Vec3>, indices: Vec<u32>, material: Material) -> Self {
+    pub fn new(vertices: Vec<Vec3>, indices: Vec<u32>) -> Self {
         Mesh {
             vertices,
             indices,
             normals: None,
             uvs: None,
-            material,
         }
     }
 
@@ -311,7 +332,7 @@ impl Mesh {
     }
 }
 
-/// Objetos renderizáveis.
+/// Geometria renderizável, em espaço local.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Primitive {
     Triangle {
@@ -319,62 +340,41 @@ pub enum Primitive {
         /// Normais por vértice.
         normals: Option<[Vec3; 3]>,
         uvs: Option<[Vec2; 3]>,
-        material: Material,
     },
     Mesh(Mesh),
     Sphere {
         center: Vec3,
         radius: f32,
-        material: Material,
     },
     Cube {
         center: Vec3,
         half_edge: f32,
-        material: Material,
     },
 }
 
 impl Primitive {
     /// Triângulo sem normais nem uv
-    pub fn triangle(points: [Vec3; 3], material: Material) -> Self {
+    pub fn triangle(points: [Vec3; 3]) -> Self {
         Primitive::Triangle {
             points,
             normals: None,
             uvs: None,
-            material,
         }
     }
 
     /// Malha sem normais nem uv.
     /// As faces são trios consecutivos de `indices`, cada índice apontando pra uma entrada de `vertices`.
-    pub fn mesh(vertices: Vec<Vec3>, indices: Vec<u32>, material: Material) -> Self {
-        Primitive::Mesh(Mesh::new(vertices, indices, material))
+    pub fn mesh(vertices: Vec<Vec3>, indices: Vec<u32>) -> Self {
+        Primitive::Mesh(Mesh::new(vertices, indices))
     }
 
-    pub fn sphere(center: Vec3, radius: f32, material: Material) -> Self {
-        Primitive::Sphere {
-            center,
-            radius,
-            material,
-        }
+    pub fn sphere(center: Vec3, radius: f32) -> Self {
+        Primitive::Sphere { center, radius }
     }
 
     /// Cubo centrado em `center`, com aresta `2 * half_edge`.
-    pub fn cube(center: Vec3, half_edge: f32, material: Material) -> Self {
-        Primitive::Cube {
-            center,
-            half_edge,
-            material,
-        }
-    }
-
-    pub fn material(&self) -> &Material {
-        match self {
-            Primitive::Triangle { material, .. }
-            | Primitive::Sphere { material, .. }
-            | Primitive::Cube { material, .. } => material,
-            Primitive::Mesh(malha) => &malha.material,
-        }
+    pub fn cube(center: Vec3, half_edge: f32) -> Self {
+        Primitive::Cube { center, half_edge }
     }
 
     /// Converte o primitivo em malha de triângulos.
@@ -384,33 +384,20 @@ impl Primitive {
                 points,
                 normals,
                 uvs,
-                material,
             } => Mesh {
                 vertices: points.to_vec(),
                 indices: vec![0, 1, 2],
                 normals: normals.map(|n| n.to_vec()),
                 uvs: uvs.map(|u| u.to_vec()),
-                material: material.clone(),
             },
 
             Primitive::Mesh(malha) => malha.clone(),
 
-            Primitive::Sphere {
-                center,
-                radius,
-                material,
-            } => Self::esfera_uv(*center, *radius, material.clone()),
+            Primitive::Sphere { center, radius } => Self::esfera_uv(*center, *radius),
 
-            Primitive::Cube {
-                center,
-                half_edge,
-                material,
-            } => {
+            Primitive::Cube { center, half_edge } => {
                 let center = *center;
-                let half_edge = *half_edge;
-
-                let material = material.clone();
-                let h = half_edge;
+                let h = *half_edge;
 
                 let vertices = [
                     Vec3::new(-h, -h, -h),
@@ -435,13 +422,13 @@ impl Primitive {
                     0, 1, 5,  0, 5, 4, // base     (-y)
                 ];
 
-                Mesh::new(vertices, indices, material)
+                Mesh::new(vertices, indices)
             }
         }
     }
 
     /// Tesselation em grade de paralelos e meridianos ("uv sphere").
-    fn esfera_uv(center: Vec3, radius: f32, material: Material) -> Mesh {
+    fn esfera_uv(center: Vec3, radius: f32) -> Mesh {
         /// Paralelos da esfera tesselada, com o dobro disso em meridianos.
         const RINGS: u32 = 16;
 
@@ -515,7 +502,6 @@ impl Primitive {
             indices,
             normals: Some(normals),
             uvs: Some(uvs),
-            material,
         }
     }
 }

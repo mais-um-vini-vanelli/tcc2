@@ -30,24 +30,35 @@ fn main() -> Result<(), Box<dyn Error>> {
         color: Rgb::WHITE,
         intensity: 1.0,
     })
-    .with_object(Primitive::triangle(
-        [
+    .with_object(Object::new(
+        Primitive::triangle([
             Vec3::new(-2.6, -1.0, 0.0),
             Vec3::new(-0.6, -1.0, 0.0),
             Vec3::new(-1.6, 1.0, 0.0),
-        ],
+        ]),
         Material::diffuse(Rgb::new(0.9, 0.3, 0.2)),
     ))
-    .with_object(Primitive::cube(
-        Vec3::new(0.0, 0.0, 0.0),
-        0.8,
-        Material::diffuse(Rgb::new(0.3, 0.8, 0.4)),
-    ))
-    .with_object(Primitive::sphere(
-        Vec3::new(2.2, 0.0, 0.0),
-        1.0,
-        Material::diffuse(Rgb::new(0.2, 0.4, 0.9)),
-    ));
+    .with_object(
+        Object::new(
+            Primitive::cube(Vec3::ZERO, 0.8),
+            Material::diffuse(Rgb::new(0.3, 0.8, 0.4)),
+        )
+        .with_transform(Transform {
+            rotation: Vec3::new(25.0, 35.0, 0.0),
+            ..Transform::default()
+        }),
+    )
+    .with_object(
+        Object::new(
+            Primitive::sphere(Vec3::ZERO, 1.0),
+            Material::diffuse(Rgb::new(0.2, 0.4, 0.9)),
+        )
+        .with_transform(Transform {
+            translation: Vec3::new(2.2, 0.0, 0.0),
+            scale: Vec3::new(1.0, 0.6, 1.0),
+            ..Transform::default()
+        }),
+    );
 
     let params = Parameters::with_resolution(320, 240);
 

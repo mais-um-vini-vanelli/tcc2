@@ -11,6 +11,9 @@ estágio:
 
 ```text
 -> um raio primário por pixel      (Da tela para a cena)
+-> o raio vai pro espaço local     (transform.md: Desfazendo,
+   de cada objeto, pela inversa     O raio vai para o espaço local)
+   do transform
 -> teste contra cada primitiva     (O raio e a esfera)
    da cena, por força bruta
 -> fica o acerto mais próximo,
@@ -26,6 +29,11 @@ dois modos existirem na mesma API: **o rasterizador projeta a geometria *para* a
 tela; o ray tracer parte da tela *para* a cena**. Um percorre objetos e descobre
 que pixels eles cobrem; o outro percorre pixels e descobre que objetos eles
 encontram.
+
+O mesmo contraste reaparece no segundo estágio, e é o assunto de
+[transform.md](transform.md): o rasterizador leva a geometria até o mundo, o ray
+tracer traz o raio até a geometria. É por isso que a esfera daqui vira elipsoide
+sob escala não uniforme sem ser tesselada.
 
 ## Da tela para a cena
 
