@@ -1,31 +1,19 @@
 //! Rasterizador.
 //!
-//! A pipeline até agora:
-//! -> world space
-//! -> camera space
-//! -> recorte contra o frustum (Sutherland e Hodgman, 1974)
-//! -> backface culling
-//! -> screen space
-//! -> teste de cobertura por edge functions (Pineda, 1988) dentro da bounding box
-//! -> baricêntricas com correção de perspectiva, interpolando normal e uv
-//! -> teste de profundidade contra o z-buffer
+//! Teoria: rasterizer.md#a-pipeline
 //!
-//! `Triangle` e `Mesh` entram pelo mesmo caminho: a malha só resolve os índices
-//! e entrega uma face de cada vez, no formato do triângulo solto.
+//! O rasterizador trabalha só com malha: todo objeto da cena passa por
+//! `Primitive::tessellate` na entrada.
 //!
 //! Ainda **não** existem aqui: wireframe, msaa, textura e shading. A cor
 //! continua sendo o albedo do material, sólido — normal e uv já são
 //! interpolados, mas só aparecem nos passes `Normal` e `Uv`.
-//!
-//! `Sphere` não é desenhada: superfície implícita não tem como ser rasterizada
-//! sem tesselar. Objeto não suportado é pulado, não é erro — a mesma cena vale
-//! pros dois modos, cada um desenha o que sabe.
 
 use crate::color::Rgb;
-use crate::math::{Vec2, Vec3};
+use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
 use crate::parameters::Parameters;
-use crate::render::{ColorBuffer, RenderPass, RenderResult, RenderStats, Renderer, ScalarBuffer};
-use crate::scene::{Camera, Material, Primitive, Scene};
+use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
+use crate::scene::{Camera, Material, Scene};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Rasterizer;
@@ -35,25 +23,19 @@ impl Renderer for Rasterizer {
         "rasterizador"
     }
 
-    fn render(&self, scene: &Scene, params: &Parameters, passes: &[RenderPass]) -> RenderResult {
-        let mut result = RenderResult::new();
-        let quer = |passe| passes.contains(&passe);
-        if !quer(RenderPass::Color)
-            && !quer(RenderPass::Depth)
-            && !quer(RenderPass::Normal)
-            && !quer(RenderPass::Uv)
-        {
-            return result;
-        }
-
+    fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
         let (largura, altura) = (params.output.width, params.output.height);
+
         let fundo = params.output.background.unwrap_or(Rgb::BLACK);
-        let mut alvos = Alvos {
-            cor: ColorBuffer::filled(largura, altura, fundo),
-            profundidade: ScalarBuffer::filled(largura, altura, f32::INFINITY),
-            normal: ColorBuffer::filled(largura, altura, Rgb::BLACK),
-            uv: ColorBuffer::filled(largura, altura, Rgb::BLACK),
+
+        let mut resultado = RenderResult {
+            color: Some(ColorBuffer::filled(largura, altura, fundo)),
+            depth: Some(ScalarBuffer::filled(largura, altura, f32::INFINITY)),
+            normal: Some(ColorBuffer::filled(largura, altura, Rgb::BLACK)),
+            uv: Some(ColorBuffer::filled(largura, altura, Rgb::BLACK)),
+            ..RenderResult::new()
         };
+
         let mut stats = RenderStats::default();
 
         let base = scene.camera.basis();
@@ -61,15 +43,15 @@ impl Renderer for Rasterizer {
         let perspectiva = matches!(scene.camera, Camera::Perspective { .. });
 
         for objeto in &scene.objects {
-            let material = objeto.material();
+            let malha = objeto.tessellate();
 
-            for indice in 0..contagem_de_faces(objeto) {
-                let Some(face) = face(objeto, indice) else {
+            for indice in 0..malha.face_count() {
+                let Some(face) = malha.face(indice) else {
                     continue;
                 };
 
-                let triangulo = face.map(|v| Vertice {
-                    posicao: para_camera(&scene.camera, base, v.posicao),
+                let triangulo = face.map(|v| Vertex {
+                    position: para_camera(&scene.camera, base, v.position),
                     ..v
                 });
 
@@ -90,81 +72,28 @@ impl Renderer for Rasterizer {
                         break;
                     };
 
-                    let area = borda(posicao_2d(a), posicao_2d(b), posicao_2d(c));
+                    let area = borda(a.position.xy(), b.position.xy(), c.position.xy());
                     if area == 0.0 {
                         // Triângulo sem área (uma linha)
                         continue;
                     }
 
+                    // Teoria: rasterizer.md#backface-culling
                     // Backface culling:
                     // Descartamos aqui fora porque um mesmo triângulo pode virar vários durante o clipping
                     // daí descartar dentro do preenche poderia trazer uma contagem de triângulos dercartados
                     // estranha para o usuário.
 
-                    // Sobre o backface culling:
-                    // Daria pra usar as normais informadas dos vértices pra saber qual o lado da frente do triângulo,
-                    // mas a convenção é usar a ordem dos vértices (winding order) pra isso: os vértices das faces de fora de um objeto
-                    // são enviados em ordem anti-horária e as faces de dentro (por consequência) em ordem horária
-
-                    // Se o triângulo é formado pelos pontos A B e C, tenho dois jeitos de avançar partindo de A:
-
-                    // A
-                    // |\
-                    // | \
-                    // B--C
-
-                    // A -> B -> C e A -> C -> B.
-
-                    // Um desses sentidos vai ser horário e o outro anti-horário.
-                    // Note que se os pontos B e C do triângulo estivessem trocados, o sentido das travessias ABC e ACB trocariam, mas uma delas
-                    // continuaria sendo horária e a outra anti-horária.
-
-                    // Se a gente olhar pro mesmo triângulo de trás (espelhado na horizontal) o sentido das travessias se inverte:
-
-                    //     A
-                    //    /|
-                    //   / |
-                    //  /  |
-                    // C---B
-
-                    // Considerando um triângulo ABC achatado no plano XY, o produto vetorial entre as arestas AB e AC dá um vetor perpendicular às duas apontando
-                    // 'pra frente' (pra fora da tela) ou 'pra trás' (pra dentro da tela), dependendo da ordem das arestas:
-
-                    // A
-                    // |\
-                    // | \
-                    // B--C
-
-                    // A = (0, 1, 0)
-                    // B = (0, 0, 0)
-                    // C = (1, 0, 0)
-
-                    // B - A = (0, -1, 0)
-                    // C - A = (1, -1, 0)
-
-                    // AB x AC = ((-1 * 0) - (0 * -1), (0 * 1) - (0 * 0), (0 * -1) - (-1 * 1)) = (0, 0, 1)
-                    // Ou seja, uma normal apontando pra +z. Agora invertendo a ordem das arestas:
-                    // AC x AB = ((-1 * 0) - (0 * -1), (0 * 0) - (1 * 0), (1 * -1) - (-1 * 0)) = (0, 0, -1)
-                    // Ou seja, uma normal apontando pra -z.
-
-                    // Note que quando as arestas do produto vetorial estão em sentido horário, o resultado do produto
-                    // vetorial tem z positivo (vetor saindo da tela), e quando estão em sentido anti-horário o resultado é um vetor entrando na tela (com z negativo)
-
-                    // Note também que a edge function que a gente já usa é exatamente a fórmula do componente z de um produto vetorial entre dois vetores 3d:
-                    // A.x * B.y - A.y * B.x
-                    // Então a gente pode usar o sinal da área calculada pela edge function pra saber qual lado do triângulo projetado em 2d está virada para a câmera
-
-                    // Mas como a projeção ndc -> tela inverte o eixo y (espelha o triângulo em y), olhamos se a área é negativa ao invés de positiva
                     if params.rasterization.backface_cull && area > 0.0 {
                         stats.backfaces_culled += 1;
                         break;
                     }
 
                     preenche(
-                        &mut alvos,
+                        &mut resultado,
                         [a, b, c],
                         area,
-                        material,
+                        &malha.material,
                         perspectiva,
                         params,
                         &mut stats,
@@ -173,235 +102,39 @@ impl Renderer for Rasterizer {
             }
         }
 
-        result.stats = stats;
-        if quer(RenderPass::Color) {
-            result.insert(RenderPass::Color, alvos.cor);
-        }
-        if quer(RenderPass::Depth) {
-            result.insert(RenderPass::Depth, alvos.profundidade);
-        }
-        if quer(RenderPass::Normal) {
-            result.insert(RenderPass::Normal, alvos.normal);
-        }
-        if quer(RenderPass::Uv) {
-            result.insert(RenderPass::Uv, alvos.uv);
-        }
-        result
+        resultado.stats = stats;
+        resultado
     }
 }
 
-/// Os buffers que o rasterizador escreve em par, um valor de cada por pixel.
-struct Alvos {
-    cor: ColorBuffer,
-    profundidade: ScalarBuffer,
-    normal: ColorBuffer,
-    uv: ColorBuffer,
-}
-
-/// Um vértice e os atributos que viajam junto com ele pelo pipeline.
-///
-/// `posicao` troca de espaço no caminho (mundo -> câmera -> tela); `normal` e
-/// `uv` ficam como estão (só são ajustados na interpolação do triângulo).
-#[derive(Debug, Clone, Copy)]
-struct Vertice {
-    posicao: Vec3,
-    normal: Vec3,
-    uv: Vec2,
-}
-
-impl Vertice {
-    /// O vértice a `t` do caminho entre os dois, com todo atributo andando pelo
-    /// mesmo `t`.
-    fn interpola(self, outro: Vertice, t: f32) -> Vertice {
-        Vertice {
-            posicao: self.posicao + (outro.posicao - self.posicao) * t,
-            normal: self.normal + (outro.normal - self.normal) * t,
-            uv: self.uv + (outro.uv - self.uv) * t,
-        }
-    }
-}
-
-fn posicao_2d(v: Vertice) -> Vec2 {
-    Vec2::new(v.posicao.x, v.posicao.y)
-}
-
-/// Quantos triângulos o primitivo entrega ao rasterizador.
-fn contagem_de_faces(objeto: &Primitive) -> usize {
-    match objeto {
-        Primitive::Triangle { .. } => 1,
-        Primitive::Mesh { indices, .. } => indices.len() / 3,
-        Primitive::Sphere { .. } => 0,
-    }
-}
-
-/// A face de índice `i`, com os atributos já resolvidos por vértice.
-fn face(objeto: &Primitive, i: usize) -> Option<[Vertice; 3]> {
-    let (pontos, normais, uvs) = match objeto {
-        Primitive::Triangle {
-            points,
-            normals,
-            uvs,
-            ..
-        } => {
-            if i != 0 {
-                return None;
-            }
-            (*points, *normals, *uvs)
-        }
-
-        Primitive::Mesh {
-            vertices,
-            indices,
-            normals,
-            uvs,
-            ..
-        } => {
-            let trio = [
-                *indices.get(i * 3)? as usize,
-                *indices.get(i * 3 + 1)? as usize,
-                *indices.get(i * 3 + 2)? as usize,
-            ];
-            (
-                tres(vertices, trio)?,
-                normals.as_deref().and_then(|n| tres(n, trio)),
-                uvs.as_deref().and_then(|u| tres(u, trio)),
-            )
-        }
-
-        Primitive::Sphere { .. } => return None,
-    };
-
-    // Se não informou normais por vértice, calcular a partir da face.
-    let normais = normais.unwrap_or_else(|| {
-        let n = (pontos[1] - pontos[0])
-            .cross(pontos[2] - pontos[0])
-            .normalized();
-        [n; 3]
-    });
-
-    let uvs = uvs.unwrap_or([Vec2::ZERO; 3]);
-
-    Some([0usize, 1, 2].map(|k| Vertice {
-        posicao: pontos[k],
-        normal: normais[k],
-        uv: uvs[k],
-    }))
-}
-
-/// Se um índice tá fora da lista a face inteira é descartada.
-fn tres<T: Copy>(valores: &[T], indices: [usize; 3]) -> Option<[T; 3]> {
-    Some([
-        *valores.get(indices[0])?,
-        *valores.get(indices[1])?,
-        *valores.get(indices[2])?,
-    ])
-}
-
-/// Um plano em 3D pode ser definido por um vetor normal `n` e um ponto `p0` que pertence ao plano.
-///
-/// Um ponto só está no plano se:
-/// > n · (p - p0) = 0
-/// > n · p - n · p0 = 0
-///
-/// Definindo deslocamento = -n · p0:
-///
-/// > n · p + deslocamento = 0
-///
-/// A gente consegue usar o resultado da fórmula do plano pra saber de qual lado do plano está um ponto P.
-///
-/// Voltando pra primeira fórmula, e trocando (p - p0) por v:
-///
-/// > n · v = 0
-///
-/// Perceba que é um produto escalar entre v e n. Isso quer dizer que o resultado é a projeção do vetor v em cima da normal
-/// do plano.
-///
-/// Quando um ponto está no plano, essa distância é 0, porque v e n são perpendiculares.
-///
-/// Se um ponto está 'pra cima' do plano (fora do plano e no lado da normal), a projeção de v em n é positiva.
-/// Se um ponto está 'pra baixo' do plano (fora do plano e no lado oposto da normal), a projeção de v em n é negativa.
-#[derive(Debug, Clone, Copy)]
-struct Plano {
-    normal: Vec3,
-    deslocamento: f32,
-}
-
-impl Plano {
-    fn novo(normal: Vec3, deslocamento: f32) -> Self {
-        Plano {
-            normal,
-            deslocamento,
-        }
-    }
-
-    /// Retorna zero se p está em cima do plano, positivo se está no lado da normal e negativo se está do lado contrário da
-    /// normal.
-    fn distancia(&self, p: Vec3) -> f32 {
-        self.normal.dot(p) + self.deslocamento
-    }
-}
-
+// Teoria: rasterizer.md#o-frustum
 /// As seis faces do frustum, em espaço de câmera.
-fn frustum(camera: &Camera) -> [Plano; 6] {
+fn frustum(camera: &Camera) -> [Plane; 6] {
     let (near, far) = camera.clip_planes();
 
     let laterais = match *camera {
         Camera::Perspective { fov, aspect, .. } => {
-            // A caixa de visão é uma pirâmide partindo da origem, ou seja deslocamento = 0
-
-            // Olhando só pro plano de cima da pirâmide:
-            // tan(fov/2) = oposto / adjacente, com adjacente = z
-            // A cada unidade de z que avanaça, o plano superior da pirâmide/o maior y visível aumenta em tan(fov/2)
-            // Isso quer dizer que pra um ponto p estar 'dentro' na caixa ele precisa ter:
-            // p.y <= p.z * meia_altura
-            //
-            // Revisando e abrindo uma equação de plano:
-            // > n · p + d >= 0
-            // > n.x * p.x + n.y * p.y + n.z * p.z + d >= 0
-
-            // Colocando o nosso plano na mesma forma:
-            // > p.y <= p.z * meia_altura
-            // > -p.y + p.z * meia_altura >= 0
-            // > 0 * p.x + (-1 * p.y) + meia_altura * p.z >= 0
-
-            // Comparando com a fórmula aberta da equação de plano, a gente pode ver que a normal precisa ser (0, -1, meia_altura) pra
-            // cumprir a inequação
-
-            // Então o plano de cima da caixa é n = (0, -1, meia_altura), d = 0
-            // E podemos seguir a mesma lógica pras outras faces, trocando tan(fov/2) por aspect * tan(fov/2) pras faces horizontais
             let meia_altura = (fov.to_radians() * 0.5).tan();
             let meia_largura = meia_altura * aspect;
 
             [
-                Plano::novo(Vec3::new(1.0, 0.0, meia_largura), 0.0),
-                Plano::novo(Vec3::new(-1.0, 0.0, meia_largura), 0.0),
-                Plano::novo(Vec3::new(0.0, 1.0, meia_altura), 0.0),
-                Plano::novo(Vec3::new(0.0, -1.0, meia_altura), 0.0),
+                Plane::new(Vec3::new(1.0, 0.0, meia_largura), 0.0),
+                Plane::new(Vec3::new(-1.0, 0.0, meia_largura), 0.0),
+                Plane::new(Vec3::new(0.0, 1.0, meia_altura), 0.0),
+                Plane::new(Vec3::new(0.0, -1.0, meia_altura), 0.0),
             ]
         }
-
-        // Na ortográfica a caixa não abre com a distância: as laterais são
-        // paralelas ao eixo de visão, em x = ±width/2 e y = ±height/2.
         Camera::Orthographic { width, height, .. } => [
-            Plano::novo(Vec3::new(1.0, 0.0, 0.0), width * 0.5),
-            Plano::novo(Vec3::new(-1.0, 0.0, 0.0), width * 0.5),
-            Plano::novo(Vec3::new(0.0, 1.0, 0.0), height * 0.5),
-            Plano::novo(Vec3::new(0.0, -1.0, 0.0), height * 0.5),
+            Plane::new(Vec3::new(1.0, 0.0, 0.0), width * 0.5),
+            Plane::new(Vec3::new(-1.0, 0.0, 0.0), width * 0.5),
+            Plane::new(Vec3::new(0.0, 1.0, 0.0), height * 0.5),
+            Plane::new(Vec3::new(0.0, -1.0, 0.0), height * 0.5),
         ],
     };
 
     [
-        // Pro near plane queremos a normal apontando pra frente (+z) (0, 0, 1.0)
-        // Além disso, qualquer ponto do near plane tem a forma (0, 0, near)
-
-        // O deslocamento do plano é:
-        // deslocamento = -(n · p0) = - ((0, 0, 1.0) * (0, 0, near)) = -near
-
-        // O deslocamento é o resultado de distancia() com p = 0:
-        // distancia(0) = normal · (0,0,0) + d = d
-        // Ele diz o quão pra trás ou pra frente a origem está do plano. A origem sendo a câmera no nosso caso
-        Plano::novo(Vec3::new(0.0, 0.0, 1.0), -near),
-        Plano::novo(Vec3::new(0.0, 0.0, -1.0), far),
+        Plane::new(Vec3::new(0.0, 0.0, 1.0), -near),
+        Plane::new(Vec3::new(0.0, 0.0, -1.0), far),
         laterais[0],
         laterais[1],
         laterais[2],
@@ -413,13 +146,13 @@ fn frustum(camera: &Camera) -> [Plano; 6] {
 ///
 /// Pra um ponto estar visível pra câmera, ele precisa estar dentro dos semiespaços definidos por todos
 // os 6 planos.
-fn recorta(triangulo: [Vertice; 3], planos: &[Plano; 6], stats: &mut RenderStats) -> Vec<Vertice> {
+fn recorta(triangulo: [Vertex; 3], planos: &[Plane; 6], stats: &mut RenderStats) -> Vec<Vertex> {
     let mut poligono = triangulo.to_vec();
     let mut recortou = false;
 
     for plano in planos {
         // Se todos os pontos do triângulo estão dentro do plano, nem precisa recortar.
-        if poligono.iter().all(|v| plano.distancia(v.posicao) >= 0.0) {
+        if poligono.iter().all(|v| plano.distance(v.position) >= 0.0) {
             continue;
         }
         poligono = recorta_no_plano(&poligono, *plano);
@@ -436,16 +169,17 @@ fn recorta(triangulo: [Vertice; 3], planos: &[Plano; 6], stats: &mut RenderStats
     poligono
 }
 
+// Teoria: rasterizer.md#recorte-no-plano
 /// Sutherland e Hodgman (1974): percorre as arestas do polígono e monta a lista
 /// de saída com o que ficou do lado de dentro de um plano.
-fn recorta_no_plano(poligono: &[Vertice], plano: Plano) -> Vec<Vertice> {
+fn recorta_no_plano(poligono: &[Vertex], plano: Plane) -> Vec<Vertex> {
     let mut saida = Vec::with_capacity(poligono.len() + 1);
 
     for (i, &atual) in poligono.iter().enumerate() {
         let proximo = poligono[(i + 1) % poligono.len()];
         let (d_atual, d_proximo) = (
-            plano.distancia(atual.posicao),
-            plano.distancia(proximo.posicao),
+            plano.distance(atual.position),
+            plano.distance(proximo.position),
         );
 
         if d_atual >= 0.0 {
@@ -456,86 +190,33 @@ fn recorta_no_plano(poligono: &[Vertice], plano: Plano) -> Vec<Vertice> {
             // Um ponto dentro e o outro fora do plano: a aresta atravessou o plano, então entra também o ponto
             // onde ela cruza o plano.
 
-            // Se a gente conhece as duas extremidades de uma aresta, a gente pode andar por ela com:
-            // > ponto = ponto_atual + (ponto_seguinte - ponto_atual) * t
-            // Ou seja, fazendo uma interpolação linear das duas posições com t de 0 a 1:
-            // > t = 0 -> devolve ponto_atual
-            // > t = 1 -> devolve ponto_seguinte
-            // > t = 0.5 -> devolve o ponto médio entre ponto_atual e ponto_seguinte
-
-            // O ponto p onde a aresta cruza o plano tem:
-
-            // 1) plano.distancia(p) = normal · p + deslocamento = 0
-            // 2) p = atual + (proximo - atual) * t
-
-            // Substituindo a fórmula de p em 1) temos:
-
-            // plano.distancia(p) = normal · [atual + (proximo - atual) * t] + deslocamento
-
-            // Agora vamos simplificar essa fórmula
-
-            // Propriedades do dot product:
-            // P1 distributiva              -> u · (v + w)  = u·v + u·w
-            // P3 escalar (k) sai para fora -> u · (k·v)    = k (u·v)
-
-            // Aplicando P1:
-            // > normal · [atual + (proximo - atual) * t] + deslocamento
-            // > normal · atual + normal · [(proximo - atual) * t] + deslocamento
-            // Aplicando P2:
-            // > normal · atual + t * [normal · (proximo - atual)] + deslocamento
-            // Aplicando P1 denovo no [normal · (proximo - atual)]:
-            // > normal · atual + t * (normal · proximo - normal · atual) + deslocamento
-
-            // Note que normal · atual + deslocamento = plano.distancia(atual) (o d_atual que foi calculado acima), então
-            // trocamos:
-            // > d_atual + t * (normal · proximo - normal · atual)
-
-            // Agora simplificando o (normal · proximo - normal · atual). Note que:
-            // > d_atual = normal · atual + deslocamento -> normal · atual = d_atual - deslocamento
-            // > d_proximo = normal · proximo + deslocamento -> normal · proximo = d_proximo - deslocamento
-
-            // Trocando:
-            // > d_atual + t * [(d_proximo - deslocamento) - (d_atual - deslocamento)]
-            // > d_atual + t * (d_proximo - deslocamento - d_atual + deslocamento)
-            // deslocamento e -deslocamento se cancelam:
-            // > d_atual + t * (d_proximo - d_atual)
-
-            // Perfeito, temos a fórmula da distancia de um ponto da aresta em função de t. Agora é igualar a 0 e
-            // resolver pra achar o ponto em que a aresta cruza o plano:
-
-            // > d_atual + t * (d_proximo - d_atual) = 0
-            // > t * (d_proximo - d_atual) = -d_atual
-            // > t = -d_atual / (d_proximo - d_atual)
             let t = -d_atual / (d_proximo - d_atual);
 
             // E agora a gente contrói o ponto com a fórmula de interpolação. Normal e uv
             // do vértice novo saem do mesmo t: o recorte inventa um vértice que não estava
             // na malha, e ele precisa carregar atributos coerentes com a aresta original.
-            saida.push(atual.interpola(proximo, t));
+            saida.push(atual.lerp(proximo, t));
         }
     }
 
     saida
 }
 
+// Teoria: rasterizer.md#mundo-para-camera-space
 /// Mundo -> espaço de câmera. É onde o recorte acontece: nesse espaço o frustum
 /// já está alinhado com a câmera, mas a divisão por z ainda não aconteceu.
 fn para_camera(camera: &Camera, base: (Vec3, Vec3, Vec3), ponto: Vec3) -> Vec3 {
     let (direita, cima, frente) = base;
 
-    // - montar o vetor que vai da origem da câmera até o ponto. Esse vetor também pode ser visto como as coordenadas do
-    //   ponto em um sistema de coordenadas com a câmera em (0,0,0)
-    // - projetar esse vetor em cada eixo da câmera pra descobrir a coordenada do ponto naquele eixo
-    //   como os 3 vetores base da câmera são normalizados, o resultado de cada produto é o comprimento do cateto adjacente de
-    //   um triângulo retângulo que vai de origem -> ponto -> projeção do ponto naquele eixo.
     let d = ponto - camera.position();
     Vec3::new(d.dot(direita), d.dot(cima), d.dot(frente))
 }
 
+// Teoria: rasterizer.md#camera-space-para-ndc
 /// Espaço de câmera -> tela. A posição vira `(x_pixel, y_pixel, z_camera)`; normal
 /// e uv atravessam intactas.
-fn para_tela(camera: &Camera, vertice: Vertice, largura: u32, altura: u32) -> Option<Vertice> {
-    let (x, y, z) = (vertice.posicao.x, vertice.posicao.y, vertice.posicao.z);
+fn para_tela(camera: &Camera, vertice: Vertex, largura: u32, altura: u32) -> Option<Vertex> {
+    let (x, y, z) = (vertice.position.x, vertice.position.y, vertice.position.z);
 
     let (near, _far) = camera.clip_planes();
     if z < near {
@@ -545,138 +226,64 @@ fn para_tela(camera: &Camera, vertice: Vertice, largura: u32, altura: u32) -> Op
     // Converter o ponto de camera space pra ndc (retângulo de [-1,-1] -> [1,1])
     let (ndc_x, ndc_y) = match *camera {
         Camera::Perspective { fov, aspect, .. } => {
-            // A área visível é um cone saindo da câmera, e abrindo mais conforme se afasta no eixo z:
-            //
-            //                               ┌── topo da tela
-            //                      ┌─────────┘
-            //             ┌─────────┘
-            //   câmera ●──┴───────────────────────── eixo de visão (centro da tela)
-            //             └─────────┐
-            //                      └─────────┐
-            //                               └── base da tela
-            //          z=1        z=3        z=6
-            //
-            // Perto da câmera cabe pouco mundo na tela; longe cabe muito. Objetos próximos ficam maiores,
-            // objetos distantes ficam menores (as coordenadas x,y dos pontos ficam mais próximas de 0)
-
-            // Divide o fov por 2 pra descobrir o ângulo entre o topo e a origem (ou a base e a origem, mesmo
-            // valor). E depois pega a tangente desse ângulo, que diz *quanto a altura aumenta a cada unidade que
-            // a gente avança em z*, já que tan() = oposto/adjacente
             let meia_altura = (fov.to_radians() * 0.5).tan();
 
-            // Agora a conversão dos pontos em camera space pra ndc
-            // Para o eixo y:
-            //   - o ponto está em (x,y,z); y unidades de altura
-            //   - no eixo y, o topo da tela fica a z * meia_altura unidades
-            //   - então a coordenada y projetada vai ficar em y / topo da tela = y / (z * meia_altura)
-
-            // Para o eixo x, não podemos usar só tan(fov/2), porque o fov é o ângulo vertical e a tela geralmente tem uma
-            // largura diferente da sua altura (a quantidade de unidades que a caixa de visão aumenta com a distância é maior
-            // que tan(fov/2))
-
-            // O aspect já diz a proporção largura/altura, então multiplicamos tan(fov/2) (taxa de aumento da altura/unidade de z) por
-            // aspect pra descobrir taxa de aumento da largura/unidade de z.
-            // Se a largura da tela é 2x a altura, faz sentido o tamanho da caixa de visão crescer 2x mais rápido que a altura
-
-            // Prova:
-            // Num triângulo retângulo, tan(ângulo) = oposto / adjacente
-            //
-            //              │ ← H  (meia-altura visível: o "oposto")
-            // câmera ●─────┘
-            //         ← z →   (a distância: o "adjacente")
-
-            // tan(fov_v / 2) = height / z
-
-            // aspect = width / height -> width = aspect * height
-            // tan(fov_h / 2) = W / z                     (definição do fov horizontal)
-            //                = (H × aspect) / z          (porque W = H × aspect)
-            //                = (H / z) × aspect          (só reagrupando a multiplicação)
-            //                = tan(fov_v / 2) × aspect   (porque H/z é o tan vertical)
             (x / (z * meia_altura * aspect), y / (z * meia_altura))
         }
-
-        Camera::Orthographic { width, height, .. } => {
-            // A área visível é uma caixa de width * height
-            // Usando o eixo x de exemplo, o centro da área fica em x = 0, e os limites em -width/2 e +width/2
-
-            // Como a gente quer um fator f que converte um ponto com x = -width/2 em x = -1 em ndc E um ponto com
-            // x = +width/2 em x = 1 em ndc, dá de transformar em sistema de equação e resolver:
-
-            // A) -width/2 * f = -1
-            // B) +width/2 * f =  1
-            //
-            // Isolando f na equação B, tem f = 1/(width/2). Trocando f na equação A tem -width/2 * 1/(width/2) = -1, que é
-            // uma equação verdadeira. Então dá de usar 1/(width/2) pra converter coordenadas do eixo x de camera space em ndc,
-            // e a mesma ideia vale pro eixo y.
-
-            // Na projeção ortográfica o tamanho dos objetos não muda com a distância da câmera, então z não é usado na projeção
-            (x / (width * 0.5), y / (height * 0.5))
-        }
+        Camera::Orthographic { width, height, .. } => (x / (width * 0.5), y / (height * 0.5)),
     };
 
-    // Agora sim, só converter as coordenadas x, y = [-1, 1] em uma matrix de pixels x = [0, resolução (largura)] e
-    // y = [0, resolução (altura)]
+    let (pixel_x, pixel_y) = para_pixel(ndc_x, ndc_y, largura, altura);
 
-    // Exemplo com 320x240:
-
-    // operação	| faixa depois dela | o que virou
-    //     x     -1 … 1
-    // + 1.0	  0 … 2	              tira o negativo, origem vai pra borda esquerda
-    // * 0.5	  0 … 1	              vira fração da tela
-    // * 320	  0 … 320	          vira index do pixel
-
-    // y cresce pra cima em NDC e pra baixo no buffer, então a gente primeiro inverte a direção com 1-y:
-
-    // y = +1 (topo)   -> 1-1 = 0 (base)
-    // y =  0 (centro) -> 1-0 = 1 (centro)
-    // y = -1 (base)   -> 1-(-1) = 2 (topo)
-
-    // e depois as mesmas etapas pra converter 0… 2 -> 0...1 e 0...1 -> 0 … 240
-    Some(Vertice {
-        posicao: Vec3::new(
-            (ndc_x + 1.0) * 0.5 * largura as f32,
-            (1.0 - ndc_y) * 0.5 * altura as f32,
-            z, // a posição z do ponto fica salva sem projeção
+    Some(Vertex {
+        position: Vec3::new(
+            pixel_x, pixel_y, z, // a posição z do ponto fica salva sem projeção
         ),
         ..vertice
     })
 }
 
+// Teoria: rasterizer.md#ndc-para-pixel
+fn para_pixel(ndc_x: f32, ndc_y: f32, largura: u32, altura: u32) -> (f32, f32) {
+    (
+        (ndc_x + 1.0) * 0.5 * largura as f32,
+        (1.0 - ndc_y) * 0.5 * altura as f32,
+    )
+}
+
+// Teoria: rasterizer.md#edge-functions
 /// A edge function de Pineda (1988).
 fn borda(a: Vec2, b: Vec2, p: Vec2) -> f32 {
-    // Essa função responde a pergunta:
-    // Traçando uma reta infinita que passa por a e b, o ponto p caiu de que lado?
-
-    // u = b - a (vetor a->b)
     let u = b - a;
-    // v = p - a (vetor a->p)
     let v = p - a;
 
-    // tiramos o produto vetorial u x v = u.x·v.y − u.y·v.x
-    // o sinal da resposta diz pra qual lado v está de u
-    // a magnitude da resposta diz o tamanho do ângulo entre u e v (com 90 graus entre eles, o resultado chega no ápice)
-    u.x * v.y - u.y * v.x
+    u.cross(v)
 }
 
 fn preenche(
-    alvos: &mut Alvos,
-    vertices: [Vertice; 3],
+    destino: &mut RenderResult,
+    vertices: [Vertex; 3],
     area: f32,
     material: &Material,
     perspectiva: bool,
     params: &Parameters,
     stats: &mut RenderStats,
 ) {
-    let [a, b, c] = vertices.map(posicao_2d);
-    let profundidades = vertices.map(|v| v.posicao.z);
+    let (Some(cor), Some(profundidade), Some(mapa_normal), Some(mapa_uv)) = (
+        destino.color.as_mut(),
+        destino.depth.as_mut(),
+        destino.normal.as_mut(),
+        destino.uv.as_mut(),
+    ) else {
+        return;
+    };
+
+    let [a, b, c] = vertices.map(|v| v.position.xy());
+    let profundidades = vertices.map(|v| v.position.z);
     let normais = vertices.map(|v| v.normal);
     let uvs = vertices.map(|v| v.uv);
 
-    // Na ortográfica não existe distorção a corrigir, então o toggle só tem efeito sob
-    // perspectiva.
-    let corrigir = perspectiva && params.rasterization.perspective_correct;
-
-    let (largura, altura) = (alvos.cor.width() as f32, alvos.cor.height() as f32);
+    let (largura, altura) = (cor.width() as f32, cor.height() as f32);
 
     // Calcular a bounding box do triângulo
     let min_x = a.x.min(b.x).min(c.x).floor().max(0.0) as u32;
@@ -708,89 +315,36 @@ fn preenche(
             // vértice oposto àquela aresta: as coordenadas baricêntricas, que
             // somam 1 em qualquer ponto de dentro.
 
-            // A edge function borda(b, c, p) retorna a área do triângulo formado entre (b, c, p) * 2. A mesma coisa pra borda(c, a, p) e borda(a, b, p)
+            let pesos_de_tela = [w0 / area, w1 / area, w2 / area];
+            // Na ortográfica não existe distorção a corrigir, então o toggle só tem efeito sob
+            // perspectiva.
+            let baricentricas = if perspectiva && params.rasterization.perspective_correct {
+                Baricentrics::perspective(pesos_de_tela, profundidades)
+            } else {
+                Baricentrics::orthographic(pesos_de_tela)
+            };
 
-            // Prova:
-            //
-            // a fórmula da área de um triângulo é base x altura / 2
-
-            // a edge function (a, b, p) usa os dois vetores u e v, com u = (a, b) e v = (a, p)
-            // podemos visualizar u como sendo a base de um triângulo, e v sendo uma das arestas laterais
-            // para descobrir a base desse triângulo precisamos de |u| * altura
-            // altura é a distância de p até a aresta u, em outras palavras: a projeção de v no eixo perpendicular a u
-
-            // Então pra descobrir a altura podemos:
-            // 1) rotacionar u em 90º
-            // 2) normalizar u_rotacionado, dividindo pelo seu comprimento |u|
-            // 3) projetar v em u_rotacionado com um produto escalar
-            //
-            // Então a altura do triângulo a, b, p é
-            // > h = (u_rotacionado / |u|) · v
-
-            // Podemos reorganizar a fórmula:
-            // > h = (u_rotacionado · v) / |u|
-            // > h * |u| = u_rotacionado · v
-
-            // Se temos um vetor u = (x, y), a fórmula desse vetor rotacionado em 90º é u'= (-y, x)
-            // Isso pode ser visto em:
-            // (1, 0)  →  (0, 1) "direita" vira "cima"
-            // (0, 1)  →  (−1, 0) "cima" vira "esquerda"
-            //
-            // Então u_rotacionado = (-u.y, u.x):
-            // > h * |u| = (-u.y, u.x) · v
-            // Desenvolvendo o produto escalar e reorganizando:
-            // > |u| * h = -u.y * v.x + u.x * v.y
-
-            // Agora olha que legal: à esquerda da equação ficou base (|u|) * altura, e à direita ficou a fórmula da edge function
-            // Considerando que a área de um triângulo é base * altura / 2, dá de ver que o resultado da edge function é o dobro da área do triângulo a, b, p
-
-            // Se p está dentro do triângulo, a soma das áreas dos subtriângulos abp, bcp e acp precisa ser igual à area do triangulo abc
-            // Isso pode ser visto intuitivamente
-            // [TODO: desenho de um triângulo com P dentro e os 3 subtriângulos]
-
-            // E quanto maior o subtriângulo formado entre uma aresta de abc e p, mais perto p está do ponto aposto à aresta, e mais longe ele está dos
-            // outras 2 pontos, que formam a aresta.
-            // Isso também pode ser visto intuitivamente
-            // [TODO: imagem mostrando p em cima de um ponto (subtriângulo = abc), p no meio de uma aresta, p no meio do triângulo]
-
-            // Outra forma de ver isso é comparando o subtriângulo com o triângulo completo:
-            // - pedaço (b,c,p) → base bc, altura = distância de p até a reta bc
-            // - triângulo (a,b,c) → base bc (a mesma!), altura = distância de a até a reta bc
-
-            // Os dois têm a mesma base. E quando dois triângulos compartilham a base, a razão entre as áreas é a razão entre as alturas:
-
-            //        base·h_p / 2        h_p        distância de p até a aresta bc
-            //  l0 = ─────────────────  = ─────  =  ────────────────────────────────
-            //        base·h_a / 2        h_a        distância de a até a aresta bc
-
-            // Ou seja: l0 mede o quanto p está longe da aresta oposta, em relação ao quanto o vértice a está.
-            // E se l0 = 1, p está tão longe de bc quanto a: p está em cima de a
-
-            // Então podemos usar a proporção (área do subtriangulo)/(área do triângulo) para descobrir o quão perto p está de cada vértice, e usar isso como
-            // coeficiente de interpolação
-
-            let bari =
-                Baricentricas::novas([w0 / area, w1 / area, w2 / area], profundidades, corrigir);
+            let z = baricentricas.interpolate_f32(profundidades);
 
             if params.rasterization.depth_test {
-                let mais_proximo = alvos.profundidade.get(x, y).unwrap_or(f32::INFINITY);
-                if bari.z >= mais_proximo {
+                let mais_proximo = profundidade.get(x, y).unwrap_or(f32::INFINITY);
+                if z >= mais_proximo {
                     continue;
                 }
             }
 
-            // A normal interpolada entre três normais unitárias não sai unitária.
+            // A normal interpolada entre três normais unitárias não sai unitária, então precisa normalizar aqui.
             // Considere n1 = (1,0), n2 = (0,1) e t = 0.5:
             // n' = n1 * (1 - t) + n2 * t = (0,5, 0,5)
             // |n'| = √(0,5² + 0,5²) = √(0,25 + 0,25) = √0,5 ≈ 0,7071
-            let normal = bari.interpola_vec3(normais).normalized();
+            let normal = baricentricas.interpolate_vec3(normais).normalized();
 
-            let uv = bari.interpola_vec2(uvs);
+            let uv = baricentricas.interpolate_vec2(uvs);
 
-            alvos.profundidade.set(x, y, bari.z);
-            alvos.cor.set(x, y, material.albedo);
+            profundidade.set(x, y, z);
+            cor.set(x, y, material.albedo);
             // Os componentes de uma normal vão de [-1,1], mas Rgb espera [0,1]. Então fazemos remap dos componentes da normal aqui:
-            alvos.normal.set(
+            mapa_normal.set(
                 x,
                 y,
                 Rgb::new(
@@ -799,83 +353,7 @@ fn preenche(
                     normal.z * 0.5 + 0.5,
                 ),
             );
-            alvos.uv.set(x, y, Rgb::new(uv.x, uv.y, 0.0));
+            mapa_uv.set(x, y, Rgb::new(uv.x, uv.y, 0.0));
         }
-    }
-}
-
-/// Os pesos de interpolação de um ponto de dentro do triângulo, mais a profundidade
-/// desse ponto.
-struct Baricentricas {
-    /// Somam 1.
-    pesos: [f32; 3],
-    /// Profundidade do ponto, em unidades de mundo.
-    z: f32,
-}
-
-impl Baricentricas {
-    /// `pesos_de_tela` são as edge functions divididas pela área do triângulo;
-    /// `profundidades`, o z de cada vértice em espaço de câmera.
-    fn novas(pesos_de_tela: [f32; 3], profundidades: [f32; 3], corrigir: bool) -> Self {
-        let [l0, l1, l2] = pesos_de_tela;
-        let [z0, z1, z2] = profundidades;
-
-        if corrigir {
-            // A projeção ortográfica é afim: transformações afins preservam razões ao longo de uma reta. O ponto médio continua o ponto médio; o ponto a 1/3 continua a 1/3.
-            // Como consequência, preservam também razões entre áreas (coordenadas baricêntricas são exatamente razões entre áreas).
-
-            // Mas a projeção perspectiva não é afim, uma vez que a gente divide cada ponto pelo seu 'z' (variável, não constante). Ela mantém as retas, mas distorce as proporções.
-            // Exemplo: uma aresta de A = (x=-1, z=1) até B = (x=1, z=5). O ponto médio P antes de projetar é (fórmula de interpolação):
-            // > (-1, 1) + ((1, 5) - (-1, 1)) * 0.5 = (x=0, z=3)
-            // Então
-            // A = (x=-1, z=1)
-            // P = (x= 0, z=3)
-            // B = (x= 1, z=5)
-
-            // Projetando os 3:
-            // A' = (-1.0, 1)
-            // P' = ( 0.0, 3)
-            // B' = ( 0.2, 5)
-
-            // Perceba que a distância em x entre A->P e P->B era 1 nos dois casos antes da projeção, mas agora a parte mais longe da aresta ocupa um espaço menor.
-            // Esse é o mesmo efeito visto na hora de fazer a projeção de perspectiva.
-
-            // Se a gente tentar interpolar A' e B' pra encontrar onde P foi projetado, o resultado não bate com o P' calculado acima:
-            // > (-1.0, 1) + ((0.2, 5) - (-1.0, 1)) * 0.5 = (x=-0.4, z=3) *X errado*
-
-            // Interpolar com 1/z pra compensar a distorção de perspectiva
-            // [TODO: demonstrar isso direito]
-            let inversos = [l0 / z0, l1 / z1, l2 / z2];
-
-            // A soma é o 1/z do ponto; invertendo volta a profundidade.
-            let z = 1.0 / (inversos[0] + inversos[1] + inversos[2]);
-
-            // E o peso corrigido de cada vértice é a fatia dele nesse 1/z, renormalizada
-            // pra somar 1 de novo. Interpolar qualquer atributo (normal, uv, cor) com esses
-            // pesos é andar em passo constante pelo triângulo no mundo, não pela tela.
-            Baricentricas {
-                pesos: inversos.map(|inverso| inverso * z),
-                z,
-            }
-        } else {
-            // A projeção ortográfica não distorce o espaço na conversão camera space -> ndc. É só interpolar
-            // normalmente
-            //
-            // É o mesmo caminho de quando o aluno desliga `perspective_correct` sob
-            // perspectiva — e aí a distorção clássica aparece na profundidade e nos
-            // atributos ao mesmo tempo.
-            Baricentricas {
-                pesos: pesos_de_tela,
-                z: l0 * z0 + l1 * z1 + l2 * z2,
-            }
-        }
-    }
-
-    fn interpola_vec3(&self, valores: [Vec3; 3]) -> Vec3 {
-        valores[0] * self.pesos[0] + valores[1] * self.pesos[1] + valores[2] * self.pesos[2]
-    }
-
-    fn interpola_vec2(&self, valores: [Vec2; 3]) -> Vec2 {
-        valores[0] * self.pesos[0] + valores[1] * self.pesos[1] + valores[2] * self.pesos[2]
     }
 }

@@ -1,7 +1,5 @@
 //! A interface comum aos dois pipelines.
 
-use std::collections::HashMap;
-
 use crate::color::Rgb;
 use crate::parameters::Parameters;
 use crate::scene::Scene;
@@ -100,8 +98,7 @@ impl ColorBuffer {
     }
 }
 
-/// Buffer de uma grandeza escalar por pixel: profundidade, contagem de raios,
-/// nós de BVH testados.
+/// Buffer de uma grandeza escalar por pixel: profundidade, contagem de raios, nós de BVH testados.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScalarBuffer {
     width: u32,
@@ -147,15 +144,16 @@ impl ScalarBuffer {
 
     pub fn finite_range(&self) -> Option<(f32, f32)> {
         let mut range: Option<(f32, f32)> = None;
+
         for &v in &self.values {
-            if !v.is_finite() {
-                continue;
+            if v.is_finite() {
+                range = Some(match range {
+                    None => (v, v),
+                    Some((lo, hi)) => (lo.min(v), hi.max(v)),
+                });
             }
-            range = Some(match range {
-                None => (v, v),
-                Some((lo, hi)) => (lo.min(v), hi.max(v)),
-            });
         }
+
         range
     }
 
@@ -164,18 +162,22 @@ impl ScalarBuffer {
     /// diferente vai gerar intensidades diferentes pro mesmo valor bruto de pixel.
     pub fn to_color(&self, range: Option<(f32, f32)>) -> ColorBuffer {
         let (lo, hi) = range.or_else(|| self.finite_range()).unwrap_or((0.0, 1.0));
+
         let span = hi - lo;
+
         let pixels = self
             .values
             .iter()
             .map(|&v| {
-                if !v.is_finite() {
+                if v.is_finite() {
+                    let t = if span == 0.0 { 0.0 } else { (v - lo) / span };
+                    Rgb::gray(t)
+                } else {
                     return Rgb::BLACK;
                 }
-                let t = if span == 0.0 { 0.0 } else { (v - lo) / span };
-                Rgb::gray(t)
             })
             .collect();
+
         ColorBuffer {
             width: self.width,
             height: self.height,
@@ -191,61 +193,61 @@ impl ScalarBuffer {
     }
 }
 
-/// Um buffer de saída, no formato que o passe pede.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Buffer {
-    Color(ColorBuffer),
-    Scalar(ScalarBuffer),
+/// Um buffer emprestado do `RenderResult`, no formato que o passe pede.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BufferRef<'a> {
+    Color(&'a ColorBuffer),
+    Scalar(&'a ScalarBuffer),
 }
 
-impl Buffer {
-    pub fn kind(&self) -> BufferKind {
+impl<'a> BufferRef<'a> {
+    pub fn kind(self) -> BufferKind {
         match self {
-            Buffer::Color(_) => BufferKind::Color,
-            Buffer::Scalar(_) => BufferKind::Scalar,
+            BufferRef::Color(_) => BufferKind::Color,
+            BufferRef::Scalar(_) => BufferKind::Scalar,
         }
     }
 
-    pub fn as_color(&self) -> Option<&ColorBuffer> {
+    pub fn as_color(self) -> Option<&'a ColorBuffer> {
         match self {
-            Buffer::Color(b) => Some(b),
-            Buffer::Scalar(_) => None,
+            BufferRef::Color(b) => Some(b),
+            BufferRef::Scalar(_) => None,
         }
     }
 
-    pub fn as_scalar(&self) -> Option<&ScalarBuffer> {
+    pub fn as_scalar(self) -> Option<&'a ScalarBuffer> {
         match self {
-            Buffer::Scalar(b) => Some(b),
-            Buffer::Color(_) => None,
+            BufferRef::Scalar(b) => Some(b),
+            BufferRef::Color(_) => None,
         }
     }
 
     /// Versão colorida do buffer, pronta para escrever em arquivo: buffer de
     /// cor sai como está, escalar é normalizado para cinza.
-    pub fn to_color(&self) -> ColorBuffer {
+    pub fn to_color(self) -> ColorBuffer {
         match self {
-            Buffer::Color(b) => b.clone(),
-            Buffer::Scalar(b) => b.to_color(None),
+            BufferRef::Color(b) => b.clone(),
+            BufferRef::Scalar(b) => b.to_color(None),
         }
     }
 
-    pub fn dimensions(&self) -> (u32, u32) {
+    pub fn dimensions(self) -> (u32, u32) {
         match self {
-            Buffer::Color(b) => (b.width(), b.height()),
-            Buffer::Scalar(b) => (b.width(), b.height()),
+            BufferRef::Color(b) => (b.width(), b.height()),
+            BufferRef::Scalar(b) => (b.width(), b.height()),
         }
     }
 }
 
-impl From<ColorBuffer> for Buffer {
-    fn from(b: ColorBuffer) -> Buffer {
-        Buffer::Color(b)
+impl<'a> From<&'a ColorBuffer> for BufferRef<'a> {
+    fn from(b: &'a ColorBuffer) -> BufferRef<'a> {
+        BufferRef::Color(b)
     }
 }
 
-impl From<ScalarBuffer> for Buffer {
-    fn from(b: ScalarBuffer) -> Buffer {
-        Buffer::Scalar(b)
+impl<'a> From<&'a ScalarBuffer> for BufferRef<'a> {
+    fn from(b: &'a ScalarBuffer) -> BufferRef<'a> {
+        BufferRef::Scalar(b)
     }
 }
 
@@ -253,24 +255,30 @@ impl From<ScalarBuffer> for Buffer {
 /// para ele e deixa o resto zerado.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RenderStats {
-    /// Raios lançados no total (primários + sombra + secundários).
-    pub rays: u64,
     /// Testes de interseção/cobertura raio-primitivo ou pixel-triângulo.
     pub primitive_tests: u64,
-    /// Nós de BVH visitados.
-    pub bvh_nodes_visited: u64,
-    /// Profundidade máxima da BVH construída.
-    pub bvh_depth: u32,
     /// Triângulos descartados pelo backface culling.
     pub backfaces_culled: u64,
     /// Polígonos recortados contra o frustum.
     pub polygons_clipped: u64,
+    /// Raios lançados no total (primários + sombra + secundários).
+    pub rays: u64,
+    /// Nós de BVH visitados.
+    pub bvh_nodes_visited: u64,
+    /// Profundidade máxima da BVH construída.
+    pub bvh_depth: u32,
 }
 
-/// O que um render devolve.
+/// O que um render devolve: um campo por `RenderPass`, `None` no que este modo
+/// não sabe produzir.
 #[derive(Debug, Clone, Default)]
 pub struct RenderResult {
-    pub buffers: HashMap<RenderPass, Buffer>,
+    pub color: Option<ColorBuffer>,
+    pub depth: Option<ScalarBuffer>,
+    pub normal: Option<ColorBuffer>,
+    pub uv: Option<ColorBuffer>,
+    pub ray_count: Option<ScalarBuffer>,
+    pub bvh_heatmap: Option<ScalarBuffer>,
     pub stats: RenderStats,
 }
 
@@ -279,32 +287,18 @@ impl RenderResult {
         RenderResult::default()
     }
 
-    pub fn insert(&mut self, pass: RenderPass, buffer: impl Into<Buffer>) {
-        self.buffers.insert(pass, buffer.into());
+    /// Acesso pelo passe, para código que compara os dois modos sem saber de
+    /// antemão qual buffer vai olhar.
+    pub fn get(&self, pass: RenderPass) -> Option<BufferRef<'_>> {
+        match pass {
+            RenderPass::Color => self.color.as_ref().map(BufferRef::from),
+            RenderPass::Normal => self.normal.as_ref().map(BufferRef::from),
+            RenderPass::Uv => self.uv.as_ref().map(BufferRef::from),
+            RenderPass::Depth => self.depth.as_ref().map(BufferRef::from),
+            RenderPass::RayCount => self.ray_count.as_ref().map(BufferRef::from),
+            RenderPass::BvhHeatmap => self.bvh_heatmap.as_ref().map(BufferRef::from),
+        }
     }
-
-    pub fn get(&self, pass: RenderPass) -> Option<&Buffer> {
-        self.buffers.get(&pass)
-    }
-
-    /// Atalho para o caso comum: a imagem final.
-    pub fn color(&self) -> Option<&ColorBuffer> {
-        self.get(RenderPass::Color)?.as_color()
-    }
-
-    /// Atalho para o depth buffer.
-    pub fn depth(&self) -> Option<&ScalarBuffer> {
-        self.get(RenderPass::Depth)?.as_scalar()
-    }
-
-    // Passes pedidos que este renderer não produziu.
-    // pub fn missing(&self, requested: &[RenderPass]) -> Vec<RenderPass> {
-    //     requested
-    //         .iter()
-    //         .copied()
-    //         .filter(|p| !self.buffers.contains_key(p))
-    //         .collect()
-    // }
 }
 
 /// A interface comum, que `Rasterizer` e `RayTracer` implementam. Permite
@@ -313,10 +307,10 @@ impl RenderResult {
 pub trait Renderer {
     fn name(&self) -> &'static str;
 
-    /// Renderiza `scene` com `params`, devolvendo os `passes` que este modo
+    /// Renderiza `scene` com `params`, devolvendo todos os passes que este modo
     /// sabe produzir.
     ///
     /// Função pura: mesma entrada, mesma saída, sem estado guardado entre
     /// chamadas.
-    fn render(&self, scene: &Scene, params: &Parameters, passes: &[RenderPass]) -> RenderResult;
+    fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult;
 }

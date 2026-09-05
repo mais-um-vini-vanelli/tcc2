@@ -8,10 +8,9 @@ use crate::color::Rgb;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameters {
-    pub rasterization: RasterOptions,
+    pub rasterization: RasterizationOptions,
     pub clipping: ClippingOptions,
     pub texturing: TextureOptions,
-    pub acceleration: AccelOptions,
     pub ray_tracing: RayTracingOptions,
     pub output: OutputOptions,
 }
@@ -30,9 +29,8 @@ impl Parameters {
     }
 }
 
-/// Estágio de rasterização (Pineda, 1988).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RasterOptions {
+pub struct RasterizationOptions {
     /// Amostras por pixel do *multisampling*. `None` = uma amostra por pixel.
     pub msaa: Option<u8>,
     /// Descarta triângulos de face oposta à câmera.
@@ -47,9 +45,9 @@ pub struct RasterOptions {
     pub depth_test: bool,
 }
 
-impl Default for RasterOptions {
+impl Default for RasterizationOptions {
     fn default() -> Self {
-        RasterOptions {
+        RasterizationOptions {
             msaa: None,
             backface_cull: true,
             wireframe: false,
@@ -59,7 +57,6 @@ impl Default for RasterOptions {
     }
 }
 
-/// Recorte de polígonos contra o frustum (Sutherland e Hodgman, 1974).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClippingOptions {
     pub enabled: bool,
@@ -89,7 +86,7 @@ impl Default for TextureOptions {
     }
 }
 
-/// Filtro de amostragem de textura.
+/// Filtro de texture sampling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Filtering {
     /// Texel mais próximo. Barato, visivelmente serrilhado.
@@ -100,21 +97,18 @@ pub enum Filtering {
     Trilinear,
 }
 
-/// Estrutura de aceleração (LBVH, Apetrei 2014).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AccelOptions {
-    /// Desligar cai para força bruta (todo raio testa todo primitivo) — a
-    /// comparação de tempo entre os dois modos é o ponto didático.
+pub struct AccelerationOptions {
+    /// Desligar cai para força bruta (todo raio testa todo primitivo).
     pub bvh: bool,
 }
 
-impl Default for AccelOptions {
+impl Default for AccelerationOptions {
     fn default() -> Self {
-        AccelOptions { bvh: true }
+        AccelerationOptions { bvh: true }
     }
 }
 
-/// Componentes do modelo recursivo de Whitted (1979).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RayTracingOptions {
     /// Profundidade máxima da recursão de reflexão/refração.
@@ -125,6 +119,7 @@ pub struct RayTracingOptions {
     pub reflections: bool,
     /// Raios secundários de refração.
     pub refractions: bool,
+    pub acceleration: AccelerationOptions,
 }
 
 impl Default for RayTracingOptions {
@@ -134,6 +129,7 @@ impl Default for RayTracingOptions {
             shadows: true,
             reflections: true,
             refractions: true,
+            acceleration: AccelerationOptions::default(),
         }
     }
 }

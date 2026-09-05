@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>esfera_uv — θ e φ</title>
+<style>
+  :root {
+    --fundo: #faf9f7;
+    --superficie: #f1efe8;
+    --texto: #1a1a18;
+    --texto-fraco: #5f5e5a;
+    --texto-muito-fraco: #888780;
+    --borda: #d3d1c7;
+    --roxo: #7f77dd;
+    --roxo-escuro: #534ab7;
+    --verde: #1d9e75;
+    --verde-claro: #5dcaa5;
+    --verde-escuro: #0f6e56;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #1a1a18;
+      --superficie: #2c2c2a;
+      --texto: #f1efe8;
+      --texto-fraco: #b4b2a9;
+      --texto-muito-fraco: #888780;
+      --borda: #444441;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 2rem 1.5rem 3rem;
+    background: var(--fundo);
+    color: var(--texto);
+    font: 400 16px/1.7 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  main { max-width: 720px; margin: 0 auto; }
+
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 .5rem; }
+
+  p { color: var(--texto-fraco); margin: 0 0 1rem; }
+
+  code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: .9em;
+  }
+
+  .controle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 12px;
+  }
+
+  .controle label { font-size: 14px; color: var(--texto-fraco); min-width: 160px; }
+  .controle b { font-weight: 500; color: var(--texto); }
+  .controle input { flex: 1; accent-color: var(--roxo); }
+  .controle output { font-size: 14px; font-weight: 500; min-width: 60px; text-align: right; }
+
+  figure { margin: 1.5rem 0 0; }
+
+  .valores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 1.25rem 0 0;
+  }
+
+  .valor {
+    background: var(--superficie);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+
+  .valor .rotulo { font-size: 13px; color: var(--texto-fraco); }
+  .valor .numero { font-size: 24px; font-weight: 500; }
+
+  .vetor {
+    margin: 12px 0 0;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 14px;
+  }
+
+  .nota {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--texto-fraco);
+    min-height: 20px;
+  }
+
+  svg text { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: var(--texto-fraco); }
+  svg text.titulo { font-size: 14px; font-weight: 500; fill: var(--texto); }
+  .eixo { stroke: var(--texto-muito-fraco); stroke-width: 1; }
+  .contorno { stroke: var(--texto-muito-fraco); stroke-width: 1; fill: none; }
+  .referencia { stroke: var(--borda); stroke-width: 1; fill: none; stroke-dasharray: 2 4; }
+  .grade { fill: var(--texto-muito-fraco); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>A esfera em dois ângulos</h1>
+
+<p>
+  Como <code>esfera_uv</code> transforma os índices <code>(i, j)</code> da grade em um
+  ponto da esfera. Primeiro <code>θ</code> escolhe uma fatia horizontal — dela saem a
+  altura <code>y = cos θ</code> e o raio <code>r = sin θ</code>. Depois <code>φ</code>
+  escolhe um ponto naquele círculo, repartindo o <code>r</code> entre
+  <code>x = r·cos φ</code> e <code>z = r·sin φ</code>.
+</p>
+
+<div class="controle">
+  <label for="si">linha <b>i</b> (paralelo)</label>
+  <input type="range" min="0" max="8" step="1" value="3" id="si">
+  <output id="oi">3 / 8</output>
+</div>
+<div class="controle">
+  <label for="sj">coluna <b>j</b> (meridiano)</label>
+  <input type="range" min="0" max="16" step="1" value="2" id="sj">
+  <output id="oj">2 / 16</output>
+</div>
+
+<figure>
+<svg width="100%" viewBox="0 0 680 352" role="img">
+  <title>Decomposição de um vértice da esfera em theta e phi</title>
+  <desc>
+    Duas vistas da esfera unitária: à esquerda o corte lateral, onde o ângulo theta define a
+    altura y (cosseno de theta) e o raio r (seno de theta); à direita a vista de cima, onde o
+    ângulo phi percorre o círculo de raio r, dando x (r vezes cosseno de phi) e z (r vezes
+    seno de phi). A vista de cima olha de +y para baixo, então o eixo z aponta para baixo na
+    tela e phi cresce no sentido horário.
+  </desc>
+
+  <text class="titulo" x="180" y="42" text-anchor="middle">corte lateral · plano y × r</text>
+  <text class="titulo" x="500" y="42" text-anchor="middle">vista de cima · plano x × z</text>
+  <text x="500" y="60" text-anchor="middle">olhando de +y para baixo</text>
+
+  <!-- painel A: o corte no plano do meridiano -->
+  <line class="eixo" x1="180" y1="76" x2="180" y2="316"/>
+  <line class="eixo" x1="62" y1="195" x2="302" y2="195"/>
+  <text x="188" y="74">y</text>
+  <text x="298" y="188" text-anchor="end">r</text>
+  <circle class="contorno" cx="180" cy="195" r="105"/>
+  <g id="dotsA"></g>
+  <line id="dashAy" stroke="var(--roxo)" stroke-width="1" stroke-dasharray="3 3"/>
+  <line id="dashAr" stroke="var(--roxo)" stroke-width="1" stroke-dasharray="3 3"/>
+  <line id="radA" stroke="var(--roxo)" stroke-width="1.5"/>
+  <path id="arcA" fill="none" stroke="var(--roxo)" stroke-width="1.5"/>
+  <text id="labTheta" fill="var(--roxo-escuro)">θ</text>
+  <text id="labY" fill="var(--roxo-escuro)" text-anchor="end">y</text>
+  <text id="labR" fill="var(--roxo-escuro)" text-anchor="middle">r</text>
+  <circle id="ptA" r="5" fill="var(--roxo)"/>
+
+  <!-- painel B: o círculo daquela latitude, visto de cima -->
+  <line class="eixo" x1="380" y1="195" x2="622" y2="195"/>
+  <line class="eixo" x1="500" y1="76" x2="500" y2="316"/>
+  <text x="618" y="188" text-anchor="end">x</text>
+  <text x="508" y="314">z</text>
+  <circle class="referencia" cx="500" cy="195" r="105"/>
+  <circle id="parB" cx="500" cy="195" fill="none" stroke="var(--verde)" stroke-width="1"/>
+  <g id="dotsB"></g>
+  <line id="dashBz" stroke="var(--verde)" stroke-width="1" stroke-dasharray="3 3"/>
+  <line id="dashBx" stroke="var(--verde)" stroke-width="1" stroke-dasharray="3 3"/>
+  <line id="radB" stroke="var(--verde)" stroke-width="1.5"/>
+  <path id="arcB" fill="none" stroke="var(--verde)" stroke-width="1.5"/>
+  <text id="labPhi" fill="var(--verde-escuro)">φ</text>
+  <text id="labZ" fill="var(--verde-escuro)" text-anchor="end">z</text>
+  <text id="labX" fill="var(--verde-escuro)" text-anchor="middle">x</text>
+  <circle id="ptB" r="5" fill="var(--verde)"/>
+</svg>
+</figure>
+
+<div class="valores">
+  <div class="valor"><div class="rotulo">θ = v · π</div><div class="numero" id="vTheta">—</div></div>
+  <div class="valor"><div class="rotulo">y = cos θ</div><div class="numero" id="vY">—</div></div>
+  <div class="valor"><div class="rotulo">r = sin θ</div><div class="numero" id="vR">—</div></div>
+  <div class="valor"><div class="rotulo">φ = u · 2π</div><div class="numero" id="vPhi">—</div></div>
+</div>
+
+<div class="vetor" id="vXYZ">—</div>
+<div class="nota" id="nota"></div>
+
+</main>
+
+<script>
+(function () {
+  var P = 8, M = 16, R = 105, AX = 180, AY = 195, BX = 500, BY = 195;
+  var NS = "http://www.w3.org/2000/svg";
+  var el = function (id) { return document.getElementById(id); };
+
+  function ponto(cx, cy, r, classe) {
+    var c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", cx);
+    c.setAttribute("cy", cy);
+    c.setAttribute("r", r);
+    c.setAttribute("class", classe);
+    return c;
+  }
+
+  function segmento(n, x1, y1, x2, y2) {
+    n.setAttribute("x1", x1); n.setAttribute("y1", y1);
+    n.setAttribute("x2", x2); n.setAttribute("y2", y2);
+  }
+
+  function arco(n, cx, cy, raio, a0, a1, sentido, visivel) {
+    if (!visivel) { n.setAttribute("d", ""); return; }
+    var p0 = [cx + raio * Math.cos(a0), cy - raio * Math.sin(a0)];
+    var p1 = [cx + raio * Math.cos(a1), cy - raio * Math.sin(a1)];
+    var maior = Math.abs(a1 - a0) > Math.PI ? 1 : 0;
+    n.setAttribute("d", "M " + p0[0].toFixed(2) + " " + p0[1].toFixed(2) +
+      " A " + raio + " " + raio + " 0 " + maior + " " + sentido + " " +
+      p1[0].toFixed(2) + " " + p1[1].toFixed(2));
+  }
+
+  // toFixed(3) num valor como -2.4e-16 devolve "-0.000".
+  function num(n) {
+    var s = n.toFixed(3);
+    return s === "-0.000" ? "0.000" : s;
+  }
+
+  function posiciona(n, x, y) {
+    n.setAttribute("x", x.toFixed(1));
+    n.setAttribute("y", y.toFixed(1));
+  }
+
+  // Os paralelos: uma linha de vértices por i, descendo de um polo ao outro.
+  var gA = el("dotsA");
+  for (var i = 0; i <= P; i++) {
+    var th = i / P * Math.PI;
+    gA.appendChild(ponto(AX + R * Math.sin(th), AY - R * Math.cos(th), 2.5, "grade"));
+  }
+
+  // Os meridianos: as posições distintas de j na latitude atual.
+  var gB = el("dotsB");
+  var dotsB = [];
+  for (var j = 0; j < M; j++) {
+    var d = ponto(0, 0, 2.5, "grade");
+    dotsB.push(d);
+    gB.appendChild(d);
+  }
+
+  // Marca da emenda, onde j = 0 e j = M coincidem.
+  var emendaMarca = document.createElementNS(NS, "circle");
+  emendaMarca.setAttribute("r", 6);
+  emendaMarca.setAttribute("fill", "none");
+  emendaMarca.setAttribute("stroke", "var(--verde-claro)");
+  emendaMarca.setAttribute("stroke-width", "1");
+  gB.appendChild(emendaMarca);
+
+  function desenha() {
+    var i = +el("si").value, j = +el("sj").value;
+    var v = i / P, u = j / M;
+    var th = v * Math.PI, ph = u * 2 * Math.PI;
+    var y = Math.cos(th), r = Math.sin(th);
+    var x = r * Math.cos(ph), z = r * Math.sin(ph);
+
+    el("oi").textContent = i + " / " + P;
+    el("oj").textContent = j + " / " + M;
+    el("vTheta").textContent = (v * 180).toFixed(1) + "°";
+    el("vPhi").textContent = (u * 360).toFixed(1) + "°";
+    el("vY").textContent = num(y);
+    el("vR").textContent = num(r);
+    el("vXYZ").textContent =
+      "posição = normal = (" + num(x) + ", " + num(y) + ", " + num(z) + ")";
+
+    var px = AX + R * r, py = AY - R * y;
+    el("ptA").setAttribute("cx", px.toFixed(2));
+    el("ptA").setAttribute("cy", py.toFixed(2));
+    segmento(el("radA"), AX, AY, px, py);
+    segmento(el("dashAy"), px, py, AX, py);
+    segmento(el("dashAr"), px, py, px, AY);
+    arco(el("arcA"), AX, AY, 44, Math.PI / 2, Math.PI / 2 - th, 1, i > 0);
+    posiciona(el("labTheta"), AX + 60 * Math.sin(th / 2) + 6, AY - 60 * Math.cos(th / 2));
+    el("labTheta").style.display = i > 0 ? "" : "none";
+    posiciona(el("labY"), AX - 8, (AY + py) / 2 + 4);
+    posiciona(el("labR"), (AX + px) / 2, AY + 16);
+
+    var rs = R * r;
+    el("parB").setAttribute("r", rs.toFixed(2));
+    // Vista de cima (de +y pra baixo): com x pra direita, +z aponta pra baixo na tela.
+    var qx = BX + rs * Math.cos(ph), qy = BY + rs * Math.sin(ph);
+    el("ptB").setAttribute("cx", qx.toFixed(2));
+    el("ptB").setAttribute("cy", qy.toFixed(2));
+    segmento(el("radB"), BX, BY, qx, qy);
+    segmento(el("dashBz"), qx, qy, BX, qy);
+    segmento(el("dashBx"), qx, qy, qx, BY);
+    arco(el("arcB"), BX, BY, 44, 0, -ph, 1, j > 0 && rs > 6);
+    posiciona(el("labPhi"), BX + 60 * Math.cos(ph / 2) + 4, BY + 60 * Math.sin(ph / 2) + 4);
+    el("labPhi").style.display = (j > 0 && rs > 6) ? "" : "none";
+    posiciona(el("labZ"), BX - 8, (BY + qy) / 2 + 4);
+    posiciona(el("labX"), (BX + qx) / 2, BY + 16);
+
+    for (var k = 0; k < M; k++) {
+      var a = k / M * 2 * Math.PI;
+      dotsB[k].setAttribute("cx", (BX + rs * Math.cos(a)).toFixed(2));
+      dotsB[k].setAttribute("cy", (BY + rs * Math.sin(a)).toFixed(2));
+    }
+    emendaMarca.setAttribute("cx", (BX + rs).toFixed(2));
+    emendaMarca.setAttribute("cy", BY);
+
+    var polo = (i === 0 || i === P);
+    var emenda = (j === 0 || j === M);
+    el("dashBz").style.display = polo ? "none" : "";
+    el("dashBx").style.display = polo ? "none" : "";
+    el("radB").style.display = polo ? "none" : "";
+
+    var nota = "";
+    if (polo) {
+      nota = "r = 0: o círculo virou um ponto — os " + (M + 1) +
+             " valores de j caem todos no mesmo lugar (o polo).";
+    } else if (emenda) {
+      nota = "a emenda: j = 0 e j = " + M +
+             " são a mesma posição, mas guardam u = 0.0 e u = 1.0.";
+    }
+    el("nota").textContent = nota;
+  }
+
+  el("si").addEventListener("input", desenha);
+  el("sj").addEventListener("input", desenha);
+  desenha();
+})();
+</script>
+</body>
+</html>

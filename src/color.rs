@@ -41,8 +41,11 @@ impl Rgb {
     }
 
     pub fn to_bytes(self) -> [u8; 3] {
-        let q = |c: f32| (c.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
-        [q(self.r), q(self.g), q(self.b)]
+        [
+            (self.r.clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
+            (self.g.clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
+            (self.b.clamp(0.0, 1.0) * 255.0 + 0.5) as u8,
+        ]
     }
 }
 

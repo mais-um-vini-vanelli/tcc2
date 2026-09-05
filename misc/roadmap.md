@@ -10,8 +10,8 @@ rasterização antes do protótipo de ray tracing.
 - [x] `Light` (`Point`, `Directional`, `Ambient`)
 - [x] `Primitive` (`Triangle`, `Mesh`, `Sphere`) com `Material` embutido
 - [x] `Parameters` agrupado por estágio (raster, clipping, texturing, acceleration, ray tracing, output)
-- [x] trait `Renderer` + `RenderResult`/`RenderPass` (mapa de buffers)
-- [x] saída em PPM/PNG (sem lógica de shading ainda)
+- [x] trait `Renderer` + `RenderResult`/`RenderPass` (um `Option<_>` por passe)
+- [x] ~~saída em PPM/PNG~~ — a lib não grava imagem; o exemplo `dois_modos` mostra como escrever PNG a partir dos buffers
 
 ## M0.5 — Esqueleto fino nos dois modos
 
@@ -27,6 +27,7 @@ rasterização antes do protótipo de ray tracing.
 - [x] z-buffer / teste de profundidade (`RenderPass::Depth` já sai do rasterizador)
 - [x] coordenadas baricêntricas com correção de perspectiva (`perspective_correct`)
 - [x] suporte a `Mesh` (não só `Triangle` solto)
+- [x] tesselação (`Primitive::tessellate`): o rasterizador só vê malha, e `Cube`/`Sphere` viram triângulos (resolução da esfera fixa)
 - [x] backface culling (`backface_cull`)
 - `wireframe` e `msaa` como toggles de `RasterOptions`
 

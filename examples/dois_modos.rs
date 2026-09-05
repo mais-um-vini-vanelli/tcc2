@@ -1,16 +1,21 @@
-//! Renderiza **a mesma cena** nos dois modos e grava um .ppm de cada.
+//! Renderiza **a mesma cena** nos dois modos e grava um .png de cada passe que
+//! o renderer produziu.
 //!
-//! A cena tem um triângulo, um cubo (`Mesh`) e uma esfera; por enquanto o
-//! rasterizador desenha os dois primeiros e o ray tracer só a esfera.
+//! A cena tem um triângulo, um cubo e uma esfera. O rasterizador tessela tudo
+//! em triângulos e desenha os três; o ray tracer, por enquanto, só intercepta a
+//! esfera.
 //!
 //! ```text
 //! cargo run --example dois_modos
 //! ```
 
-use tcc2::output::write_ppm;
+use std::error::Error;
+use std::fs::{self, File};
+use std::io::BufWriter;
+
 use tcc2::prelude::*;
 
-fn main() -> std::io::Result<()> {
+fn main() -> Result<(), Box<dyn Error>> {
     let scene = Scene::new(Camera::Perspective {
         fov: 60.0,
         aspect: 4.0 / 3.0,
@@ -33,7 +38,7 @@ fn main() -> std::io::Result<()> {
         ],
         Material::diffuse(Rgb::new(0.9, 0.3, 0.2)),
     ))
-    .with_object(cubo(
+    .with_object(Primitive::cube(
         Vec3::new(0.0, 0.0, 0.0),
         0.8,
         Material::diffuse(Rgb::new(0.3, 0.8, 0.4)),
@@ -46,8 +51,8 @@ fn main() -> std::io::Result<()> {
 
     let params = Parameters::with_resolution(320, 240);
 
-    renderiza(&Rasterizer, &scene, &params, "./renders/raster.ppm")?;
-    renderiza(&RayTracer, &scene, &params, "./renders/raytracer.ppm")?;
+    renderiza(&Rasterizer, &scene, &params, "raster")?;
+    renderiza(&RayTracer, &scene, &params, "raytracer")?;
 
     Ok(())
 }
@@ -56,57 +61,65 @@ fn renderiza(
     renderer: &dyn Renderer,
     scene: &Scene,
     params: &Parameters,
-    arquivo: &str,
-) -> std::io::Result<()> {
-    let resultado = renderer.render(scene, params, &RenderPass::SHARED);
+    prefixo: &str,
+) -> Result<(), Box<dyn Error>> {
+    let resultado = renderer.render(scene, params);
 
-    let imagem = resultado.color().unwrap();
-    write_ppm(arquivo, imagem)?;
+    fs::create_dir_all("./renders")?;
 
-    if let Some(normais) = resultado.get(RenderPass::Normal) {
-        write_ppm(arquivo.replace(".ppm", "_normal.ppm"), &normais.to_color())?;
+    let mut gravados = Vec::new();
+
+    for (passe, nome) in [
+        (RenderPass::Color, "color"),
+        (RenderPass::Depth, "depth"),
+        (RenderPass::Normal, "normal"),
+        (RenderPass::Uv, "uv"),
+        (RenderPass::RayCount, "ray_count"),
+        (RenderPass::BvhHeatmap, "bvh_heatmap"),
+    ] {
+        let Some(buffer) = resultado.get(passe) else {
+            continue;
+        };
+
+        let arquivo = format!("./renders/{prefixo}_{nome}.png");
+        grava_png(&arquivo, &buffer.to_color())?;
+
+        gravados.push(nome);
     }
 
+    let (largura, altura) = resultado
+        .color
+        .as_ref()
+        .map(|b| (b.width(), b.height()))
+        .unwrap_or((0, 0));
+
     println!(
-        "{}: {arquivo} ({}x{}), {} backfaces culled",
+        "{}: {largura}x{altura}, {} backfaces descartadas, passes: {}",
         renderer.name(),
-        imagem.width(),
-        imagem.height(),
         resultado.stats.backfaces_culled,
+        gravados.join(", "),
     );
 
     Ok(())
 }
 
-/// Cubo centrado em `centro`, com aresta `2 * meia_aresta`.
-///
-/// A ordem dos índices de cada face é anti-horária **vista de fora**, que é o
-/// que o backface culling espera: face virada pra câmera fica, face de costas
-/// some.
-fn cubo(centro: Vec3, meia_aresta: f32, material: Material) -> Primitive {
-    let h = meia_aresta;
-    let vertices = [
-        Vec3::new(-h, -h, -h),
-        Vec3::new(h, -h, -h),
-        Vec3::new(h, h, -h),
-        Vec3::new(-h, h, -h),
-        Vec3::new(-h, -h, h),
-        Vec3::new(h, -h, h),
-        Vec3::new(h, h, h),
-        Vec3::new(-h, h, h),
-    ]
-    .map(|v| v + centro)
-    .to_vec();
+fn grava_png(caminho: &str, buffer: &ColorBuffer) -> Result<(), Box<dyn Error>> {
+    let mut bytes = Vec::with_capacity(buffer.pixels().len() * 3);
+    for pixel in buffer.pixels() {
+        bytes.extend_from_slice(&pixel.to_bytes());
+    }
 
-    #[rustfmt::skip]
-    let indices = vec![
-        4, 5, 6,  4, 6, 7, // frente (+z)
-        0, 3, 2,  0, 2, 1, // fundo  (-z)
-        1, 2, 6,  1, 6, 5, // direita (+x)
-        0, 4, 7,  0, 7, 3, // esquerda (-x)
-        3, 7, 6,  3, 6, 2, // topo (+y)
-        0, 1, 5,  0, 5, 4, // base (-y)
-    ];
+    let mut encoder = png::Encoder::new(
+        BufWriter::new(File::create(caminho)?),
+        buffer.width(),
+        buffer.height(),
+    );
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
 
-    Primitive::mesh(vertices, indices, material)
+    let mut escritor = encoder.write_header()?;
+    escritor.write_image_data(&bytes)?;
+    escritor.finish()?;
+
+    Ok(())
 }

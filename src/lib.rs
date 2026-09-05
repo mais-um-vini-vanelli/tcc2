@@ -5,7 +5,6 @@
 
 pub mod color;
 pub mod math;
-pub mod output;
 pub mod parameters;
 pub mod rasterizer;
 pub mod raytracer;
@@ -14,16 +13,16 @@ pub mod scene;
 
 pub mod prelude {
     pub use crate::color::Rgb;
-    pub use crate::math::{Ray, Vec2, Vec3};
+    pub use crate::math::{Baricentrics, Plane, Ray, Vec2, Vec3, Vertex};
     pub use crate::parameters::{
-        AccelOptions, ClippingOptions, Filtering, OutputOptions, Parameters, RasterOptions,
-        RayTracingOptions, TextureOptions,
+        AccelerationOptions, ClippingOptions, Filtering, OutputOptions, Parameters,
+        RasterizationOptions, RayTracingOptions, TextureOptions,
     };
     pub use crate::rasterizer::Rasterizer;
     pub use crate::raytracer::RayTracer;
     pub use crate::render::{
-        Buffer, BufferKind, ColorBuffer, RenderPass, RenderResult, RenderStats, Renderer,
+        BufferKind, BufferRef, ColorBuffer, RenderPass, RenderResult, RenderStats, Renderer,
         ScalarBuffer,
     };
-    pub use crate::scene::{Camera, Light, Material, Primitive, Scene, Texture};
+    pub use crate::scene::{Camera, Light, Material, Mesh, Primitive, Scene, Texture};
 }
