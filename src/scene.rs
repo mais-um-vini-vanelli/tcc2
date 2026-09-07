@@ -119,17 +119,29 @@ impl Camera {
 
         (right, up, forward)
     }
+
+    /// Direção do ponto **para** a câmera.
+    ///
+    /// Sob perspectiva todos os raios de visão convergem na posição da câmera;
+    /// sob ortográfica eles são paralelos, e a direção não depende do ponto.
+    pub fn view_from(&self, point: Vec3) -> Vec3 {
+        match self {
+            Camera::Perspective { position, .. } => (*position - point).normalized(),
+            Camera::Orthographic { .. } => -self.basis().2,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Light {
-    /// Luz pontual
+    /// Luz pontual: irradia em todas as direções e atenua com o quadrado da
+    /// distância.
     Point {
         position: Vec3,
         color: Rgb,
         intensity: f32,
     },
-    /// Luz direcional
+    /// Luz direcional: raios paralelos, sem posição e sem atenuação.
     Directional {
         direction: Vec3,
         color: Rgb,
@@ -157,44 +169,112 @@ impl Light {
     }
 }
 
+/// Um canal do material: ou um valor constante, ou uma textura.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value<T> {
+    Constant(T),
+    Map(Texture),
+}
+
+impl Value<Rgb> {
+    pub fn sample(&self, uv: Vec2) -> Rgb {
+        match self {
+            Value::Constant(c) => *c,
+            Value::Map(textura) => textura.sample(uv),
+        }
+    }
+}
+
+impl Value<f32> {
+    /// Mapa de dado (roughness, metallic) é cinza: os três canais são iguais,
+    /// então basta ler um.
+    pub fn sample(&self, uv: Vec2) -> f32 {
+        match self {
+            Value::Constant(v) => *v,
+            Value::Map(textura) => textura.sample(uv).r,
+        }
+    }
+}
+
 /// Propriedades de superfície.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Material {
-    /// Cor difusa base.
-    pub albedo: Rgb,
-    /// Fração de luz refletida especularmente (raio de reflexão).
-    pub reflectivity: f32,
+    /// Cor base. Em metal, é também a cor do reflexo especular.
+    pub albedo: Value<Rgb>,
+    /// 0 dielétrico, 1 metal. Na prática só 0 ou 1 — o meio do caminho não
+    /// existe como material real.
+    pub metallic: Value<f32>,
+    /// 0 espelho, 1 difuso. É daqui que sai o expoente do especular.
+    pub roughness: Value<f32>,
+
+    // Modelo de Whitted (M3), ortogonais ao acima.
     /// Fração de luz transmitida (raio de refração).
     pub transparency: f32,
     /// Índice de refração, usado quando `transparency > 0` (vidro ~ 1.5).
     pub refractive_index: f32,
-    /// Expoente especular do termo de Phong.
-    pub shininess: f32,
-    /// Textura difusa opcional
-    pub texture: Option<Texture>,
 }
 
 impl Default for Material {
     fn default() -> Self {
         Material {
-            albedo: Rgb::gray(0.8),
-            reflectivity: 0.0,
+            albedo: Value::Constant(Rgb::gray(0.8)),
+            metallic: Value::Constant(0.0),
+            roughness: Value::Constant(0.5),
             transparency: 0.0,
             refractive_index: 1.0,
-            shininess: 32.0,
-            texture: None,
         }
     }
 }
 
 impl Material {
-    /// Material difuso puro da cor dada.
+    /// Material difuso puro da cor dada: dielétrico e áspero.
     pub fn diffuse(albedo: Rgb) -> Self {
         Material {
-            albedo,
+            albedo: Value::Constant(albedo),
+            roughness: Value::Constant(1.0),
             ..Material::default()
         }
     }
+
+    /// Metal da cor dada. O albedo vira a cor do
+    /// próprio reflexo.
+    pub fn metal(albedo: Rgb, roughness: f32) -> Self {
+        Material {
+            albedo: Value::Constant(albedo),
+            metallic: Value::Constant(1.0),
+            roughness: Value::Constant(roughness),
+            ..Material::default()
+        }
+    }
+
+    /// Material com textura difusa.
+    pub fn textured(texture: Texture) -> Self {
+        Material {
+            albedo: Value::Map(texture),
+            roughness: Value::Constant(1.0),
+            ..Material::default()
+        }
+    }
+
+    pub fn sample(&self, uv: Vec2) -> MaterialSample {
+        MaterialSample {
+            albedo: self.albedo.sample(uv),
+            metallic: self.metallic.sample(uv).clamp(0.0, 1.0),
+            // Roughness zero concentra o especular num delta que nenhuma
+            // amostragem de pixel pega, e o highlight some.
+            roughness: self.roughness.sample(uv).clamp(Self::MIN_ROUGHNESS, 1.0),
+        }
+    }
+
+    const MIN_ROUGHNESS: f32 = 0.045;
+}
+
+/// O material já resolvido num ponto.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MaterialSample {
+    pub albedo: Rgb,
+    pub metallic: f32,
+    pub roughness: f32,
 }
 
 /// Imagem de textura em memória, com cor em float como o resto do renderer.
@@ -232,6 +312,26 @@ impl Texture {
 
     pub fn texels(&self) -> &[Rgb] {
         &self.texels
+    }
+
+    /// Amostragem *nearest*: o texel que contém `uv`, sem filtro nenhum.
+    ///
+    /// uv fora de [0,1] faz wrap. `v` cresce para baixo, como nas
+    /// imagens.
+    ///
+    /// [TODO: filtro bilinear, trilinear e mipmaps.]
+    pub fn sample(&self, uv: Vec2) -> Rgb {
+        let repete = |c: f32| c - c.floor();
+
+        let x = (repete(uv.x) * self.width as f32) as u32;
+        let y = (repete(uv.y) * self.height as f32) as u32;
+
+        // O produto acima pode chegar em width/height.
+        self.texel(
+            x.min(self.width.saturating_sub(1)),
+            y.min(self.height.saturating_sub(1)),
+        )
+        .unwrap_or(Rgb::BLACK)
     }
 
     pub fn texel(&self, x: u32, y: u32) -> Option<Rgb> {

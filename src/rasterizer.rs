@@ -5,15 +5,14 @@
 //! O rasterizador trabalha só com malha: todo objeto da cena passa por
 //! `Primitive::tessellate` na entrada.
 //!
-//! Ainda **não** existem aqui: wireframe, msaa, textura e shading. A cor
-//! continua sendo o albedo do material, sólido — normal e uv já são
-//! interpolados, mas só aparecem nos passes `Normal` e `Uv`.
+//! Ainda **não** existem aqui: wireframe, msaa e sombra projetada.
 
 use crate::color::Rgb;
 use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
-use crate::parameters::Parameters;
+use crate::parameters::{Parameters, ShadingFrequency};
 use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
-use crate::scene::{Camera, Material, Scene};
+use crate::scene::{Camera, Light, Material, Scene};
+use crate::shading::{self, Surface};
 use crate::transform::Transform;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -43,6 +42,13 @@ impl Renderer for Rasterizer {
         let planos = frustum(&scene.camera);
         let perspectiva = matches!(scene.camera, Camera::Perspective { .. });
 
+        let contexto = Contexto {
+            camera: &scene.camera,
+            lights: &scene.lights,
+            params,
+            perspectiva,
+        };
+
         for objeto in &scene.objects {
             let malha = objeto.geometry.tessellate();
 
@@ -64,8 +70,8 @@ impl Renderer for Rasterizer {
 
                 // O recorte devolve um polígono convexo de N vértices; desenhar com triangle fan.
                 for i in 1..poligono.len().saturating_sub(1) {
-                    let tela = [poligono[0], poligono[i], poligono[i + 1]]
-                        .map(|v| para_tela(&scene.camera, v, largura, altura));
+                    let recortado = [poligono[0], poligono[i], poligono[i + 1]];
+                    let tela = recortado.map(|v| para_tela(&scene.camera, v, largura, altura));
 
                     let [Some(a), Some(b), Some(c)] = tela else {
                         // Só entra aqui com clipping desligado. Daí o triângulo que cruza o near plane
@@ -90,13 +96,26 @@ impl Renderer for Rasterizer {
                         break;
                     }
 
+                    // O shading acontece no espaço de mundo.
+                    let mundo = recortado.map(|v| de_camera(&scene.camera, base, v.position));
+
+                    let shading = contexto.shade_vertex(
+                        &objeto.material,
+                        mundo,
+                        recortado.map(|v| v.normal),
+                        recortado.map(|v| v.uv),
+                    );
+
                     preenche(
                         &mut resultado,
-                        [a, b, c],
-                        area,
-                        &objeto.material,
-                        perspectiva,
-                        params,
+                        &Triangulo {
+                            tela: [a, b, c],
+                            mundo,
+                            area,
+                            shading,
+                            material: &objeto.material,
+                        },
+                        &contexto,
                         &mut stats,
                     );
                 }
@@ -106,6 +125,116 @@ impl Renderer for Rasterizer {
         resultado.stats = stats;
         resultado
     }
+}
+
+/// O que o shading precisa saber da cena e que não muda de um triângulo para o
+/// outro.
+struct Contexto<'a> {
+    camera: &'a Camera,
+    lights: &'a [Light],
+    params: &'a Parameters,
+    perspectiva: bool,
+}
+
+impl Contexto<'_> {
+    fn shade_fragment(
+        &self,
+        triangulo: &Triangulo,
+        baricentricas: &Baricentrics,
+        normal: Vec3,
+        uv: Vec2,
+    ) -> Rgb {
+        match triangulo.shading {
+            Shading::Face(cor) => cor,
+            Shading::Vertices(cores) => baricentricas.interpolate_rgb(cores),
+            Shading::Pixel => {
+                let superficie = Surface {
+                    point: baricentricas.interpolate_vec3(triangulo.mundo),
+                    normal,
+                    uv,
+                };
+
+                shading::shade(
+                    &superficie,
+                    triangulo.material,
+                    self.lights,
+                    self.camera,
+                    self.params.shading.reflectance,
+                )
+            }
+        }
+    }
+
+    fn shade_vertex(
+        &self,
+        material: &Material,
+        mundo: [Vec3; 3],
+        normais: [Vec3; 3],
+        uvs: [Vec2; 3],
+    ) -> Shading {
+        match self.params.shading.frequency {
+            ShadingFrequency::Flat => {
+                let normal = (mundo[1] - mundo[0])
+                    .cross(mundo[2] - mundo[0])
+                    .normalized();
+                let centro = (mundo[0] + mundo[1] + mundo[2]) / 3.0;
+                let uv = (uvs[0] + uvs[1] + uvs[2]) / 3.0;
+
+                Shading::Face({
+                    let superficie = Surface {
+                        point: centro,
+                        normal: normal,
+                        uv: uv,
+                    };
+                    shading::shade(
+                        &superficie,
+                        material,
+                        self.lights,
+                        self.camera,
+                        self.params.shading.reflectance,
+                    )
+                })
+            }
+            ShadingFrequency::Gouraud => Shading::Vertices([0, 1, 2].map(|k| {
+                let ponto = mundo[k];
+                let normal = normais[k];
+                let uv = uvs[k];
+
+                let superficie = Surface {
+                    point: ponto,
+                    normal,
+                    uv,
+                };
+                shading::shade(
+                    &superficie,
+                    material,
+                    self.lights,
+                    self.camera,
+                    self.params.shading.reflectance,
+                )
+            })),
+            ShadingFrequency::Phong => Shading::Pixel,
+        }
+    }
+}
+
+/// O que sobrou do modelo de shading depois de resolver o triângulo: a cor já
+/// pronta, ou o aviso de que ela ainda vai ser calculada em cada pixel.
+enum Shading {
+    Face(Rgb),
+    Vertices([Rgb; 3]),
+    Pixel,
+}
+
+struct Triangulo<'a> {
+    /// Posição em pixels, com o z de câmera guardado sem projeção.
+    tela: [Vertex; 3],
+    /// As mesmas três posições, em espaço de mundo, para o shading.
+    mundo: [Vec3; 3],
+    /// Área com sinal em espaço de tela: o sinal diz a orientação.
+    area: f32,
+    shading: Shading,
+    material: &'a Material,
 }
 
 // Teoria: transform.md#o-transform
@@ -227,6 +356,13 @@ fn para_camera(camera: &Camera, base: (Vec3, Vec3, Vec3), ponto: Vec3) -> Vec3 {
     Vec3::new(d.dot(direita), d.dot(cima), d.dot(frente))
 }
 
+/// Câmera -> mundo, a inversa de `para_camera`.
+fn de_camera(camera: &Camera, base: (Vec3, Vec3, Vec3), p: Vec3) -> Vec3 {
+    let (direita, cima, frente) = base;
+
+    camera.position() + direita * p.x + cima * p.y + frente * p.z
+}
+
 // Teoria: rasterizer.md#camera-space-para-ndc
 /// Espaço de câmera -> tela. A posição vira `(x_pixel, y_pixel, z_camera)`; normal
 /// e uv atravessam intactas.
@@ -277,11 +413,8 @@ fn borda(a: Vec2, b: Vec2, p: Vec2) -> f32 {
 
 fn preenche(
     destino: &mut RenderResult,
-    vertices: [Vertex; 3],
-    area: f32,
-    material: &Material,
-    perspectiva: bool,
-    params: &Parameters,
+    triangulo: &Triangulo,
+    contexto: &Contexto,
     stats: &mut RenderStats,
 ) {
     let (Some(cor), Some(profundidade), Some(mapa_normal), Some(mapa_uv)) = (
@@ -293,10 +426,13 @@ fn preenche(
         return;
     };
 
-    let [a, b, c] = vertices.map(|v| v.position.xy());
-    let profundidades = vertices.map(|v| v.position.z);
-    let normais = vertices.map(|v| v.normal);
-    let uvs = vertices.map(|v| v.uv);
+    let params = contexto.params;
+
+    let [a, b, c] = triangulo.tela.map(|v| v.position.xy());
+    let profundidades = triangulo.tela.map(|v| v.position.z);
+    let normais = triangulo.tela.map(|v| v.normal);
+    let uvs = triangulo.tela.map(|v| v.uv);
+    let area = triangulo.area;
 
     let (largura, altura) = (cor.width() as f32, cor.height() as f32);
 
@@ -333,7 +469,8 @@ fn preenche(
             let pesos_de_tela = [w0 / area, w1 / area, w2 / area];
             // Na ortográfica não existe distorção a corrigir, então o toggle só tem efeito sob
             // perspectiva.
-            let baricentricas = if perspectiva && params.rasterization.perspective_correct {
+            let baricentricas = if contexto.perspectiva && params.rasterization.perspective_correct
+            {
                 Baricentrics::perspective(pesos_de_tela, profundidades)
             } else {
                 Baricentrics::orthographic(pesos_de_tela)
@@ -357,7 +494,11 @@ fn preenche(
             let uv = baricentricas.interpolate_vec2(uvs);
 
             profundidade.set(x, y, z);
-            cor.set(x, y, material.albedo);
+            cor.set(
+                x,
+                y,
+                contexto.shade_fragment(triangulo, &baricentricas, normal, uv),
+            );
             // Os componentes de uma normal vão de [-1,1], mas Rgb espera [0,1]. Então fazemos remap dos componentes da normal aqui:
             mapa_normal.set(
                 x,

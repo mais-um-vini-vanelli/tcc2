@@ -95,41 +95,46 @@ render imagem parecida com a de um renderer de referência. Teoria em
   dado. Não precisa de campo — o `Value<T>` do material já diz qual é qual
   (`Value<Rgb>` decodifica, `Value<f32>` e `normal_map` não). Nada a fazer aqui
   até os mapas de M2 existirem; a distinção já está no tipo
-- [ ] `OutputOptions { exposure, tonemap: None | Reinhard | Aces }` — sem
-  tonemap, `clamped()` estoura o branco em qualquer especular forte. Aplicado só
-  no passe `Color`, e separado da codificação sRGB, que vale pra qualquer buffer
-  que vire arquivo.
+- [ ] `OutputOptions { exposure, tonemap: None | Reinhard | Aces }` — **fora por
+  decisão**, não por esquecimento. Chegou a entrar com a primeira leva do
+  shading e saiu de novo: sem tonemap `clamped()` estoura o branco em qualquer
+  especular forte, e é assim que a lib fica por ora. `OutputOptions` volta a ser
+  dimensões e cor de fundo, e a codificação sRGB do `Rgb` segue valendo pra
+  qualquer buffer que vire arquivo. Quando o estouro incomodar, o estágio volta
+  como uma função só, aplicada ao passe `Color`
 
 ### Shading
 
 Em duas levas: a BRDF de Cook-Torrance é um braço de `match` numa função
 pequena, então Lambert/Blinn-Phong pode ir sozinho primeiro.
 
-Primeira leva:
+Primeira leva — **implementada**:
 
-- `shade()` em módulo próprio (`src/shading.rs`), consumido pelos dois modos —
+- [x] `shade()` em módulo próprio (`src/shading.rs`), consumido pelos dois modos —
   define a fronteira do código compartilhado antes de textura empilhar por cima.
   Forma: `shade()` itera as luzes e resolve visibilidade/atenuação, e a
   reflectância fica isolada numa função `(material, n, v, l) -> Rgb`, para a
-  BRDF nova entrar como braço de `match` sem tocar no resto
-- difuso (Lambert) e especular **Blinn-Phong** — com o vetor `h` do meio do
+  BRDF nova entrar como braço de `match` sem tocar no resto. A visibilidade
+  ainda é sempre 1: raio de sombra é M3
+- [x] difuso (Lambert) e especular **Blinn-Phong** — com o vetor `h` do meio do
   caminho, não o vetor de reflexão do Phong de 1975: é o mesmo `h` que GGX usa,
   e é para ele que vale a relação de expoente com `roughness`. Phong clássico
   fica como possível quinta variante depois, se valer como conteúdo
-- **(antecipado)** `Material` já reparametrizado: `roughness` e `metallic`
+- [x] **(antecipado)** `Material` já reparametrizado: `roughness` e `metallic`
   entram mesmo com só Phong lendo (o expoente sai de `roughness`, em uma linha);
   `shininess` e `reflectivity` saem — o segundo aproveitando que ninguém lê
   ainda
-- **(antecipado)** `Value<T> { Constant(T), Map(Texture) }` como tipo de cada
+- [x] **(antecipado)** `Value<T> { Constant(T), Map(Texture) }` como tipo de cada
   canal do material, com `sample(uv)` — é o que faz a textura entrar sem que o
   `shade()` ganhe um `if` por canal, e trocar depois mexeria em toda cena de
   exemplo
-- **(antecipado)** `Mul<Rgb>` e `lerp` no `Rgb` — Phong com luz colorida já
+- [x] **(antecipado)** `Mul<Rgb>` e `lerp` no `Rgb` — Phong com luz colorida já
   precisa da multiplicação componente a componente
-- **(antecipado)** a subseção "Cor de saída" acima, inteira
-- os tipos de `Light`: `Point` (com atenuação), `Directional`, `Ambient`
-- `ShadingOptions { model: Flat | Gouraud | Phong }`
-- amostragem de textura *nearest*, com a uv já interpolada e `Texture::texel`
+- [x] **(antecipado)** a subseção "Cor de saída" acima, na parte que entrou (o
+  sRGB dos dois lados; o estágio de exposição/tonemap ficou de fora por decisão)
+- [x] os tipos de `Light`: `Point` (com atenuação), `Directional`, `Ambient`
+- [x] `ShadingOptions { model: Flat | Gouraud | Phong }`
+- [x] amostragem de textura *nearest*, com a uv já interpolada e `Texture::texel`
   que já existem. Mipmap, filtros e `from_file` ficam em M2; o que se ganha
   aqui é a cena de xadrez, que é a imagem que melhor mostra
   `perspective_correct` ligado e desligado
@@ -178,6 +183,11 @@ Escopo, armadilhas e ordem em
   disso, Whitted não dá conta do lóbulo GGX com um raio só, e a divergência
   entre o que a BRDF descreve e o que o modelo consegue traçar vira cena de
   demonstração em M5
+- `shading::shade` continua sendo o termo **direto** de Whitted, e a recursão
+  fica no `trace()` do ray tracer. A assinatura muda em três pontos (`Camera`
+  vira `view: Vec3`, entra a visibilidade por callback, `f0`/`fresnel_schlick`
+  viram públicas) — ver "O `shade()` sob o modelo de Whitted" em
+  [design_api.md](design_api.md)
 
 ## M4 — Aceleração
 

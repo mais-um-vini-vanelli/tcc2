@@ -5,7 +5,7 @@
 //!
 //! Teoria: color.md#linear-e-srgb
 
-use std::ops::{Add, Div, Mul};
+use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Rgb {
@@ -34,6 +34,11 @@ impl Rgb {
 
     pub fn clamped(self) -> Rgb {
         self.map(|c| c.clamp(0.0, 1.0))
+    }
+
+    /// A cor a `t` do caminho entre as duas.
+    pub fn lerp(self, outra: Rgb, t: f32) -> Rgb {
+        self + (outra - self) * t
     }
 
     /// Pixel sRGB -> cor linear.
@@ -65,6 +70,20 @@ impl Add for Rgb {
     type Output = Rgb;
     fn add(self, o: Rgb) -> Rgb {
         Rgb::new(self.r + o.r, self.g + o.g, self.b + o.b)
+    }
+}
+
+impl Sub for Rgb {
+    type Output = Rgb;
+    fn sub(self, o: Rgb) -> Rgb {
+        Rgb::new(self.r - o.r, self.g - o.g, self.b - o.b)
+    }
+}
+
+impl Mul<Rgb> for Rgb {
+    type Output = Rgb;
+    fn mul(self, o: Rgb) -> Rgb {
+        Rgb::new(self.r * o.r, self.g * o.g, self.b * o.b)
     }
 }
 

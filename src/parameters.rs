@@ -11,6 +11,7 @@ pub struct Parameters {
     pub rasterization: RasterizationOptions,
     pub clipping: ClippingOptions,
     pub texturing: TextureOptions,
+    pub shading: ShadingOptions,
     pub ray_tracing: RayTracingOptions,
     pub output: OutputOptions,
 }
@@ -95,6 +96,36 @@ pub enum Filtering {
     Bilinear,
     /// Bilinear em dois níveis de mip, interpolados entre si.
     Trilinear,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ShadingOptions {
+    // Com que frequência a cor é avaliada
+    pub frequency: ShadingFrequency,
+    // Qual modelo de reflectância a avalia a cor
+    pub reflectance: ReflectanceModel,
+}
+
+/// Onde a cor é avaliada — por face, por vértice ou por fragmento. Não diz nada
+/// sobre *como* ela é calculada; isso é o `ReflectanceModel`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShadingFrequency {
+    /// Uma cor por triângulo, da normal geométrica da face. A malha aparece
+    /// facetada, e cada face da tesselação fica visível.
+    Flat,
+    /// Uma cor por vértice, interpolada no interior. Barato, mas o brilho
+    /// especular só existe se cair em cima de um vértice.
+    Gouraud,
+    /// A normal é interpolada e a cor calculada por pixel. É o padrão.
+    #[default]
+    Phong,
+}
+
+/// Qual BRDF converte a luz que chega em luz que sai.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReflectanceModel {
+    #[default]
+    BlinnPhong,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

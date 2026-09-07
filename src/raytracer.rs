@@ -3,16 +3,20 @@
 //! Teoria: raytracer.md#a-pipeline
 //!
 //! Lança um raio primário por pixel, leva o raio pro espaço local de cada
-//! objeto, testa contra as esferas da cena e pinta o albedo do material como cor
-//! sólida.
+//! objeto, testa contra as esferas da cena e aplica o shading no acerto mais próximo com
+//! o mesmo `shade()` do rasterizador.
 //!
-//! `Triangle`/`Mesh`/`Cube` são ignorados por enquanto.
+//! `Triangle`/`Mesh`/`Cube` são ignorados por enquanto, e sombra projetada e reflexo
+//! chegam em M3 — o que existe aqui é iluminação direta, sem raio secundário.
+
+use std::f32::consts::{PI, TAU};
 
 use crate::color::Rgb;
-use crate::math::{Ray, Vec3};
+use crate::math::{Ray, Vec2, Vec3};
 use crate::parameters::Parameters;
 use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer};
-use crate::scene::{Camera, Primitive, Scene};
+use crate::scene::{Camera, Object, Primitive, Scene};
+use crate::shading::{self, Surface};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RayTracer;
@@ -38,7 +42,7 @@ impl Renderer for RayTracer {
 
                 // Pegar o objeto mais próximo da câmera que esse raio acertou
                 let mut mais_proximo = far;
-                let mut acertou = None;
+                let mut acertou: Option<(&Object, Surface)> = None;
                 for objeto in &scene.objects {
                     let Primitive::Sphere { center, radius } = &objeto.geometry else {
                         // Ignorando outras primitivas por enquanto
@@ -57,12 +61,33 @@ impl Renderer for RayTracer {
                         && t < mais_proximo
                     {
                         mais_proximo = t;
-                        acertou = Some(objeto.material.albedo);
+
+                        // O `t` é igual nos espaços local e de mundo.
+                        let normal_local = (local.at(t) - *center).normalized();
+
+                        acertou = Some((
+                            objeto,
+                            Surface {
+                                point: raio.at(t),
+                                normal: objeto.transform.apply_normal(normal_local),
+                                uv: uv_da_esfera(normal_local),
+                            },
+                        ));
                     }
                 }
 
-                if let Some(albedo) = acertou {
-                    cor.set(x, y, albedo);
+                if let Some((objeto, superficie)) = acertou {
+                    cor.set(
+                        x,
+                        y,
+                        shading::shade(
+                            &superficie,
+                            &objeto.material,
+                            &scene.lights,
+                            &scene.camera,
+                            params.shading.reflectance,
+                        ),
+                    );
                 }
             }
         }
@@ -127,6 +152,45 @@ fn raio_primario(
             Ray::new(origem, frente)
         }
     }
+}
+
+fn uv_da_esfera(normal: Vec3) -> Vec2 {
+    // Seguindo a lógica de tessellation da esfera
+    // θ = u · π -> (0 no polo norte, π no polo sul)
+    // φ = v · τ -> (dá a volta no equador)
+    //
+    // normal = (sen θ · cos φ,  cos θ,  sen θ · sen φ)
+    // uv     = (v, u)
+
+    // y = cos θ, então θ = acos(y) / π
+    let theta = normal.y.acos() / PI;
+
+    // Vista de cima (plano xz)
+    //              +z
+    //               │
+    //               │     ● (x, z)
+    //               │    ╱
+    //               │   ╱  r = sen θ
+    //               │  ╱
+    //               │ ╱ φ
+    //     ───────────┼───────────── +x
+    //               │
+    //
+    // x = sen θ · cos φ = r · cos φ
+    // z = sen θ · sen φ = r · sen φ
+    //
+    // φ = atan2(sen φ, cos φ) = atan2(r · sen φ, r · cos φ)
+    //
+    // Aumentar os dois catetos de um triângulo retângulo pelo mesmo fator não muda os ângulos internos então podemos
+    // desconsiderar o r na chamada de atan2()
+    let phi = normal.z.atan2(normal.x) / TAU;
+
+    // atan2() retorna no range -PI..PI -> -0.5..0.5 depois de dividir por TAU:
+    // x =  0; z = -1 -> φ = 270º = −π/2 = 3π/2
+    // Então precisamos converter pro range -0.5..0 -> 0.5..1
+    let phi = if phi >= 0.0 { phi } else { 1.0 + phi };
+
+    Vec2::new(phi, theta)
 }
 
 // Teoria: raytracer.md#o-raio-e-a-esfera

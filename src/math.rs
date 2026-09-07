@@ -1,5 +1,6 @@
 //! Tipos geométricos básicos.
 
+use crate::color::Rgb;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// Vetor de duas dimensões. Usado para coordenadas de textura (uv) e para
@@ -65,6 +66,13 @@ impl Mul<f32> for Vec2 {
     type Output = Vec2;
     fn mul(self, s: f32) -> Vec2 {
         Vec2::new(self.x * s, self.y * s)
+    }
+}
+
+impl Div<f32> for Vec2 {
+    type Output = Vec2;
+    fn div(self, s: f32) -> Vec2 {
+        Vec2::new(self.x / s, self.y / s)
     }
 }
 
@@ -295,6 +303,10 @@ impl Baricentrics {
     }
 
     pub fn interpolate_vec3(&self, valores: [Vec3; 3]) -> Vec3 {
+        valores[0] * self.weights[0] + valores[1] * self.weights[1] + valores[2] * self.weights[2]
+    }
+
+    pub fn interpolate_rgb(&self, valores: [Rgb; 3]) -> Rgb {
         valores[0] * self.weights[0] + valores[1] * self.weights[1] + valores[2] * self.weights[2]
     }
 }
