@@ -242,3 +242,54 @@ superfície mais próxima, então fica a menor das duas — mas só entre as
 positivas, senão a câmera "veria" uma esfera que está atrás dela. Por isso o
 código pega a primeira de `[t0, t1]` que passa do zero: se `t0` é negativo e `t1`
 não, a câmera está dentro da esfera.
+
+## O uv do acerto
+
+Achado o `t`, a normal no ponto é `(P − centro) / raio` — na esfera, a direção
+do centro para a superfície *é* a normal. Falta a coordenada de textura, e ela
+sai da mesma parametrização que a tesselação (`Primitive::tessellate`) usa para
+gerar os vértices, só que percorrida ao contrário: lá o par (θ, φ) gera a
+posição, aqui a posição devolve o par. É o mesmo contraste do resto do capítulo
+— aproximar por triângulos ou resolver direto —, agora na coordenada de
+textura.
+
+```text
+θ = u · π    0 no polo norte, π no polo sul
+φ = v · τ    dá a volta no equador
+
+normal = (sen θ · cos φ,  cos θ,  sen θ · sen φ)
+uv     = (v, u)
+```
+
+O y da normal já é `cos θ` sozinho, então θ é imediato: `θ = acos(y)`, dividido
+por π para cair em 0..1.
+
+Para φ, olhando a esfera de cima (plano xz):
+
+```text
+              +z
+               │
+               │     ● (x, z)
+               │    ╱
+               │   ╱  r = sen θ
+               │  ╱
+               │ ╱ φ
+    ───────────┼───────────── +x
+               │
+```
+
+```text
+x = sen θ · cos φ = r · cos φ
+z = sen θ · sen φ = r · sen φ
+
+φ = atan2(sen φ, cos φ) = atan2(r · sen φ, r · cos φ)
+```
+
+O `r` pode ser ignorado na chamada de `atan2`: multiplicar os dois catetos de um
+triângulo retângulo pelo mesmo fator não muda os ângulos internos.
+
+Sobra um detalhe de intervalo. `atan2` devolve em `−π..π`, que depois da divisão
+por τ vira `−0.5..0.5` — o meridiano de trás da esfera (`x = 0`, `z = −1`, ou
+seja φ = 3π/2) aparece como `−0.25`. Somar 1 aos negativos recoloca tudo em
+`0..1`, que é o que a amostragem de textura espera.
+

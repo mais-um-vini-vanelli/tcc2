@@ -7,11 +7,19 @@
 //! reflectância em si fica numa função por variante do `ReflectanceModel` —
 //! hoje só `blinn_phong`. É por ali que uma BRDF microfacetada entra depois,
 //! sem tocar no laço das luzes.
+//!
+//! Teoria: raytracer.md#o-termo-direto-de-whitted
+//!
+//! Sob o modelo de Whitted este módulo é o **termo direto** da fórmula, e só
+//! ele: a recursão de reflexão e refração é do ray tracer. O que entra aqui do
+//! modelo é o fator de visibilidade `V`, que cada pipeline resolve do seu jeito
+//! — raio de sombra no ray tracer, mapa de sombra (quando existir) no
+//! rasterizador.
 
 use crate::color::Rgb;
 use crate::math::{Vec2, Vec3};
 use crate::parameters::ReflectanceModel;
-use crate::scene::{Camera, Light, Material, MaterialSample};
+use crate::scene::{Light, Material, MaterialSample};
 
 /// O ponto que recebe o shading. Todos os vetores em espaço de mundo, e a
 /// normal unitária.
@@ -22,18 +30,26 @@ pub struct Surface {
     pub uv: Vec2,
 }
 
-/// A cor que sai da superfície na direção da câmera.
+/// A cor que sai da superfície na direção `view`.
+///
+/// `view` aponta do ponto **para** quem olha: a câmera no acerto primário, e o
+/// espelho no que o ray tracer vê dentro de um reflexo.
+///
+/// `visibility` devolve, por luz, a fração dela que chega ao ponto — 1 sem
+/// sombra nenhuma, 0 totalmente na sombra. É o `V` de Whitted, e é o parâmetro
+/// que os dois pipelines preenchem de formas diferentes.
 pub fn shade(
     surface: &Surface,
     material: &Material,
     lights: &[Light],
-    camera: &Camera,
+    view: Vec3,
     reflectance: ReflectanceModel,
+    visibility: &dyn Fn(&Surface, &Light) -> f32,
 ) -> Rgb {
     let amostra = material.sample(surface.uv);
 
     let n = surface.normal;
-    let v = camera.view_from(surface.point);
+    let v = view;
 
     let mut cor = Rgb::BLACK;
 
@@ -46,16 +62,31 @@ pub fn shade(
 
         let (l, radiancia) = incidencia(luz, surface.point);
 
+        // Luz que chega por trás da superfície não ilumina, e não vale testar a visibilidade nesse caso.
+        if n.dot(l) <= 0.0 {
+            continue;
+        }
+
+        let visivel = visibility(surface, luz);
+        if visivel <= 0.0 {
+            continue;
+        }
+
         // A escolha da BRDF. Cada modelo devolve a fração da luz que chega
         // por `l` e sai por `v`.
         let refletida = match reflectance {
             ReflectanceModel::BlinnPhong => blinn_phong(&amostra, n, v, l),
         };
 
-        cor = cor + refletida * radiancia;
+        cor = cor + refletida * radiancia * visivel;
     }
 
     cor
+}
+
+/// A visibilidade de quem não tem sombra: toda luz chega inteira.
+pub fn always_visible(_surface: &Surface, _light: &Light) -> f32 {
+    1.0
 }
 
 /// Direção **para** a luz e a radiância que chega ao ponto.
@@ -143,8 +174,11 @@ fn blinn_phong(m: &MaterialSample, n: Vec3, v: Vec3, l: Vec3) -> Rgb {
     // kd e ks são, na literatura, dois parâmetros do material. Aqui eles saem do `metallic`: metal não devolve luz difusa,
     // e o brilho dele é da cor do próprio metal (ouro brilha amarelo) enquanto o de um dielétrico é branco (plástico vermelho
     // brilha branco).
-    let kd = 1.0 - m.metallic;
-    let ks = Rgb::gray(0.5).lerp(m.albedo, m.metallic);
+    // Os dois fatores tiram luz do difuso pelo mesmo motivo: ela não voltou espalhada. Em metal porque nada entra na superfície,
+    // em vidro porque o que entrou atravessou e saiu do outro lado — e é o raio de refração que carrega essa parte.
+    let kd = (1.0 - m.metallic) * (1.0 - m.transparency);
+    // ks de Blinn-Phong e f0 de Schlick respondem à mesma pergunta física: que fração da luz volta na interface sem entrar no material.
+    let ks = f0(m);
 
     let difuso = m.albedo * (kd * cos_theta);
 
@@ -164,4 +198,23 @@ fn blinn_phong(m: &MaterialSample, n: Vec3, v: Vec3, l: Vec3) -> Rgb {
     let especular = ks * ndoth.powf(shininess);
 
     difuso + especular
+}
+
+// Teoria: raytracer.md#o-peso-do-raio-de-espelho
+/// A refletância de frente (`f0`): quanto da luz um material devolve como
+/// espelho quando ela chega perpendicular à superfície.
+///
+/// 4% em qualquer dielétrico — vidro, plástico, água, tudo perto disso —, e o
+/// próprio albedo em metal, que é o motivo de ouro refletir amarelo. É a mesma
+/// regra usada pelo especular da BRDF e pelo peso do raio de reflexão do
+/// modelo de Whitted, e por isso mora aqui, e não nos dois.
+pub fn f0(material: &MaterialSample) -> Rgb {
+    Rgb::gray(0.04).lerp(material.albedo, material.metallic)
+}
+
+/// Schlick (1994): a refletância cresce de `f0` até 1 conforme a luz passa a
+/// raspar a superfície.
+pub fn fresnel_schlick(f0: Rgb, cos: f32) -> Rgb {
+    let cos = cos.clamp(0.0, 1.0);
+    f0 + (Rgb::WHITE - f0) * (1.0 - cos).powi(5)
 }

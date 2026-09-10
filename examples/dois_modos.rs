@@ -1,10 +1,14 @@
 //! Renderiza **a mesma cena** nos dois modos e grava um .png de cada passe que
 //! o renderer produziu.
 //!
-//! A cena tem um chão de xadrez, um triângulo, um cubo e uma esfera. O
-//! rasterizador tessela tudo em triângulos e desenha; o ray tracer,
-//! por enquanto, só intercepta a esfera — mas os dois passam pelo mesmo
-//! `shade()`.
+//! A cena tem um chão de xadrez, um triângulo, um cubo, uma esfera difusa, uma
+//! de metal polido e uma de vidro. O rasterizador tessela tudo em triângulos e
+//! desenha; o ray tracer resolve a esfera pela equação e o resto pelas faces —
+//! e os dois passam pelo mesmo `shade()`.
+//!
+//! As duas últimas esferas existem para o que só o ray tracer faz: o metal
+//! reflete a cena e o vidro a refrata, os dois por recursão do modelo de
+//! Whitted.
 //!
 //! ```text
 //! cargo run --example dois_modos
@@ -77,7 +81,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             scale: Vec3::new(1.0, 0.7, 1.0),
             ..Transform::default()
         }),
-    );
+    )
+    // Metal polido
+    .with_object(Object::new(
+        Primitive::sphere(Vec3::new(-2.0, -0.45, 1.6), 0.75),
+        Material::metal(Rgb::new(0.95, 0.93, 0.88), 0.04),
+    ))
+    // Vidro
+    .with_object(Object::new(
+        Primitive::sphere(Vec3::new(1.0, -0.5, 2.4), 0.7),
+        Material {
+            albedo: Value::Constant(Rgb::gray(0.02)),
+            roughness: Value::Constant(0.03),
+            transparency: 0.9,
+            refractive_index: 1.5,
+            ..Material::default()
+        },
+    ));
 
     let params = Parameters::with_resolution(320, 240);
 
@@ -100,6 +120,49 @@ fn main() -> Result<(), Box<dyn Error>> {
         let resultado = Rasterizer.render(&scene, &params);
         if let Some(buffer) = resultado.color.as_ref() {
             grava_png(&format!("./renders/shading_{nome}.png"), buffer)?;
+        }
+    }
+
+    // Os toggles de caixa branca do modelo de Whitted: cada render abaixo
+    // desliga um termo da recursão.
+    for (opcoes, nome) in [
+        (
+            RayTracingOptions {
+                shadows: false,
+                ..params.ray_tracing
+            },
+            "sem_sombra",
+        ),
+        (
+            RayTracingOptions {
+                reflections: false,
+                ..params.ray_tracing
+            },
+            "sem_reflexo",
+        ),
+        (
+            RayTracingOptions {
+                refractions: false,
+                ..params.ray_tracing
+            },
+            "sem_refracao",
+        ),
+        (
+            RayTracingOptions {
+                max_depth: 0,
+                ..params.ray_tracing
+            },
+            "sem_recursao",
+        ),
+    ] {
+        let params = Parameters {
+            ray_tracing: opcoes,
+            ..params.clone()
+        };
+
+        let resultado = RayTracer.render(&scene, &params);
+        if let Some(buffer) = resultado.color.as_ref() {
+            grava_png(&format!("./renders/whitted_{nome}.png"), buffer)?;
         }
     }
 
@@ -183,8 +246,9 @@ fn renderiza(
         .unwrap_or((0, 0));
 
     println!(
-        "{}: {largura}x{altura}, {} backfaces descartadas, passes: {}",
+        "{}: {largura}x{altura}, {} raios, {} backfaces descartadas, passes: {}",
         renderer.name(),
+        resultado.stats.rays,
         resultado.stats.backfaces_culled,
         gravados.join(", "),
     );

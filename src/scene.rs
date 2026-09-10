@@ -1,7 +1,7 @@
 //! Descrição da cena: câmera, luzes e objetos.
 
 use crate::color::Rgb;
-use crate::math::{Vec2, Vec3, Vertex};
+use crate::math::{Baricentrics, Ray, Vec2, Vec3, Vertex};
 use crate::transform::Transform;
 
 #[derive(Debug, Clone)]
@@ -208,7 +208,8 @@ pub struct Material {
     pub roughness: Value<f32>,
 
     // Modelo de Whitted (M3), ortogonais ao acima.
-    /// Fração de luz transmitida (raio de refração).
+    /// Do que **entra** na superfície, quanto atravessa em vez de voltar
+    /// espalhado: vidro ~1, tinta 0.
     pub transparency: f32,
     /// Índice de refração, usado quando `transparency > 0` (vidro ~ 1.5).
     pub refractive_index: f32,
@@ -263,6 +264,7 @@ impl Material {
             // Roughness zero concentra o especular num delta que nenhuma
             // amostragem de pixel pega, e o highlight some.
             roughness: self.roughness.sample(uv).clamp(Self::MIN_ROUGHNESS, 1.0),
+            transparency: self.transparency.clamp(0.0, 1.0),
         }
     }
 
@@ -275,6 +277,7 @@ pub struct MaterialSample {
     pub albedo: Rgb,
     pub metallic: f32,
     pub roughness: f32,
+    pub transparency: f32,
 }
 
 /// Imagem de textura em memória, com cor em float como o resto do renderer.
@@ -407,29 +410,20 @@ impl Mesh {
 
         let pontos = tres(&self.vertices, trio)?;
 
-        let normais = self
-            .normals
-            .as_deref()
-            .and_then(|n| tres(n, trio))
-            .unwrap_or_else(|| {
-                let n = (pontos[1] - pontos[0])
-                    .cross(pontos[2] - pontos[0])
-                    .normalized();
-                [n; 3]
-            });
-
-        let uvs = self
-            .uvs
-            .as_deref()
-            .and_then(|u| tres(u, trio))
-            .unwrap_or([Vec2::ZERO; 3]);
-
-        Some([0usize, 1, 2].map(|k| Vertex {
-            position: pontos[k],
-            normal: normais[k],
-            uv: uvs[k],
-        }))
+        Some(monta_triangulo(
+            pontos,
+            self.normals.as_deref().and_then(|n| tres(n, trio)),
+            self.uvs.as_deref().and_then(|u| tres(u, trio)),
+        ))
     }
+}
+
+/// O que um raio encontra num primitivo, em espaço local.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Hit {
+    pub t: f32,
+    pub normal: Vec3,
+    pub uv: Vec2,
 }
 
 /// Geometria renderizável, em espaço local.
@@ -495,36 +489,74 @@ impl Primitive {
 
             Primitive::Sphere { center, radius } => Self::esfera_uv(*center, *radius),
 
+            Primitive::Cube { center, half_edge } => Mesh::new(
+                Self::cantos_do_cubo(*center, *half_edge).to_vec(),
+                CUBO_INDICES.to_vec(),
+            ),
+        }
+    }
+
+    // Teoria: raytracer.md#o-raio-e-a-esfera
+    /// Interseção do raio com o primitivo, em espaço local — o par de
+    /// `tessellate` do lado do ray tracer: um resolve a superfície por
+    /// aproximação em triângulos, o outro pela equação exata.
+    ///
+    /// A aceleração de M4 entra por cima disto, sem mudar a assinatura: o BVH
+    /// escolhe *quais* primitivos testar, não como.
+    pub fn intersect(&self, ray: Ray) -> Option<Hit> {
+        match self {
+            Primitive::Sphere { center, radius } => {
+                let t = intersecao_esfera(ray, *center, *radius)?;
+
+                let normal = (ray.at(t) - *center).normalized();
+
+                Some(Hit {
+                    t,
+                    normal,
+                    uv: uv_da_esfera(normal),
+                })
+            }
+
+            Primitive::Triangle {
+                points,
+                normals,
+                uvs,
+            } => intersecao_triangulo(ray, monta_triangulo(*points, *normals, *uvs)),
+
+            Primitive::Mesh(malha) => (0..malha.face_count())
+                .filter_map(|i| intersecao_triangulo(ray, malha.face(i)?))
+                .reduce(mais_perto),
+
+            // Por enquanto o cubo não tem equação própria.
             Primitive::Cube { center, half_edge } => {
-                let center = *center;
-                let h = *half_edge;
+                let cantos = Self::cantos_do_cubo(*center, *half_edge);
 
-                let vertices = [
-                    Vec3::new(-h, -h, -h),
-                    Vec3::new(h, -h, -h),
-                    Vec3::new(h, h, -h),
-                    Vec3::new(-h, h, -h),
-                    Vec3::new(-h, -h, h),
-                    Vec3::new(h, -h, h),
-                    Vec3::new(h, h, h),
-                    Vec3::new(-h, h, h),
-                ]
-                .map(|v| v + center)
-                .to_vec();
-
-                #[rustfmt::skip]
-                let indices = vec![
-                    4, 5, 6,  4, 6, 7, // frente   (+z)
-                    0, 3, 2,  0, 2, 1, // fundo    (-z)
-                    1, 2, 6,  1, 6, 5, // direita  (+x)
-                    0, 4, 7,  0, 7, 3, // esquerda (-x)
-                    3, 7, 6,  3, 6, 2, // topo     (+y)
-                    0, 1, 5,  0, 5, 4, // base     (-y)
-                ];
-
-                Mesh::new(vertices, indices)
+                CUBO_INDICES
+                    .chunks_exact(3)
+                    .filter_map(|trio| {
+                        let pontos = [0, 1, 2].map(|k| cantos[trio[k] as usize]);
+                        intersecao_triangulo(ray, monta_triangulo(pontos, None, None))
+                    })
+                    .reduce(mais_perto)
             }
         }
+    }
+
+    /// Os oito cantos do cubo, na ordem que `CUBO_INDICES` espera.
+    fn cantos_do_cubo(center: Vec3, half_edge: f32) -> [Vec3; 8] {
+        let h = half_edge;
+
+        [
+            Vec3::new(-h, -h, -h),
+            Vec3::new(h, -h, -h),
+            Vec3::new(h, h, -h),
+            Vec3::new(-h, h, -h),
+            Vec3::new(-h, -h, h),
+            Vec3::new(h, -h, h),
+            Vec3::new(h, h, h),
+            Vec3::new(-h, h, h),
+        ]
+        .map(|v| v + center)
     }
 
     /// Tesselation em grade de paralelos e meridianos ("uv sphere").
@@ -604,4 +636,229 @@ impl Primitive {
             uvs: Some(uvs),
         }
     }
+}
+
+#[rustfmt::skip]
+const CUBO_INDICES: [u32; 36] = [
+    4, 5, 6,  4, 6, 7, // frente   (+z)
+    0, 3, 2,  0, 2, 1, // fundo    (-z)
+    1, 2, 6,  1, 6, 5, // direita  (+x)
+    0, 4, 7,  0, 7, 3, // esquerda (-x)
+    3, 7, 6,  3, 6, 2, // topo     (+y)
+    0, 1, 5,  0, 5, 4, // base     (-y)
+];
+
+/// Resolve os atributos de um triângulo solto: sem normais informadas, a normal
+/// é a da própria face; sem uv, a origem da textura.
+fn monta_triangulo(
+    pontos: [Vec3; 3],
+    normais: Option<[Vec3; 3]>,
+    uvs: Option<[Vec2; 3]>,
+) -> [Vertex; 3] {
+    let normais = normais.unwrap_or_else(|| {
+        let n = (pontos[1] - pontos[0])
+            .cross(pontos[2] - pontos[0])
+            .normalized();
+        [n; 3]
+    });
+
+    let uvs = uvs.unwrap_or([Vec2::ZERO; 3]);
+
+    [0, 1, 2].map(|k| Vertex {
+        position: pontos[k],
+        normal: normais[k],
+        uv: uvs[k],
+    })
+}
+
+fn mais_perto(a: Hit, b: Hit) -> Hit {
+    if b.t < a.t { b } else { a }
+}
+
+fn intersecao_triangulo(ray: Ray, face: [Vertex; 3]) -> Option<Hit> {
+    let (t, pesos) = moller_trumbore(ray, face.map(|v| v.position))?;
+
+    // No raytracer a geometria não passa por divisão por z diretamente, então podemos calcular as baricêntricas sem
+    // corrigir isso.
+    let baricentricas = Baricentrics::orthographic(pesos);
+
+    Some(Hit {
+        t,
+        normal: baricentricas
+            .interpolate_vec3(face.map(|v| v.normal))
+            .normalized(),
+        uv: baricentricas.interpolate_vec2(face.map(|v| v.uv)),
+    })
+}
+
+// Teoria: raytracer.md#o-raio-e-o-triangulo
+/// Möller e Trumbore (1997): resolve a interseção e as coordenadas baricêntricas
+/// de uma vez, sem montar a equação do plano do triângulo.
+fn moller_trumbore(r: Ray, p: [Vec3; 3]) -> Option<(f32, [f32; 3])> {
+    // Ancore-se em p0 e olhe para as duas arestas que saem dele como se fossem eixos:
+    //         p2
+    //         ●
+    //        ╱ ╲
+    //  E2   ╱   ╲
+    //      ╱     ╲
+    //     ●───────●
+    //    p0   E1   p1
+    //
+    // E1 e E2 não são perpendiculares nem unitários, mas isso não importa: qualquer ponto do plano do triângulo é p0 + u·E1 + v·E2
+    // para exatamente um par (u, v). É um sistema de coordenadas oblíquo, com origem em p0.
+    //
+    // Podemos visualizar os pontos do triângulo no plano UV:
+    //  v
+    //  │
+    // 1┤● p2
+    //  │  ╲
+    //  │   ╲
+    //  │    ╲
+    //  │     ╲
+    // 0┤●──────●────
+    //  p0      p1   u
+    //  0       1
+    //
+    // Um ponto está dentro do triângulo se:
+    // u ≥ 0
+    // v ≥ 0
+    // u + v ≤ 1    (não passou da aresta p1p2)
+    //
+    // Um raio é O + t·D, então pra achar o ponto de interseção com o triângulo usamos:
+    // O + t·D = p0 + u·E1 + v·E2
+    // Isolando as incógnitas à esquerda e definindo T = O - p0:
+    // −t·D + u·E1 + v·E2 = T
+    // Isso é uma equação de vetores, então podemos expandir pra equações de escalares:
+    // −t·Dx + u·E1x + v·E2x = Tx
+    // −t·Dy + u·E1y + v·E2y = Ty
+    // −t·Dz + u·E1z + v·E2z = Tz
+    // Vamos resolver isso por Cramer, então precisa reorganizar como multiplicação de matrizes:
+    // ┌                 ┐ ┌   ┐   ┌    ┐
+    // │ −Dx   E1x   E2x │ │ t │   │ Tx │
+    // │ −Dy   E1y   E2y │ │ u │ = │ Ty │
+    // │ −Dz   E1z   E2z │ │ v │   │ Tz │
+    // └                 ┘ └   ┘   └    ┘
+    //
+    // Organizamos as operações de Cramer:
+    // det(M) = det(−D, E1, E2)
+    // t = det( T, E1, E2) / det(M)
+    // u = det(−D,  T, E2) / det(M)
+    // v = det(−D, E1,  T) / det(M)
+    //
+    // E agora reorganizamos pra precisar calcular menos coisa. Identidades:
+    // 1) det(a, b, c) = a · (b × c)
+    // 2) det(a, b, c) = det(b, c, a) = det(c, a, b)
+    //
+    // Com isso, vamos definir P = D × E2 e Q = T × E1 e reorganizar os cálculos de determinante:
+    //
+    // det(M) = det(−D, E1, E2)
+    //        = −det(D, E1, E2) <-  det(-1·a, b, c) = -1 · det(a, b, c)
+    //        = −det(E1, E2, D) <-  Prop 2
+    //        = −E1 · (E2 × D)  <-  Prop 1
+    //        =  E1 · (D × E2)  <-  E2×D = −(D×E2)
+    //        =  E1 · P         <-  Substituindo P
+    //
+    // t:   det(T, E1, E2)
+    //    = det(E2, T, E1) <-  Prop 2
+    //    = E2 · (T × E1)  <-  Prop 1
+    //    = E2 · Q         <-  Substituindo Q
+    //
+    // u:   det(−D, T, E2)
+    //   = −det(T, E2, D)
+    //   = −T · (E2 × D)
+    //   =  T · (D × E2)
+    //   =  T · P
+    //
+    // v:   det(−D, E1, T)
+    //    = −det(D, E1, T)
+    //    = −D · (E1 × T)
+    //    =  D · (T × E1)
+    //    =  D · Q
+    //
+    // det(M) tem um significado especial: é o volume com sinal de E1 x D x E2. Volume 0 significa que os 3 estão no mesmo plano.
+    // Como E1 e E2 são as duas direções que geram o plano do triângulo, D ser coplanar com eles quer dizer que D não tem nenhuma componente
+    // saindo do plano:
+    //
+    // det ≠ 0                          det = 0
+    //
+    //     D
+    //      ╲                           ────D────→
+    //   ════╳══════                     ═══════════
+    //
+    //  o raio sai do plano           o raio fica no plano (passa paralelo ao triângulo)
+    //
+    // det(M) = 0 significa que um desses aconteceu:
+    // - O raio é paralelo ao plano e está fora dele (não encosta no triângulo)
+    // - O raio está deitado dentro do plano (triângulo tem espessura 0, então não encosta também)
+    // - O triângulo é degenerado, com E1 e E2 paralelos e área zero (não encosta também)
+    // Então não houve interseção e o triângulo pode ser descartado.
+
+    let borda1 = p[1] - p[0];
+    let borda2 = p[2] - p[0];
+
+    let perpendicular = r.direction.cross(borda2);
+    let determinante = borda1.dot(perpendicular);
+
+    if determinante.abs() < 1e-8 {
+        return None;
+    }
+
+    let inverso = 1.0 / determinante;
+    let ate_o_vertice = r.origin - p[0];
+
+    let u = ate_o_vertice.dot(perpendicular) * inverso;
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+
+    let q = ate_o_vertice.cross(borda1);
+
+    let v = r.direction.dot(q) * inverso;
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+
+    let t = borda2.dot(q) * inverso;
+    if t <= 0.0 {
+        return None;
+    }
+
+    Some((t, [1.0 - u - v, u, v]))
+}
+
+// Teoria: raytracer.md#o-raio-e-a-esfera
+fn intersecao_esfera(r: Ray, centro: Vec3, raio: f32) -> Option<f32> {
+    let oc = r.origin - centro;
+
+    // `a` não é 1: o raio chega aqui em espaço local, sem renormalizar, pra que
+    // o `t` valha também no mundo.
+    let a = r.direction.dot(r.direction);
+    let b = 2.0 * oc.dot(r.direction);
+    let c = oc.dot(oc) - raio * raio;
+
+    let discriminante = b * b - 4.0 * a * c;
+    if discriminante < 0.0 {
+        return None;
+    }
+
+    let raiz = discriminante.sqrt();
+    let t0 = (-b - raiz) / (2.0 * a);
+    let t1 = (-b + raiz) / (2.0 * a);
+
+    // t0 <= t1, e o filtro > 0 descarta acerto atrás da câmera.
+    [t0, t1].into_iter().find(|&t| t > 0.0)
+}
+
+// Teoria: raytracer.md#o-uv-do-acerto
+fn uv_da_esfera(normal: Vec3) -> Vec2 {
+    // Mesma parametrização de `esfera_uv`, invertida: theta do polo, phi da
+    // volta no equador.
+    let theta = normal.y.acos() / std::f32::consts::PI;
+
+    let phi = normal.z.atan2(normal.x) / std::f32::consts::TAU;
+
+    // atan2 devolve -pi..pi, que vira -0.5..0.5 aqui.
+    let phi = if phi >= 0.0 { phi } else { 1.0 + phi };
+
+    Vec2::new(phi, theta)
 }

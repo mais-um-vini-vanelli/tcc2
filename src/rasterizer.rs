@@ -158,8 +158,9 @@ impl Contexto<'_> {
                     &superficie,
                     triangulo.material,
                     self.lights,
-                    self.camera,
+                    self.camera.view_from(superficie.point),
                     self.params.shading.reflectance,
+                    &shading::always_visible,
                 )
             }
         }
@@ -183,15 +184,16 @@ impl Contexto<'_> {
                 Shading::Face({
                     let superficie = Surface {
                         point: centro,
-                        normal: normal,
-                        uv: uv,
+                        normal,
+                        uv,
                     };
                     shading::shade(
                         &superficie,
                         material,
                         self.lights,
-                        self.camera,
+                        self.camera.view_from(centro),
                         self.params.shading.reflectance,
+                        &shading::always_visible,
                     )
                 })
             }
@@ -209,8 +211,9 @@ impl Contexto<'_> {
                     &superficie,
                     material,
                     self.lights,
-                    self.camera,
+                    self.camera.view_from(ponto),
                     self.params.shading.reflectance,
+                    &shading::always_visible,
                 )
             })),
             ShadingFrequency::Phong => Shading::Pixel,

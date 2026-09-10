@@ -160,7 +160,49 @@ mudança de imagem, então precisa de shading pronto para ter o que comparar.
 Escopo, armadilhas e ordem em
 [refactor_matrizes.md](refactor_matrizes.md).
 
-## M2 — Texturização
+## M2 — Ray tracing a fundo
+
+Teoria em [teoria/raytracer.md](../teoria/raytracer.md), da seção "O raio e o
+triângulo" para baixo. Refinamentos da implementação em
+[design_api.md](design_api.md), seção "Refinamentos vindos da implementação de
+M2".
+
+- [x] geração de raios primários a partir da câmera
+- [x] interseção raio-triângulo (Möller–Trumbore ou equivalente) — e com ela
+  `Mesh` e `Cube`, que é resolvido pelas doze faces da mesma tesselação que o
+  rasterizador consome, sem construir a `Mesh` a cada raio
+- [x] interseção raio-esfera (equação algébrica direta)
+- [x] modelo recursivo de Whitted: raios de sombra, reflexão, refração
+- [x] `max_depth` controlando a recursão
+- [x] suporte aos tipos de `Light` no cálculo de iluminação
+- [x] reflexão sem `reflectivity`: a intensidade do raio de espelho vem do
+  Fresnel do material, e o raio só é disparado enquanto `roughness < 0.1` —
+  acima disso, Whitted não dá conta do lóbulo GGX com um raio só, e a
+  divergência entre o que a BRDF descreve e o que o modelo consegue traçar vira
+  cena de demonstração em M5
+- [x] `shading::shade` continua sendo o termo **direto** de Whitted, e a
+  recursão fica no `trace()` do ray tracer. A assinatura mudou nos três pontos
+  previstos (`Camera` virou `view: Vec3`, entrou a visibilidade por callback,
+  `f0`/`fresnel_schlick` viraram públicas) — ver "O `shade()` sob o modelo de
+  Whitted" em [design_api.md](design_api.md)
+- [x] deslocamento por epsilon nos raios secundários (o *shadow acne*), e
+  reflexão interna total caindo em reflexo em vez de virar caso de erro
+- **exposição**: o `ks` do Blinn-Phong passou a ser o `f0` de verdade (4% em
+  dielétrico, contra o cinza 0.5 anterior), como a decisão de design pedia. O
+  brilho especular dos dielétricos ficou ~12× mais fraco em **todas** as cenas,
+  inclusive nas do rasterizador. Decidir se o Blinn-Phong volta a ter um `ks`
+  próprio (empírico, como na literatura) ou se a lib assume o `f0` físico e
+  recalibra as cenas — a segunda opção fica melhor com o tonemap que "Cor de
+  saída" deixou de fora
+
+## M3 — Aceleração
+
+- construção de BVH linear (LBVH, Apetrei 2014)
+- travessia da BVH durante interseção de raios
+- toggle `AccelOptions.bvh` (ligado/desligado) pra comparar tempo de render
+- `RenderPass::RayCount` e `RenderPass::BvhHeatmap`
+
+## M4 — Texturização
 
 - interpolação de UV por triângulo
 - `Texture::from_file` / `Texture::from_bytes`
@@ -169,32 +211,6 @@ Escopo, armadilhas e ordem em
 - filtros: nearest, bilinear, trilinear
 - os mapas do material, como `Value::Map` em `albedo`, `roughness` e `metallic`, mais `normal_map`
 - tangentes por vértice, que o normal map exige e que a `Mesh` ainda não tem
-
-## M3 — Ray tracing a fundo
-
-- geração de raios primários a partir da câmera
-- interseção raio-triângulo (Möller–Trumbore ou equivalente)
-- interseção raio-esfera (equação algébrica direta)
-- modelo recursivo de Whitted: raios de sombra, reflexão, refração
-- `max_depth` controlando a recursão
-- suporte aos tipos de `Light` no cálculo de iluminação
-- reflexão sem `reflectivity`: a intensidade do raio de espelho vem do Fresnel
-  do material, e o raio só é disparado enquanto `roughness < 0.1` — acima
-  disso, Whitted não dá conta do lóbulo GGX com um raio só, e a divergência
-  entre o que a BRDF descreve e o que o modelo consegue traçar vira cena de
-  demonstração em M5
-- `shading::shade` continua sendo o termo **direto** de Whitted, e a recursão
-  fica no `trace()` do ray tracer. A assinatura muda em três pontos (`Camera`
-  vira `view: Vec3`, entra a visibilidade por callback, `f0`/`fresnel_schlick`
-  viram públicas) — ver "O `shade()` sob o modelo de Whitted" em
-  [design_api.md](design_api.md)
-
-## M4 — Aceleração
-
-- construção de BVH linear (LBVH, Apetrei 2014)
-- travessia da BVH durante interseção de raios
-- toggle `AccelOptions.bvh` (ligado/desligado) pra comparar tempo de render
-- `RenderPass::RayCount` e `RenderPass::BvhHeatmap`
 
 ## M5 — Recursos cross-pipeline
 
