@@ -1,5 +1,7 @@
 //! A interface comum aos dois pipelines.
 
+use std::time::Duration;
+
 use crate::color::Rgb;
 use crate::parameters::Parameters;
 use crate::scene::Scene;
@@ -14,9 +16,11 @@ pub enum RenderPass {
     Normal,
     /// Coordenadas de textura visíveis, para conferir mapeamento.
     Uv,
-    /// Raios lançados por pixel. Só o ray tracer produz.
+    /// Raios lançados por pixel, contando sombra e recursão. Só o ray tracer
+    /// produz.
     RayCount,
-    /// Nós de BVH testados por pixel. Só o ray tracer produz.
+    /// Nós de BVH testados por pixel, por todos os raios dele. Só o ray tracer
+    /// produz, e só com a BVH ligada.
     BvhHeatmap,
 }
 
@@ -173,7 +177,7 @@ impl ScalarBuffer {
                     let t = if span == 0.0 { 0.0 } else { (v - lo) / span };
                     Rgb::gray(t)
                 } else {
-                    return Rgb::BLACK;
+                    Rgb::BLACK
                 }
             })
             .collect();
@@ -263,10 +267,16 @@ pub struct RenderStats {
     pub polygons_clipped: u64,
     /// Raios lançados no total (primários + sombra + secundários).
     pub rays: u64,
-    /// Nós de BVH visitados.
+    /// Caixas de nó de BVH testadas contra um raio.
     pub bvh_nodes_visited: u64,
-    /// Profundidade máxima da BVH construída.
-    pub bvh_depth: u32,
+    /// Nós no caminho mais longo da TLAS, da raiz até a folha mais funda.
+    pub tlas_depth: u32,
+    /// O mesmo na mais funda das BLAS. Separado da TLAS de propósito: a soma
+    /// dos dois é uma cota do caminho mais longo da árvore inteira, não o
+    /// caminho — ver `teoria/bvh.md#as-duas-profundidades`.
+    pub blas_depth: u32,
+    /// Tempo de construção das BVHs, que acontece dentro do `render()`.
+    pub bvh_build_time: Duration,
 }
 
 /// O que um render devolve: um campo por `RenderPass`, `None` no que este modo

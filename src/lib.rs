@@ -3,6 +3,8 @@
 //!
 //! `render()` é função pura, sem estado escondido. A mesma cena vale pros dois modos.
 
+mod bvh;
+
 pub mod color;
 pub mod math;
 pub mod parameters;
@@ -15,7 +17,7 @@ pub mod transform;
 
 pub mod prelude {
     pub use crate::color::Rgb;
-    pub use crate::math::{Baricentrics, Plane, Ray, Vec2, Vec3, Vertex};
+    pub use crate::math::{Aabb, Baricentrics, Plane, Ray, Vec2, Vec3, Vertex};
     pub use crate::parameters::{
         AccelerationOptions, ClippingOptions, Filtering, OutputOptions, Parameters,
         RasterizationOptions, RayTracingOptions, ReflectanceModel, ShadingFrequency,

@@ -216,6 +216,104 @@ impl Ray {
     }
 }
 
+// Teoria: bvh.md#a-caixa-envolvente
+/// Caixa alinhada aos eixos (*axis-aligned bounding box*): o menor e o maior
+/// valor em cada eixo.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Aabb {
+    pub min: Vec3,
+    pub max: Vec3,
+}
+
+impl Aabb {
+    /// A caixa que não contém nada: qualquer ponto incluído nela vira a caixa
+    /// inteira.
+    pub const EMPTY: Aabb = Aabb {
+        min: Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY),
+        max: Vec3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
+    };
+
+    /// A menor caixa que contém todos os pontos.
+    pub fn around(points: impl IntoIterator<Item = Vec3>) -> Aabb {
+        points.into_iter().fold(Aabb::EMPTY, |caixa, p| Aabb {
+            min: caixa.min.min(p),
+            max: caixa.max.max(p),
+        })
+    }
+
+    pub fn union(self, other: Aabb) -> Aabb {
+        Aabb {
+            min: self.min.min(other.min),
+            max: self.max.max(other.max),
+        }
+    }
+
+    pub fn center(self) -> Vec3 {
+        (self.min + self.max) * 0.5
+    }
+
+    pub fn corners(self) -> [Vec3; 8] {
+        let (a, b) = (self.min, self.max);
+
+        [
+            Vec3::new(a.x, a.y, a.z),
+            Vec3::new(b.x, a.y, a.z),
+            Vec3::new(a.x, b.y, a.z),
+            Vec3::new(b.x, b.y, a.z),
+            Vec3::new(a.x, a.y, b.z),
+            Vec3::new(b.x, a.y, b.z),
+            Vec3::new(a.x, b.y, b.z),
+            Vec3::new(b.x, b.y, b.z),
+        ]
+    }
+
+    // Teoria: bvh.md#o-teste-dos-slabs
+    /// O `t` em que o raio entra na caixa, se ele passa por ela em algum ponto
+    /// entre `t_min` e `t_max`.
+    pub fn hit(self, ray: Ray, t_min: f32, t_max: f32) -> Option<f32> {
+        // O intervalo de `t` em que o raio está entre os dois planos de um eixo.
+        let slab = |origem: f32, direcao: f32, min: f32, max: f32| {
+            // Um plano x = k é cruzado pelo raio O + t·D quando O.x + t·D.x = k, ou seja: t = (k − O.x) / D.x
+            // Usamos essa ideia pra descobrir o t em que o raio cruza os dois planos paralelos de cada eixo.
+            //
+            // A divisão por direção pode ser uma divisão por 0, e isso é proposital.
+            // Se a direção tem componente 0 em um eixo, é porque o raio passa paralelo a ele; então
+            // ele só está dentro dos dois planos se a origem está dentro dos dois planos.
+            // A divisão é de f32 e segue a IEEE 754: divisão por 0 não causa panic e devolve ±∞ dependendo do sinal do
+            // numerador.
+            //
+            // Visualize os planos x_min = 0 e x_max = 1, e um raio com direção.x = 0 e origem.x = -1, 0.5 e 2, respectivamente:
+            // dentro,  d=+0 : (-inf, inf)
+            // fora(-), d=+0 : (inf, inf)
+            // fora(+), d=+0 : (-inf, -inf)
+            // Note que só o caso em que o raio está dentro do plano retorna (-inf, inf), que são valores neutros de t;
+            // não deixam o intervalo mais restritivo.
+            let t0 = (min - origem) / direcao;
+            let t1 = (max - origem) / direcao;
+
+            // Quando a direção do raio é negativa em um eixo, o raio cruza o `max` antes do `min`, então ordenamos aqui.
+            (t0.min(t1), t0.max(t1))
+        };
+
+        let (o, d) = (ray.origin, ray.direction);
+        let (x0, x1) = slab(o.x, d.x, self.min.x, self.max.x);
+        let (y0, y1) = slab(o.y, d.y, self.min.y, self.max.y);
+        let (z0, z1) = slab(o.z, d.z, self.min.z, self.max.z);
+
+        // O ponto O + t·D está dentro da caixa quando as três coordenadas estão nos seus limites ao mesmo tempo, e t está entre
+        // t_min e t_max:
+        // > dentro(t) ⟺ min.x ≤ x(t) ≤ max.x E min.y ≤ y(t) ≤ max.y E min.z ≤ z(t) ≤ max.z E t_min ≤ t ≤ t_max
+        // Então calculamos a interseção desses intervalos; t precisa se maior que todos os limites mínimos e menor que todos os limites
+        // máximos.
+        // Se o limite mínimo da interseção dos intervalos é maior que o limite máximo, não há valor de t válido; o raio
+        // não tem nenhum trecho passando por dentro da caixa E respeitando t_min e t_max.
+        let entrada = t_min.max(x0).max(y0).max(z0);
+        let saida = t_max.min(x1).min(y1).min(z1);
+
+        (entrada <= saida).then_some(entrada)
+    }
+}
+
 // Teoria: rasterizer.md#o-plano
 /// Plano em 3D pela forma `n · p + deslocamento = 0`, com `deslocamento` sendo
 /// `-(n · p0)` para um ponto `p0` qualquer do plano.

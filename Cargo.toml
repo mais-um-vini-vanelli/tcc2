@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 
 [dev-dependencies]
+gltf = { version = "1.4.1", features = ["KHR_materials_transmission", "KHR_materials_ior"] }
 png = "0.18.1"

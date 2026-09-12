@@ -10,6 +10,9 @@
 //! reflete a cena e o vidro a refrata, os dois por recursão do modelo de
 //! Whitted.
 //!
+//! No fim, o mesmo render do ray tracer com a BVH ligada e desligada: a imagem
+//! é igual, e o que muda é o trabalho.
+//!
 //! ```text
 //! cargo run --example dois_modos
 //! ```
@@ -17,6 +20,7 @@
 use std::error::Error;
 use std::fs::{self, File};
 use std::io::BufWriter;
+use std::time::Instant;
 
 use tcc2::prelude::*;
 
@@ -164,6 +168,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         if let Some(buffer) = resultado.color.as_ref() {
             grava_png(&format!("./renders/whitted_{nome}.png"), buffer)?;
         }
+    }
+
+    for bvh in [true, false] {
+        let params = Parameters {
+            ray_tracing: RayTracingOptions {
+                acceleration: AccelerationOptions { bvh },
+                ..params.ray_tracing
+            },
+            ..params.clone()
+        };
+
+        let inicio = Instant::now();
+        let stats = RayTracer.render(&scene, &params).stats;
+
+        println!(
+            "bvh {}: {:.1?}, {} testes de primitivo, {} caixas testadas, profundidade {} na tlas e {} na blas mais funda, construída em {:.1?}",
+            if bvh { "ligada" } else { "desligada" },
+            inicio.elapsed(),
+            stats.primitive_tests,
+            stats.bvh_nodes_visited,
+            stats.tlas_depth,
+            stats.blas_depth,
+            stats.bvh_build_time,
+        );
     }
 
     Ok(())

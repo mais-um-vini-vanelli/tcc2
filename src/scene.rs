@@ -1,7 +1,7 @@
 //! Descrição da cena: câmera, luzes e objetos.
 
 use crate::color::Rgb;
-use crate::math::{Baricentrics, Ray, Vec2, Vec3, Vertex};
+use crate::math::{Aabb, Baricentrics, Ray, Vec2, Vec3, Vertex};
 use crate::transform::Transform;
 
 #[derive(Debug, Clone)]
@@ -501,7 +501,7 @@ impl Primitive {
     /// `tessellate` do lado do ray tracer: um resolve a superfície por
     /// aproximação em triângulos, o outro pela equação exata.
     ///
-    /// A aceleração de M4 entra por cima disto, sem mudar a assinatura: o BVH
+    /// A BVH do ray tracer entra por cima disto, sem mudar a assinatura: ela
     /// escolhe *quais* primitivos testar, não como.
     pub fn intersect(&self, ray: Ray) -> Option<Hit> {
         match self {
@@ -538,6 +538,30 @@ impl Primitive {
                         intersecao_triangulo(ray, monta_triangulo(pontos, None, None))
                     })
                     .reduce(mais_perto)
+            }
+        }
+    }
+
+    /// A AABB que contém o primitivo, em espaço local.
+    pub fn bounds(&self) -> Aabb {
+        match self {
+            Primitive::Triangle { points, .. } => Aabb::around(*points),
+            Primitive::Mesh(malha) => Aabb::around(malha.vertices.iter().copied()),
+
+            Primitive::Sphere { center, radius } => {
+                let meio = Vec3::ONE * radius.abs();
+                Aabb {
+                    min: *center - meio,
+                    max: *center + meio,
+                }
+            }
+
+            Primitive::Cube { center, half_edge } => {
+                let meio = Vec3::ONE * half_edge.abs();
+                Aabb {
+                    min: *center - meio,
+                    max: *center + meio,
+                }
             }
         }
     }
@@ -675,7 +699,7 @@ fn mais_perto(a: Hit, b: Hit) -> Hit {
     if b.t < a.t { b } else { a }
 }
 
-fn intersecao_triangulo(ray: Ray, face: [Vertex; 3]) -> Option<Hit> {
+pub(crate) fn intersecao_triangulo(ray: Ray, face: [Vertex; 3]) -> Option<Hit> {
     let (t, pesos) = moller_trumbore(ray, face.map(|v| v.position))?;
 
     // No raytracer a geometria não passa por divisão por z diretamente, então podemos calcular as baricêntricas sem
