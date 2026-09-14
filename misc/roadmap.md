@@ -135,7 +135,7 @@ Primeira leva — **implementada**:
 - [x] os tipos de `Light`: `Point` (com atenuação), `Directional`, `Ambient`
 - [x] `ShadingOptions { model: Flat | Gouraud | Phong }`
 - [x] amostragem de textura *nearest*, com a uv já interpolada e `Texture::texel`
-  que já existem. Mipmap, filtros e `from_file` ficam em M2; o que se ganha
+  que já existem. Mipmap e filtros ficam em M4; o que se ganha
   aqui é a cena de xadrez, que é a imagem que melhor mostra
   `perspective_correct` ligado e desligado
 
@@ -197,35 +197,97 @@ M2".
 
 ## M3 — Aceleração
 
-- construção de BVH linear (LBVH, Apetrei 2014)
-- travessia da BVH durante interseção de raios
-- toggle `AccelOptions.bvh` (ligado/desligado) pra comparar tempo de render
-- `RenderPass::RayCount` e `RenderPass::BvhHeatmap`
+Teoria em [teoria/bvh.md](../teoria/bvh.md). Refinamentos da implementação em
+[design_api.md](design_api.md), seção "Refinamentos vindos da implementação de
+M3".
+
+- [x] BVH em dois níveis, com a mesma construção: a de baixo (BLAS) sobre os
+  triângulos de cada `Mesh`, em espaço local; a de cima (TLAS) sobre os
+  `Object`, em espaço de mundo, com a caixa de cada um vinda dos 8 cantos da
+  AABB local (`Primitive::bounds`). Na folha da TLAS o raio passa pelo
+  `undo_ray`; `Mesh` desce pela BLAS, e os outros primitivos chamam `intersect`
+  direto
+- [x] as duas árvores são construídas no início do `render()` e percorridas pelo
+  ray tracer, com `Primitive::intersect` intacto — ver "Onde a BVH mora" em
+  [design_api.md](design_api.md)
+- [x] construção *top-down* da BVH, partindo na mediana dos centroides pelo eixo
+  mais comprido
+- troca da mediana pelo SAH (*Surface Area Heuristic*), mesma travessia e mesmo
+  formato de árvore; a comparação entre as duas é por testes de interseção por
+  raio, não só por tempo — **fica para a próxima rodada**; o ponto de troca é só
+  a função `divide` de `src/bvh.rs`
+- [x] travessia da BVH durante interseção de raios, com o filho mais perto
+  primeiro e o limite encolhendo pelos dois níveis
+- raio de sombra parando no primeiro acerto (*any-hit*) — implementado e
+  depois **removido**: o modo de busca a mais atravessava a travessia e a força
+  bruta por ~1% dos testes desta cena; ver
+  `teoria/bvh.md#a-sombra-so-precisaria-de-um`
+- [x] toggle `RayTracingOptions.acceleration.bvh` (ligado/desligado) pra
+  comparar tempo de render — o exemplo `dois_modos` imprime os dois
+- [x] `RenderPass::RayCount` e `RenderPass::BvhHeatmap`
 
 ## M4 — Texturização
 
-- interpolação de UV por triângulo
-- `Texture::from_file` / `Texture::from_bytes`
-- geração da pirâmide de mipmaps (Williams, 1983)
-- seleção de nível de mip por distância/derivada de tela
-- filtros: nearest, bilinear, trilinear
-- os mapas do material, como `Value::Map` em `albedo`, `roughness` e `metallic`, mais `normal_map`
-- tangentes por vértice, que o normal map exige e que a `Mesh` ainda não tem
+Decisões e o que ficou de fora em [design_api.md](design_api.md), seção
+"Texturização (M4)".
 
-## M5 — Recursos cross-pipeline
+- [x] interpolação de UV por triângulo — já vinha de M1, com correção de
+  perspectiva
+- [x] geração da pirâmide de mipmaps (Williams, 1983), dentro de `Texture::new`,
+  aceitando lado fora de potência de dois
+- [x] seleção do nível de mip pela derivada de tela: diferença finita da uv nos
+  pixels vizinhos, **só no rasterizador**
+- [x] filtros: nearest, bilinear, trilinear
+- [x] os mapas do material, como `Value::Map` em `albedo`, `roughness` e
+  `metallic`
+- ~~`Texture::from_file` / `Texture::from_bytes`~~ — **fora**: estava no roadmap
+  por engano, a lib não lê arquivo de imagem
+- mipmap no ray tracer, pela footprint reconstruída da geometria ou por *ray
+  differentials* — hoje ele lê sempre o nível 0
 
-- `RenderPass::Depth`, `Normal`, `Uv` implementados nos dois modos
-- ferramenta de diff de imagem entre `Rasterizer` e `RayTracer` sobre a mesma cena
-- cenas de demonstração dos pontos de divergência (sombra, esfera, metal áspero) do item 8 de [diferenciais_possiveis.md](diferenciais_possiveis.md)
-- toggles "caixa branca" documentados (efeito visual de cada `Parameters` ligado/desligado)
+## M5 — Cena em `.glb`
 
-## M6 — Import e cenas
+O formato é desenhado em [design_api.md](design_api.md) antes do código, sem
+depender do editor de M6: o editor é um produtor do formato, não a definição
+dele.
 
-- parser de `.obj` (geometria: vértices, normais, uv, faces)
-- parser de `.mtl` (material + caminho de textura)
-- resolução de caminho relativo do `.mtl`/texturas ao diretório do `.obj`
-- serialização de `Scene`/`Parameters` via `serde` (RON/JSON)
-- pacote de cenas de benchmark (com números de referência: triângulos, tempo por modo)
+- `Scene` → `.glb` e `.glb` → `Scene` fora do núcleo, em módulo à parte e atrás
+  de feature, como `import`: o core continua sem dependências
+- objetos como lista **plana** de nós. A hierarquia de um `.glb` de terceiros é
+  achatada na importação: a subárvore vira uma `Mesh` só, com o transform
+  aplicado nos vértices (que absorvem até cisalhamento), ou vários objetos
+- `Sphere` e `Cube` gravados como malha tesselada, com uma extensão própria
+  (`TCC2_primitive`, não `KHR_`) dizendo qual primitivo exato é. Fora de
+  `extensionsRequired`, pra que outros visualizadores mostrem a malha
+- `Material` em `pbrMetallicRoughness`, com `transparency` e `refractive_index`
+  em `KHR_materials_transmission` e `KHR_materials_ior`. Os mapas de metallic
+  (canal B) e roughness (canal G) são empacotados numa textura só, e só o albedo
+  é codificado em sRGB
+- `Camera` como nó olhando para −Z: `look_at` e `up` saem da rotação do nó. Na
+  ortográfica, `xmag`/`ymag` são metade de `width`/`height`
+- `Light::Point` e `Light::Directional` em `KHR_lights_punctual`, com a
+  intensidade gravada crua, sem converter para candela/lux. `Ambient` não existe
+  no glTF e vai na extensão própria
+- `Transform` com Euler XYZ ↔ quaternion. A volta dá a mesma rotação, mas não
+  necessariamente os mesmos ângulos
+- `Parameters` opcional no arquivo, como preset e fora da `Scene`: a importação
+  devolve `(Scene, Option<Parameters>)`
+- o exemplo `gltf_raytracing` passa a usar a importação da lib
+
+## M6 — Editor de cenas em Godot
+
+Para quem está começando em Computação Gráfica, que não deveria precisar da
+interface do Blender pra montar uma cena.
+
+- adicionar primitivos da lib como nós próprios, com os campos dela (raio,
+  meia-aresta), além de câmera, luzes e `.glb` importado
+- cena plana, sem objetos aninhados; `.glb` importado é achatado como em M5
+- `rotation_order` XYZ nos nós (o padrão do Godot é YXZ), pra que os ângulos do
+  inspetor sejam os do `Transform`
+- preview neutro, sem prometer a imagem da lib
+- exportação para o formato de M5 com `GLTFDocument` e uma
+  `GLTFDocumentExtension` que grava `TCC2_primitive`, a intensidade crua das
+  luzes, `Ambient` e o preset de `Parameters`
 
 ## M7 — Validação
 

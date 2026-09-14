@@ -180,7 +180,9 @@ impl<'a> Contexto<'a> {
 
         let superficie = acerto.surface;
         let material = &acerto.objeto.material;
-        let amostra = material.sample(superficie.uv);
+        // Um raio não sabe dos raios vizinhos, então não há footprint: a textura
+        // fica no nível 0.
+        let amostra = material.sample(superficie.uv, None, self.params.texturing);
 
         let n = superficie.normal;
         let direcao = raio.direction.normalized();
@@ -200,7 +202,7 @@ impl<'a> Contexto<'a> {
 
             shading::shade(
                 &superficie,
-                material,
+                &amostra,
                 &self.scene.lights,
                 v,
                 self.params.shading.reflectance,

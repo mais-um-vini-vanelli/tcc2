@@ -2,6 +2,8 @@
 
 use crate::color::Rgb;
 use crate::math::{Aabb, Baricentrics, Ray, Vec2, Vec3, Vertex};
+use crate::parameters::TextureOptions;
+use crate::texture::{Footprint, Texture};
 use crate::transform::Transform;
 
 #[derive(Debug, Clone)]
@@ -177,10 +179,10 @@ pub enum Value<T> {
 }
 
 impl Value<Rgb> {
-    pub fn sample(&self, uv: Vec2) -> Rgb {
+    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, options: TextureOptions) -> Rgb {
         match self {
             Value::Constant(c) => *c,
-            Value::Map(textura) => textura.sample(uv),
+            Value::Map(textura) => textura.sample(uv, footprint, options),
         }
     }
 }
@@ -188,10 +190,10 @@ impl Value<Rgb> {
 impl Value<f32> {
     /// Mapa de dado (roughness, metallic) é cinza: os três canais são iguais,
     /// então basta ler um.
-    pub fn sample(&self, uv: Vec2) -> f32 {
+    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, options: TextureOptions) -> f32 {
         match self {
             Value::Constant(v) => *v,
-            Value::Map(textura) => textura.sample(uv).r,
+            Value::Map(textura) => textura.sample(uv, footprint, options).r,
         }
     }
 }
@@ -257,13 +259,23 @@ impl Material {
         }
     }
 
-    pub fn sample(&self, uv: Vec2) -> MaterialSample {
+    /// O material no ponto `uv`. A `footprint` é o que o pipeline sabe do pixel;
+    /// sem ela os mapas são lidos no nível 0.
+    pub fn sample(
+        &self,
+        uv: Vec2,
+        footprint: Option<Footprint>,
+        options: TextureOptions,
+    ) -> MaterialSample {
         MaterialSample {
-            albedo: self.albedo.sample(uv),
-            metallic: self.metallic.sample(uv).clamp(0.0, 1.0),
+            albedo: self.albedo.sample(uv, footprint, options),
+            metallic: self.metallic.sample(uv, footprint, options).clamp(0.0, 1.0),
             // Roughness zero concentra o especular num delta que nenhuma
             // amostragem de pixel pega, e o highlight some.
-            roughness: self.roughness.sample(uv).clamp(Self::MIN_ROUGHNESS, 1.0),
+            roughness: self
+                .roughness
+                .sample(uv, footprint, options)
+                .clamp(Self::MIN_ROUGHNESS, 1.0),
             transparency: self.transparency.clamp(0.0, 1.0),
         }
     }
@@ -279,88 +291,6 @@ pub struct MaterialSample {
     pub roughness: f32,
     pub transparency: f32,
 }
-
-/// Imagem de textura em memória, com cor em float como o resto do renderer.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Texture {
-    width: u32,
-    height: u32,
-    texels: Vec<Rgb>,
-}
-
-impl Texture {
-    /// Erro se `texels` não tiver exatamente `width * height` elementos.
-    pub fn new(width: u32, height: u32, texels: Vec<Rgb>) -> Result<Self, TextureError> {
-        let expected = width as usize * height as usize;
-        if texels.len() != expected {
-            return Err(TextureError::WrongPixelCount {
-                expected,
-                found: texels.len(),
-            });
-        }
-        Ok(Texture {
-            width,
-            height,
-            texels,
-        })
-    }
-
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    pub fn texels(&self) -> &[Rgb] {
-        &self.texels
-    }
-
-    /// Amostragem *nearest*: o texel que contém `uv`, sem filtro nenhum.
-    ///
-    /// uv fora de [0,1] faz wrap. `v` cresce para baixo, como nas
-    /// imagens.
-    ///
-    /// [TODO: filtro bilinear, trilinear e mipmaps.]
-    pub fn sample(&self, uv: Vec2) -> Rgb {
-        let repete = |c: f32| c - c.floor();
-
-        let x = (repete(uv.x) * self.width as f32) as u32;
-        let y = (repete(uv.y) * self.height as f32) as u32;
-
-        // O produto acima pode chegar em width/height.
-        self.texel(
-            x.min(self.width.saturating_sub(1)),
-            y.min(self.height.saturating_sub(1)),
-        )
-        .unwrap_or(Rgb::BLACK)
-    }
-
-    pub fn texel(&self, x: u32, y: u32) -> Option<Rgb> {
-        if x >= self.width || y >= self.height {
-            return None;
-        }
-        Some(self.texels[(y * self.width + x) as usize])
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TextureError {
-    WrongPixelCount { expected: usize, found: usize },
-}
-
-impl std::fmt::Display for TextureError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TextureError::WrongPixelCount { expected, found } => {
-                write!(f, "textura espera {expected} pixels, recebeu {found}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for TextureError {}
 
 /// Malha indexada de triângulos: é o formato que o rasterizador consome, e o
 /// que todo primitivo vira depois de `Primitive::tessellate`.

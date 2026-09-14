@@ -13,6 +13,7 @@ pub mod raytracer;
 pub mod render;
 pub mod scene;
 pub mod shading;
+pub mod texture;
 pub mod transform;
 
 pub mod prelude {
@@ -30,8 +31,9 @@ pub mod prelude {
         ScalarBuffer,
     };
     pub use crate::scene::{
-        Camera, Light, Material, MaterialSample, Mesh, Object, Primitive, Scene, Texture, Value,
+        Camera, Light, Material, MaterialSample, Mesh, Object, Primitive, Scene, Value,
     };
     pub use crate::shading::{Surface, shade};
+    pub use crate::texture::{Footprint, Texture, TextureError};
     pub use crate::transform::Transform;
 }

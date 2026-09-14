@@ -13,6 +13,7 @@ use crate::parameters::{Parameters, ShadingFrequency};
 use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
 use crate::scene::{Camera, Light, Material, Scene};
 use crate::shading::{self, Surface};
+use crate::texture::Footprint;
 use crate::transform::Transform;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -143,6 +144,7 @@ impl Contexto<'_> {
         baricentricas: &Baricentrics,
         normal: Vec3,
         uv: Vec2,
+        footprint: Footprint,
     ) -> Rgb {
         match triangulo.shading {
             Shading::Face(cor) => cor,
@@ -154,9 +156,16 @@ impl Contexto<'_> {
                     uv,
                 };
 
+                let texturing = self.params.texturing;
+                let amostra = triangulo.material.sample(
+                    uv,
+                    texturing.mipmaps.then_some(footprint),
+                    texturing,
+                );
+
                 shading::shade(
                     &superficie,
-                    triangulo.material,
+                    &amostra,
                     self.lights,
                     self.camera.view_from(superficie.point),
                     self.params.shading.reflectance,
@@ -187,9 +196,10 @@ impl Contexto<'_> {
                         normal,
                         uv,
                     };
+                    let amostra = material.sample(uv, None, self.params.texturing);
                     shading::shade(
                         &superficie,
-                        material,
+                        &amostra,
                         self.lights,
                         self.camera.view_from(centro),
                         self.params.shading.reflectance,
@@ -207,9 +217,10 @@ impl Contexto<'_> {
                     normal,
                     uv,
                 };
+                let amostra = material.sample(uv, None, self.params.texturing);
                 shading::shade(
                     &superficie,
-                    material,
+                    &amostra,
                     self.lights,
                     self.camera.view_from(ponto),
                     self.params.shading.reflectance,
@@ -445,13 +456,30 @@ fn preenche(
     let min_y = a.y.min(b.y).min(c.y).floor().max(0.0) as u32;
     let max_y = a.y.max(b.y).max(c.y).ceil().min(altura - 1.0).max(0.0) as u32;
 
+    // Cada edge function dividida pela área do triângulo vira o peso do
+    // vértice oposto àquela aresta: as coordenadas baricêntricas, que
+    // somam 1 em qualquer ponto de dentro.
+    let baricentricas_de = |arestas: [f32; 3]| {
+        let pesos_de_tela = arestas.map(|w| w / area);
+
+        if contexto.perspectiva && params.rasterization.perspective_correct {
+            Baricentrics::perspective(pesos_de_tela, profundidades)
+        } else {
+            Baricentrics::orthographic(pesos_de_tela)
+        }
+    };
+
+    let uv_em = |p: Vec2| {
+        baricentricas_de([borda(b, c, p), borda(c, a, p), borda(a, b, p)]).interpolate_vec2(uvs)
+    };
+
     for y in min_y..=max_y {
         for x in min_x..=max_x {
             stats.primitive_tests += 1;
 
             // Usar o centro do pixel. Pixel (1,1) tem centro 1.5,1.5 por exemplo
             let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
-            let (w0, w1, w2) = (borda(b, c, p), borda(c, a, p), borda(a, b, p));
+            let [w0, w1, w2] = [borda(b, c, p), borda(c, a, p), borda(a, b, p)];
 
             // Sem backface culling, aceita as duas orientações. Um ponto está dentro do triângulo se ele está *do mesmo
             // lado das 3 arestas*
@@ -465,19 +493,7 @@ fn preenche(
                 continue;
             }
 
-            // Cada edge function dividida pela área do triângulo vira o peso do
-            // vértice oposto àquela aresta: as coordenadas baricêntricas, que
-            // somam 1 em qualquer ponto de dentro.
-
-            let pesos_de_tela = [w0 / area, w1 / area, w2 / area];
-            // Na ortográfica não existe distorção a corrigir, então o toggle só tem efeito sob
-            // perspectiva.
-            let baricentricas = if contexto.perspectiva && params.rasterization.perspective_correct
-            {
-                Baricentrics::perspective(pesos_de_tela, profundidades)
-            } else {
-                Baricentrics::orthographic(pesos_de_tela)
-            };
+            let baricentricas = baricentricas_de([w0, w1, w2]);
 
             let z = baricentricas.interpolate_f32(profundidades);
 
@@ -496,11 +512,19 @@ fn preenche(
 
             let uv = baricentricas.interpolate_vec2(uvs);
 
+            // O pixel vizinho é a próxima iteração do laço, então a derivada da uv
+            // sai por diferença finita. Ele pode cair fora do triângulo, e tudo bem:
+            // interessa a taxa de variação, não uma uv válida.
+            let footprint = Footprint {
+                dx: uv_em(Vec2::new(p.x + 1.0, p.y)) - uv,
+                dy: uv_em(Vec2::new(p.x, p.y + 1.0)) - uv,
+            };
+
             profundidade.set(x, y, z);
             cor.set(
                 x,
                 y,
-                contexto.shade_fragment(triangulo, &baricentricas, normal, uv),
+                contexto.shade_fragment(triangulo, &baricentricas, normal, uv, footprint),
             );
             // Os componentes de uma normal vão de [-1,1], mas Rgb espera [0,1]. Então fazemos remap dos componentes da normal aqui:
             mapa_normal.set(

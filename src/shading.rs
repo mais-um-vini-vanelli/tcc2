@@ -19,7 +19,7 @@
 use crate::color::Rgb;
 use crate::math::{Vec2, Vec3};
 use crate::parameters::ReflectanceModel;
-use crate::scene::{Light, Material, MaterialSample};
+use crate::scene::{Light, MaterialSample};
 
 /// O ponto que recebe o shading. Todos os vetores em espaço de mundo, e a
 /// normal unitária.
@@ -40,14 +40,12 @@ pub struct Surface {
 /// que os dois pipelines preenchem de formas diferentes.
 pub fn shade(
     surface: &Surface,
-    material: &Material,
+    material: &MaterialSample,
     lights: &[Light],
     view: Vec3,
     reflectance: ReflectanceModel,
     visibility: &dyn Fn(&Surface, &Light) -> f32,
 ) -> Rgb {
-    let amostra = material.sample(surface.uv);
-
     let n = surface.normal;
     let v = view;
 
@@ -56,7 +54,7 @@ pub fn shade(
     for luz in lights {
         if let Light::Ambient { color, intensity } = *luz {
             // A ambiente não tem direção. É o termo que impede a sombra de fechar em preto chapado enquanto não há iluminação indireta.
-            cor = cor + amostra.albedo * color * intensity;
+            cor = cor + material.albedo * color * intensity;
             continue;
         }
 
@@ -75,7 +73,7 @@ pub fn shade(
         // A escolha da BRDF. Cada modelo devolve a fração da luz que chega
         // por `l` e sai por `v`.
         let refletida = match reflectance {
-            ReflectanceModel::BlinnPhong => blinn_phong(&amostra, n, v, l),
+            ReflectanceModel::BlinnPhong => blinn_phong(material, n, v, l),
         };
 
         cor = cor + refletida * radiancia * visivel;

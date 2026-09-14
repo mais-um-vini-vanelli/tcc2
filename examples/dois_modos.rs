@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         color: Rgb::new(0.4, 0.5, 0.7),
         intensity: 0.08,
     })
-    .with_object(Object::new(chao(), Material::textured(xadrez(64, 8))))
+    .with_object(Object::new(chao(), Material::textured(xadrez(512, 8))))
     .with_object(Object::new(
         Primitive::triangle([
             Vec3::new(-3.4, -1.0, 0.0),

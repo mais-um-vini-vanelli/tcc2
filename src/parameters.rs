@@ -82,7 +82,7 @@ impl Default for TextureOptions {
     fn default() -> Self {
         TextureOptions {
             mipmaps: true,
-            filtering: Filtering::Bilinear,
+            filtering: Filtering::Trilinear,
         }
     }
 }
@@ -90,11 +90,14 @@ impl Default for TextureOptions {
 /// Filtro de texture sampling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Filtering {
-    /// Texel mais próximo. Barato, visivelmente serrilhado.
+    /// Texel mais próximo, no nível de mip mais próximo. Barato, visivelmente
+    /// serrilhado.
     Nearest,
-    /// Interpolação entre os quatro texels vizinhos, dentro de um nível de mip.
+    /// Interpolação entre os quatro texels vizinhos, no nível de mip mais
+    /// próximo.
     Bilinear,
-    /// Bilinear em dois níveis de mip, interpolados entre si.
+    /// Bilinear em dois níveis de mip, interpolados entre si. Evita mudanças bruscas de resolução
+    /// na fronteira entre mip levels.
     Trilinear,
 }
 
