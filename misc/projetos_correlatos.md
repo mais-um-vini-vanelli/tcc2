@@ -72,7 +72,7 @@ aceleração espacial, shading físico etc.
 2. **Rasterização e ray tracing são trilhas separadas** — não há alternância entre
    os dois modos sobre a mesma cena/API; são exemplos de código independentes,
    cada lição com seu próprio mini-programa.
-3. Sem Rust, sem BVH/LBVH como estrutura central, sem objetivo de "produto"
+3. Sem Rust, sem BVH como estrutura central, sem objetivo de "produto"
    reutilizável — é puramente conteúdo de ensino (mais parecido com um livro-texto
    interativo do que com um software/biblioteca).
 

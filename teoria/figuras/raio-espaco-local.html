@@ -1,0 +1,565 @@
+<title>O Raio no Espaço Local</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  :root {
+    --paper:   #ECEFEE;
+    --surface: #FBFCFC;
+    --ink:     #101719;
+    --muted:   #58696D;
+    --line:    #C7D2D3;
+    --grid:    #DEE5E5;
+    --ray:     #A8511B;
+    --hit:     #16665C;
+    --box:     #3B535A;
+    --box-fill: rgba(59, 83, 90, 0.10);
+  }
+  :root:not([data-theme="light"]) {
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper:   #0B1012;
+      --surface: #121A1C;
+      --ink:     #E3EAE8;
+      --muted:   #8DA0A3;
+      --line:    #263133;
+      --grid:    #1C2528;
+      --ray:     #E0904E;
+      --hit:     #4FC2B0;
+      --box:     #8FA8AD;
+      --box-fill: rgba(143, 168, 173, 0.12);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper:   #0B1012;
+    --surface: #121A1C;
+    --ink:     #E3EAE8;
+    --muted:   #8DA0A3;
+    --line:    #263133;
+    --grid:    #1C2528;
+    --ray:     #E0904E;
+    --hit:     #4FC2B0;
+    --box:     #8FA8AD;
+    --box-fill: rgba(143, 168, 173, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  .sheet {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 56px 28px 88px;
+  }
+
+  h1, h2, h3, .eyebrow, .cap, th {
+    font-family: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+
+  h1 {
+    font-size: clamp(34px, 5vw, 50px);
+    font-weight: 700;
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+
+  .lede {
+    max-width: 62ch;
+    font-size: 18px;
+    margin: 0 0 14px;
+  }
+  .lede em { font-style: italic; }
+
+  p { max-width: 66ch; }
+
+  code, pre, .mono, .num {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  code {
+    font-size: 0.88em;
+    background: color-mix(in srgb, var(--box) 12%, transparent);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+  }
+
+  .setup {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 32px;
+    margin: 28px 0 0;
+    padding: 16px 0 0;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .setup div { display: flex; flex-direction: column; gap: 2px; }
+  .setup dt, .setup .k {
+    font-family: "IBM Plex Sans Condensed", Arial, sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .setup .v { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 26px;
+    align-items: center;
+    margin: 22px 0 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .legend svg { display: block; overflow: visible; }
+
+  .plate { margin: 64px 0 0; }
+  .plate + .plate { padding-top: 60px; border-top: 1px solid var(--line); }
+
+  .plate-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 6px;
+  }
+  .step {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ray);
+    padding-top: 3px;
+  }
+  h2 {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .tform {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    color: var(--muted);
+    margin: 0 0 26px 0;
+  }
+
+  .figs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 26px;
+    align-items: start;
+  }
+  @media (max-width: 720px) { .figs { grid-template-columns: 1fr; } }
+
+  .fig {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 12px 12px 10px;
+  }
+  .fig svg { display: block; width: 100%; height: auto; }
+  .cap {
+    margin: 10px 2px 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .cap b {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+
+  .conta {
+    margin: 26px 0 0;
+    overflow-x: auto;
+    background: var(--surface);
+    border-left: 2px solid var(--ray);
+    padding: 16px 18px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    line-height: 1.75;
+    white-space: pre;
+  }
+  .conta .c { color: var(--muted); }
+  .conta .ok { color: var(--hit); }
+
+  .read {
+    margin: 20px 0 0;
+    max-width: 68ch;
+    font-size: 16.5px;
+  }
+  .read b { font-weight: 600; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 14.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 11px 14px 11px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom-color: var(--ink);
+  }
+  td.n { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+  .yes { color: var(--hit); font-weight: 600; }
+  .no  { color: var(--muted); }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  footer p { max-width: 74ch; }
+</style>
+
+<div class="sheet">
+
+  <p class="eyebrow">TCC2 · teoria/transform.md</p>
+  <h1>O raio no espaço local</h1>
+
+  <p class="lede">O rasterizador leva a geometria até o mundo. O ray tracer faz o contrário:
+  leva o <em>raio</em> até o espaço local do objeto, e intersecta contra a geometria não
+  transformada. As quatro pranchas abaixo mostram o mesmo acerto medido pelas duas réguas —
+  e o mesmo <code>t</code> saindo dos dois lados.</p>
+
+  <div class="setup">
+    <div><span class="k">Primitivo</span><span class="v">Cube { center: (0,0,0), half_edge: 1 }</span></div>
+    <div><span class="k">Em espaço local</span><span class="v">caixa [-1,1]³, sempre</span></div>
+    <div><span class="k">Interseção</span><span class="v">slabs: t = (plano − o) / d</span></div>
+    <div><span class="k">Vista</span><span class="v">plano XY, de cima</span></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div id="plates"></div>
+
+  <div class="plate" style="padding-top:60px;border-top:1px solid var(--line)">
+    <div class="plate-head"><h2>O que cada etapa faz com o raio</h2></div>
+    <table>
+      <thead>
+        <tr><th>Etapa</th><th>Mexe na origem</th><th>Mexe na direção</th><th>Muda |d|</th><th>Efeito no desenho</th><th>t</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Translação</td>
+          <td class="yes">sim</td><td class="no">não</td><td class="no">não</td>
+          <td>desloca o raio inteiro</td><td class="n">12</td>
+        </tr>
+        <tr>
+          <td>Rotação</td>
+          <td class="yes">sim</td><td class="yes">sim</td><td class="no">não</td>
+          <td>troca qual face é atingida</td><td class="n">9</td>
+        </tr>
+        <tr>
+          <td>Escala</td>
+          <td class="yes">sim</td><td class="yes">sim</td><td class="yes">sim</td>
+          <td>encurta o passo do <code>t</code></td><td class="n">8</td>
+        </tr>
+        <tr>
+          <td>As três</td>
+          <td class="yes">sim</td><td class="yes">sim</td><td class="yes">sim</td>
+          <td>desfeitas na ordem contrária</td><td class="n">11</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="read">Em todos os quatro, o <code>t</code> do espaço local é o <code>t</code> do mundo,
+    sem nenhuma conversão. É isso que permite comparar o acerto com o <code>near</code>/<code>far</code>
+    da câmera e com o <code>t</code> de outro objeto de escala completamente diferente.</p>
+  </div>
+
+  <footer>
+    <p>A direção sai de <code>undo_direction</code> <b>sem normalizar</b>, de propósito: é o que faz
+    o <code>t</code> valer nos dois espaços. Na esfera isso aparece como <code>a = d · d</code> na
+    equação do segundo grau, que deixa de valer 1; na caixa, a compensação já está embutida na
+    divisão do teste de slabs.</p>
+    <p>O ray tracer do projeto hoje só trata <code>Primitive::Sphere</code> — a caixa aqui é
+    ilustrativa, e é o primitivo em que o argumento fica mais forte: o teste de slabs exige caixa
+    alinhada aos eixos, e no espaço local o cubo nunca deixa de estar alinhado, para qualquer
+    rotação que o usuário escreva.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var W = 360;
+
+  var casos = [
+    {
+      n: 1,
+      titulo: "Só translação",
+      tform: "translation = (3, 0, 0)   ·   scale = (1,1,1)   ·   rotation = (0,0,0)",
+      win: { x0: -14.5, x1: 5.5, y0: -5, y1: 5 },
+      mundo: {
+        cap: "Mundo", sub: "caixa [2,4] × [−1,1] · acerta a face x = 2",
+        box: { x0: 2, x1: 4, y0: -1, y1: 1 },
+        ray: { ox: -10, oy: 0, dx: 1, dy: 0, t: 12 },
+        lo: { dx: 0, dy: 20, a: "middle" },
+        ld: { dx: 0, dy: -12, a: "middle" },
+        lt: { dx: 0, dy: 34, a: "middle" }
+      },
+      local: {
+        cap: "Espaço local", sub: "caixa [−1,1]³ · acerta a face x = −1",
+        box: { x0: -1, x1: 1, y0: -1, y1: 1 },
+        ray: { ox: -13, oy: 0, dx: 1, dy: 0, t: 12 },
+        lo: { dx: 0, dy: 20, a: "middle" },
+        ld: { dx: 0, dy: -12, a: "middle" },
+        lt: { dx: 0, dy: 34, a: "middle" }
+      },
+      conta: [
+        ["undo_point:      (-10, 0, 0) − (3, 0, 0)  =  (-13, 0, 0)", ""],
+        ["undo_direction:  (1, 0, 0)                =  (1, 0, 0)", "intacta: direção não translada"],
+        ["", ""],
+        ["slab X:  t = (-1 − (-13)) / 1  =  12", "OK"]
+      ],
+      leitura: "A direção não é tocada — translação move ponto, não vetor. <b>|d| = 1</b> nos dois lados, e o espaço local é o mundo deslocado."
+    },
+    {
+      n: 2,
+      titulo: "Só rotação",
+      tform: "rotation = (0, 0, 90)   ·   scale = (1,1,1)   ·   translation = (0,0,0)",
+      win: { x0: -12, x1: 4, y0: -3, y1: 12.5 },
+      mundo: {
+        cap: "Mundo", sub: "caixa [−1,1]³ · o cubo é simétrico, não sai do lugar · acerta x = −1",
+        box: { x0: -1, x1: 1, y0: -1, y1: 1 },
+        ray: { ox: -10, oy: 0.5, dx: 1, dy: 0, t: 9 },
+        lo: { dx: 0, dy: 20, a: "middle" },
+        ld: { dx: 0, dy: -12, a: "middle" },
+        lt: { dx: -10, dy: -14, a: "end" }
+      },
+      local: {
+        cap: "Espaço local", sub: "mesma caixa · o raio é que virou · acerta y = +1",
+        box: { x0: -1, x1: 1, y0: -1, y1: 1 },
+        ray: { ox: 0.5, oy: 10, dx: 0, dy: -1, t: 9 },
+        lo: { dx: -12, dy: 4, a: "end" },
+        ld: { dx: 13, dy: 4, a: "start" },
+        lt: { dx: 16, dy: -8, a: "start" }
+      },
+      conta: [
+        ["desgirar 90° em Z:  (x, y) → (y, −x)", ""],
+        ["", ""],
+        ["undo_point:      (-10, 0.5, 0)  →  (0.5, 10, 0)", ""],
+        ["undo_direction:  (1, 0, 0)      →  (0, -1, 0)", "o raio agora desce em Y"],
+        ["", ""],
+        ["slab Y:  t = (1 − 10) / (-1)  =  9", "OK"]
+      ],
+      leitura: "Rotação preserva comprimento — <b>|d| = 1</b> de novo. O que muda é <b>qual face é atingida</b>: no mundo, a face <code>x = −1</code>; no espaço local, a face <code>y = +1</code>. O mesmo pedaço de superfície, com outro nome."
+    },
+    {
+      n: 3,
+      titulo: "Só escala",
+      tform: "scale = (2, 1, 1)   ·   rotation = (0,0,0)   ·   translation = (0,0,0)",
+      win: { x0: -11.5, x1: 3.5, y0: -4, y1: 4 },
+      mundo: {
+        cap: "Mundo", sub: "caixa [−2,2] × [−1,1] · esticada em X · acerta x = −2",
+        box: { x0: -2, x1: 2, y0: -1, y1: 1 },
+        ray: { ox: -10, oy: 0, dx: 1, dy: 0, t: 8 },
+        lo: { dx: 0, dy: 20, a: "middle" },
+        ld: { dx: 0, dy: -12, a: "middle" },
+        lt: { dx: -8, dy: -14, a: "end" }
+      },
+      local: {
+        cap: "Espaço local", sub: "caixa [−1,1]³ · o passo do raio é que encolheu · acerta x = −1",
+        box: { x0: -1, x1: 1, y0: -1, y1: 1 },
+        ray: { ox: -5, oy: 0, dx: 0.5, dy: 0, t: 8 },
+        lo: { dx: 0, dy: 20, a: "middle" },
+        ld: { dx: 0, dy: -12, a: "middle" },
+        lt: { dx: -8, dy: -14, a: "end" }
+      },
+      conta: [
+        ["undo_point:      (-10, 0, 0) · (0.5, 1, 1)  =  (-5, 0, 0)", ""],
+        ["undo_direction:  (1, 0, 0)   · (0.5, 1, 1)  =  (0.5, 0, 0)", "e NÃO normalizou"],
+        ["", ""],
+        ["slab X:  t = (-1 − (-5)) / 0.5  =  4 / 0.5  =  8", "OK"]
+      ],
+      leitura: "Único dos três que mexe no comprimento: <b>|d| = 0,5</b>. Conte os traços — são oito dos dois lados, e do lado local cada um vale metade. Passo menor, mesmo <code>t</code>. Se a direção tivesse sido normalizada, o slab daria <code>t = 4</code>, e 4 não é distância nenhuma no mundo."
+    },
+    {
+      n: 4,
+      titulo: "As três juntas",
+      tform: "scale = (2, 1, 1)   ·   rotation = (0, 0, 90)   ·   translation = (0, 3, 0)",
+      win: { x0: -8.5, x1: 3.5, y0: -11.5, y1: 6.5 },
+      mundo: {
+        cap: "Mundo", sub: "caixa [−1,1] × [1,5] · esticada, girada e subida · acerta y = 1",
+        box: { x0: -1, x1: 1, y0: 1, y1: 5 },
+        ray: { ox: 0, oy: -10, dx: 0, dy: 1, t: 11 },
+        lo: { dx: 13, dy: 4, a: "start" },
+        ld: { dx: -12, dy: 4, a: "end" },
+        lt: { dx: 15, dy: 16, a: "start" }
+      },
+      local: {
+        cap: "Espaço local", sub: "caixa [−1,1]³ · como sempre · acerta x = −1",
+        box: { x0: -1, x1: 1, y0: -1, y1: 1 },
+        ray: { ox: -6.5, oy: 0, dx: 0.5, dy: 0, t: 11 },
+        lo: { dx: 0, dy: 20, a: "middle" },
+        ld: { dx: 0, dy: -12, a: "middle" },
+        lt: { dx: -8, dy: -14, a: "end" }
+      },
+      conta: [
+        ["undo_point:                                    undo_direction:", ""],
+        ["  − translação   (0,-10,0) − (0,3,0) = (0,-13,0)  (translação não entra)", ""],
+        ["  desgira 90° Z  (x,y) → (y,−x)      = (-13,0,0)  (0,1,0) → (1,0,0)", ""],
+        ["  escala recípr. · (0.5,1,1)         = (-6.5,0,0) · (0.5,1,1) → (0.5,0,0)", ""],
+        ["", ""],
+        ["slab X:  t = (-1 − (-6.5)) / 0.5  =  5.5 / 0.5  =  11", "OK"],
+        ["", ""],
+        ["de volta:  (-6.5,0,0) + 11·(0.5,0,0) = (-1,0,0)", "face x = −1 do cubo"],
+        ["           escala → (-2,0,0)  gira → (0,-2,0)  transla → (0,1,0)", "= o raio do mundo em t = 11"]
+      ],
+      leitura: "As três desfeitas na ordem contrária: destranslada, desrotaciona, desescala. O raio local acaba sendo <b>o mesmo do caso 3, deslocado</b> — e o acerto volta pro mundo exatamente sobre o raio original."
+    }
+  ];
+
+  function panel(win, p) {
+    var u = W / (win.x1 - win.x0);
+    var H = (win.y1 - win.y0) * u;
+    var X = function (x) { return (x - win.x0) * u; };
+    var Y = function (y) { return (win.y1 - y) * u; };
+    var s = [];
+
+    s.push('<svg viewBox="0 0 ' + W + ' ' + H.toFixed(1) + '" xmlns="http://www.w3.org/2000/svg" role="img">');
+
+    // grade em unidades inteiras
+    var g = [];
+    for (var gx = Math.ceil(win.x0); gx <= win.x1; gx++) {
+      g.push('M' + X(gx).toFixed(1) + ' 0V' + H.toFixed(1));
+    }
+    for (var gy = Math.ceil(win.y0); gy <= win.y1; gy++) {
+      g.push('M0 ' + Y(gy).toFixed(1) + 'H' + W);
+    }
+    s.push('<path d="' + g.join('') + '" fill="none" stroke="var(--grid)" stroke-width="1"/>');
+
+    // eixos
+    s.push('<path d="M' + X(0).toFixed(1) + ' 0V' + H.toFixed(1) +
+           'M0 ' + Y(0).toFixed(1) + 'H' + W + '" fill="none" stroke="var(--line)" stroke-width="1.5"/>');
+
+    // caixa
+    s.push('<rect x="' + X(p.box.x0).toFixed(1) + '" y="' + Y(p.box.y1).toFixed(1) +
+           '" width="' + ((p.box.x1 - p.box.x0) * u).toFixed(1) +
+           '" height="' + ((p.box.y1 - p.box.y0) * u).toFixed(1) +
+           '" fill="var(--box-fill)" stroke="var(--box)" stroke-width="1.6"/>');
+
+    var r = p.ray;
+    var px = function (t) { return X(r.ox + t * r.dx); };
+    var py = function (t) { return Y(r.oy + t * r.dy); };
+    // perpendicular unitária, em pixels
+    var len = Math.hypot(r.dx, r.dy);
+    var nx = -r.dy / len, ny = -r.dx / len; // y da tela é invertido
+
+    // trilho do raio
+    s.push('<line x1="' + px(0).toFixed(1) + '" y1="' + py(0).toFixed(1) +
+           '" x2="' + px(r.t).toFixed(1) + '" y2="' + py(r.t).toFixed(1) +
+           '" stroke="var(--ray)" stroke-width="1.4" opacity="0.55"/>');
+
+    // traços em cada t inteiro
+    var ticks = [];
+    for (var k = 1; k < r.t; k++) {
+      var tx = px(k), ty = py(k);
+      ticks.push('M' + (tx + nx * 4).toFixed(1) + ' ' + (ty + ny * 4).toFixed(1) +
+                 'L' + (tx - nx * 4).toFixed(1) + ' ' + (ty - ny * 4).toFixed(1));
+    }
+    s.push('<path d="' + ticks.join('') + '" stroke="var(--ray)" stroke-width="1.4" opacity="0.7" fill="none"/>');
+
+    // o vetor d: o primeiro passo, com ponta
+    var ax = px(1), ay = py(1), bx = px(0), by = py(0);
+    var ux = (ax - bx) / Math.hypot(ax - bx, ay - by), uy = (ay - by) / Math.hypot(ax - bx, ay - by);
+    s.push('<line x1="' + bx.toFixed(1) + '" y1="' + by.toFixed(1) +
+           '" x2="' + (ax - ux * 5).toFixed(1) + '" y2="' + (ay - uy * 5).toFixed(1) +
+           '" stroke="var(--ray)" stroke-width="3.4"/>');
+    s.push('<path d="M' + ax.toFixed(1) + ' ' + ay.toFixed(1) +
+           'L' + (ax - ux * 9 + nx * 4.2).toFixed(1) + ' ' + (ay - uy * 9 + ny * 4.2).toFixed(1) +
+           'L' + (ax - ux * 9 - nx * 4.2).toFixed(1) + ' ' + (ay - uy * 9 - ny * 4.2).toFixed(1) +
+           'Z" fill="var(--ray)"/>');
+
+    // origem
+    s.push('<circle cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1) +
+           '" r="3.4" fill="var(--surface)" stroke="var(--ray)" stroke-width="1.8"/>');
+
+    // acerto
+    var hx = px(r.t), hy = py(r.t);
+    s.push('<circle cx="' + hx.toFixed(1) + '" cy="' + hy.toFixed(1) + '" r="5.6" fill="var(--hit)"/>');
+    s.push('<circle cx="' + hx.toFixed(1) + '" cy="' + hy.toFixed(1) +
+           '" r="9.5" fill="none" stroke="var(--hit)" stroke-width="1.2" opacity="0.5"/>');
+
+    var txt = function (x, y, off, anchor, fill, weight, size, str) {
+      return '<text x="' + (x + off.dx).toFixed(1) + '" y="' + (y + off.dy).toFixed(1) +
+        '" text-anchor="' + anchor + '" fill="' + fill + '" font-family="IBM Plex Mono, monospace" font-size="' +
+        size + '" font-weight="' + weight + '">' + str + '</text>';
+    };
+    s.push(txt(bx, by, p.lo, p.lo.a, 'var(--muted)', 400, 12, 'o'));
+    s.push(txt((bx + ax) / 2, (by + ay) / 2, p.ld, p.ld.a, 'var(--ray)', 500, 12.5, 'd'));
+    s.push(txt(hx, hy, p.lt, p.lt.a, 'var(--hit)', 500, 13, 't = ' + r.t));
+
+    s.push('</svg>');
+    return s.join('');
+  }
+
+  function fig(win, p) {
+    return '<div class="fig">' + panel(win, p) +
+      '<p class="cap"><b>' + p.cap + '</b>' + p.sub + '</p></div>';
+  }
+
+  var out = casos.map(function (c) {
+    var conta = c.conta.map(function (l) {
+      if (!l[0]) return '';
+      var pad = l[1] ? '  '.repeat(1) : '';
+      var nota = '';
+      if (l[1] === 'OK') nota = '   <span class="ok">✓</span>';
+      else if (l[1]) nota = '   <span class="c">← ' + l[1] + '</span>';
+      return l[0].replace(/&/g, '&amp;').replace(/</g, '&lt;') + pad + nota;
+    }).join('\n');
+
+    return '<section class="plate">' +
+      '<div class="plate-head"><span class="step">0' + c.n + '</span><h2>' + c.titulo + '</h2></div>' +
+      '<p class="tform">' + c.tform + '</p>' +
+      '<div class="figs">' + fig(c.win, c.mundo) + fig(c.win, c.local) + '</div>' +
+      '<div class="conta">' + conta + '</div>' +
+      '<p class="read">' + c.leitura + '</p>' +
+      '</section>';
+  }).join('');
+
+  document.getElementById('plates').innerHTML = out;
+
+  document.getElementById('legend').innerHTML = [
+    '<span><svg width="26" height="14"><rect x="1" y="1" width="24" height="12" fill="var(--box-fill)" stroke="var(--box)" stroke-width="1.6"/></svg>caixa do cubo</span>',
+    '<span><svg width="30" height="14"><line x1="1" y1="7" x2="29" y2="7" stroke="var(--ray)" stroke-width="1.4" opacity="0.55"/><line x1="10" y1="3" x2="10" y2="11" stroke="var(--ray)" stroke-width="1.4" opacity="0.7"/><line x1="20" y1="3" x2="20" y2="11" stroke="var(--ray)" stroke-width="1.4" opacity="0.7"/></svg>traço a cada <code>t</code> inteiro</span>',
+    '<span><svg width="30" height="14"><line x1="1" y1="7" x2="22" y2="7" stroke="var(--ray)" stroke-width="3.4"/><path d="M29 7L20 3.2L20 10.8Z" fill="var(--ray)"/></svg>o vetor <code>d</code> — um passo de <code>t</code></span>',
+    '<span><svg width="20" height="16"><circle cx="10" cy="8" r="5.2" fill="var(--hit)"/><circle cx="10" cy="8" r="8.6" fill="none" stroke="var(--hit)" stroke-width="1.2" opacity="0.5"/></svg>acerto</span>'
+  ].join('');
+})();
+</script>
