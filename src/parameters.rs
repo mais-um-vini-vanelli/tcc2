@@ -8,6 +8,7 @@ use crate::color::Rgb;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameters {
+    pub transform: TransformOptions,
     pub rasterization: RasterizationOptions,
     pub clipping: ClippingOptions,
     pub texturing: TextureOptions,
@@ -28,6 +29,19 @@ impl Parameters {
             ..Parameters::default()
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TransformOptions {
+    pub method: TransformMethod,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TransformMethod {
+    /// Escala, depois uma rotação por eixo (Euler X, Y, Z), depois translação,
+    /// cada etapa aplicada separadamente.
+    #[default]
+    Stepwise,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -38,6 +38,10 @@ pub struct Object {
     pub geometry: Primitive,
     pub material: Material,
     pub transform: Transform,
+    /// Se o objeto entra no caminho do raio de sombra. Desligar é o truque que
+    /// deixa uma `Light` morar dentro de um objeto emissivo sem ele bloquear a
+    /// própria luz.
+    pub casts_shadows: bool,
 }
 
 impl Object {
@@ -46,11 +50,17 @@ impl Object {
             geometry,
             material,
             transform: Transform::default(),
+            casts_shadows: true,
         }
     }
 
     pub fn with_transform(mut self, transform: Transform) -> Self {
         self.transform = transform;
+        self
+    }
+
+    pub fn with_shadows(mut self, casts_shadows: bool) -> Self {
+        self.casts_shadows = casts_shadows;
         self
     }
 }
@@ -149,6 +159,18 @@ pub enum Light {
         color: Rgb,
         intensity: f32,
     },
+    /// Luz pontual restrita a um cone.
+    Spot {
+        position: Vec3,
+        /// Eixo do cone, saindo da luz.
+        direction: Vec3,
+        /// Meio-ângulo do cone interno, em graus.
+        inner_angle: f32,
+        /// Meio-ângulo do cone externo, em graus.
+        outer_angle: f32,
+        color: Rgb,
+        intensity: f32,
+    },
     /// Luz ambiente
     Ambient { color: Rgb, intensity: f32 },
 }
@@ -158,6 +180,7 @@ impl Light {
         match *self {
             Light::Point { color, .. }
             | Light::Directional { color, .. }
+            | Light::Spot { color, .. }
             | Light::Ambient { color, .. } => color,
         }
     }
@@ -166,6 +189,7 @@ impl Light {
         match *self {
             Light::Point { intensity, .. }
             | Light::Directional { intensity, .. }
+            | Light::Spot { intensity, .. }
             | Light::Ambient { intensity, .. } => intensity,
         }
     }
@@ -208,6 +232,9 @@ pub struct Material {
     pub metallic: Value<f32>,
     /// 0 espelho, 1 difuso. É daqui que sai o expoente do especular.
     pub roughness: Value<f32>,
+    // Teoria: shading.md#o-termo-emitido
+    /// Luz que a superfície emite por conta própria, sem depender de luzes externas.
+    pub emissive: Value<Rgb>,
 
     // Modelo de Whitted (M3), ortogonais ao acima.
     /// Do que **entra** na superfície, quanto atravessa em vez de voltar
@@ -223,6 +250,7 @@ impl Default for Material {
             albedo: Value::Constant(Rgb::gray(0.8)),
             metallic: Value::Constant(0.0),
             roughness: Value::Constant(0.5),
+            emissive: Value::Constant(Rgb::BLACK),
             transparency: 0.0,
             refractive_index: 1.0,
         }
@@ -246,6 +274,18 @@ impl Material {
             albedo: Value::Constant(albedo),
             metallic: Value::Constant(1.0),
             roughness: Value::Constant(roughness),
+            ..Material::default()
+        }
+    }
+
+    /// Superfície que brilha com a cor dada e não reflete nada.
+    ///
+    /// Ela ilumina só a si mesma: aparece acesa na imagem e nos reflexos, mas
+    /// não joga luz nos vizinhos.
+    pub fn emissive(color: Rgb) -> Self {
+        Material {
+            albedo: Value::Constant(Rgb::BLACK),
+            emissive: Value::Constant(color),
             ..Material::default()
         }
     }
@@ -276,6 +316,7 @@ impl Material {
                 .roughness
                 .sample(uv, footprint, options)
                 .clamp(Self::MIN_ROUGHNESS, 1.0),
+            emission: self.emissive.sample(uv, footprint, options),
             transparency: self.transparency.clamp(0.0, 1.0),
         }
     }
@@ -289,6 +330,7 @@ pub struct MaterialSample {
     pub albedo: Rgb,
     pub metallic: f32,
     pub roughness: f32,
+    pub emission: Rgb,
     pub transparency: f32,
 }
 

@@ -190,19 +190,22 @@ Decisões e o que ficou de fora em [design_api.md](design_api.md), seção
 - [x] `OutputOptions { exposure, tonemap: None | Reinhard }`
 
 - Prerequisitos pra bater com glTF:
-  - spotlights
-  - 1 material per face
-  - Material.emissive
-  - unidade de medida lights
+  ? scene graph
+    # pode ficar como flat array
+  ? 1 material per face
+    # pode ser contornado importando cada primitive em uma mesh diferente
+  [x] spotlights
+  [x] unidades de medida luzes
+  [x] `Material.emissive` (`Value<Rgb>`, sem `KHR_materials_emissive_strength`),
+    somado no `shade` como o `Le` da equação; `Object.casts_shadows` junto
   - normal map, normal por vértice, tangentes por vértice
-  - scene graph
 
 - permitir acompanhar 1 pixel
 
 - Cook-Torrance com GGX, Smith height-correlated e Fresnel de Schlick, na
   parametrização metallic/roughness (o subconjunto do Principled do Blender que
   o glTF 2.0 padronizou), como quarta variante `CookTorrance`
-- `TransformOptions { method: Stepwise | Quaternions }`
+- Quaternions
 
 - `wireframe` e `msaa` como toggles de `RasterOptions`
 - toggle pra renderizar bvh

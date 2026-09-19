@@ -8,6 +8,7 @@
 //! tracer transforma o raio com a inversa (`undo_*`).
 
 use crate::math::{Ray, Vec3};
+use crate::parameters::TransformMethod;
 
 /// Escala, rotação e translação, aplicadas nessa ordem.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -33,34 +34,42 @@ impl Transform {
 
     // Teoria: transform.md#a-ordem-das-tres-etapas
     /// Local -> mundo: escala, rotaciona, translada.
-    pub fn apply_point(&self, p: Vec3) -> Vec3 {
-        Self::gira(Self::escala(p, self.scale), self.rotation) + self.translation
+    pub fn apply_point(&self, p: Vec3, method: TransformMethod) -> Vec3 {
+        Self::gira(Self::escala(p, self.scale), self.rotation, method) + self.translation
     }
 
     /// Como `apply_point`, sem a translação: direção não tem posição.
-    pub fn apply_direction(&self, d: Vec3) -> Vec3 {
-        Self::gira(Self::escala(d, self.scale), self.rotation)
+    pub fn apply_direction(&self, d: Vec3, method: TransformMethod) -> Vec3 {
+        Self::gira(Self::escala(d, self.scale), self.rotation, method)
     }
 
     // Teoria: transform.md#a-normal-usa-a-escala-reciproca
     /// A normal não acompanha a escala: ela usa o recíproco dela. É a forma
     /// legível do que a inversa transposta faz.
-    pub fn apply_normal(&self, n: Vec3) -> Vec3 {
-        Self::gira(Self::escala(n, Self::reciproco(self.scale)), self.rotation).normalized()
+    pub fn apply_normal(&self, n: Vec3, method: TransformMethod) -> Vec3 {
+        Self::gira(
+            Self::escala(n, Self::reciproco(self.scale)),
+            self.rotation,
+            method,
+        )
+        .normalized()
     }
 
     // Teoria: transform.md#desfazendo
     /// Mundo -> local: desfaz as três etapas na ordem contrária.
-    pub fn undo_point(&self, p: Vec3) -> Vec3 {
+    pub fn undo_point(&self, p: Vec3, method: TransformMethod) -> Vec3 {
         Self::escala(
-            Self::desgira(p - self.translation, self.rotation),
+            Self::desgira(p - self.translation, self.rotation, method),
             Self::reciproco(self.scale),
         )
     }
 
     /// Como `undo_point`, sem a translação.
-    pub fn undo_direction(&self, d: Vec3) -> Vec3 {
-        Self::escala(Self::desgira(d, self.rotation), Self::reciproco(self.scale))
+    pub fn undo_direction(&self, d: Vec3, method: TransformMethod) -> Vec3 {
+        Self::escala(
+            Self::desgira(d, self.rotation, method),
+            Self::reciproco(self.scale),
+        )
     }
 
     // Teoria: transform.md#o-raio-vai-para-o-espaco-local
@@ -69,10 +78,10 @@ impl Transform {
     ///
     /// A direção sai **sem normalizar** de propósito: é isso que faz o `t` do
     /// acerto valer também no mundo, sem conversão de volta.
-    pub fn undo_ray(&self, r: Ray) -> Ray {
+    pub fn undo_ray(&self, r: Ray, method: TransformMethod) -> Ray {
         Ray {
-            origin: self.undo_point(r.origin),
-            direction: self.undo_direction(r.direction),
+            origin: self.undo_point(r.origin, method),
+            direction: self.undo_direction(r.direction, method),
         }
     }
 
@@ -91,16 +100,24 @@ impl Transform {
         Vec3::new(inverte(s.x), inverte(s.y), inverte(s.z))
     }
 
-    fn gira(v: Vec3, graus: Vec3) -> Vec3 {
-        let v = Self::gira_x(v, graus.x.to_radians());
-        let v = Self::gira_y(v, graus.y.to_radians());
-        Self::gira_z(v, graus.z.to_radians())
+    fn gira(v: Vec3, graus: Vec3, method: TransformMethod) -> Vec3 {
+        match method {
+            TransformMethod::Stepwise => {
+                let v = Self::gira_x(v, graus.x.to_radians());
+                let v = Self::gira_y(v, graus.y.to_radians());
+                Self::gira_z(v, graus.z.to_radians())
+            }
+        }
     }
 
-    fn desgira(v: Vec3, graus: Vec3) -> Vec3 {
-        let v = Self::gira_z(v, -graus.z.to_radians());
-        let v = Self::gira_y(v, -graus.y.to_radians());
-        Self::gira_x(v, -graus.x.to_radians())
+    fn desgira(v: Vec3, graus: Vec3, method: TransformMethod) -> Vec3 {
+        match method {
+            TransformMethod::Stepwise => {
+                let v = Self::gira_z(v, -graus.z.to_radians());
+                let v = Self::gira_y(v, -graus.y.to_radians());
+                Self::gira_x(v, -graus.x.to_radians())
+            }
+        }
     }
 
     // Teoria: transform.md#girar-em-torno-de-um-eixo

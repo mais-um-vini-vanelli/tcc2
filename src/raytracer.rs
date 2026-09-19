@@ -54,7 +54,11 @@ impl Renderer for RayTracer {
 
         let aceleracao = params.ray_tracing.acceleration.bvh.then(|| {
             let inicio = Instant::now();
-            let aceleracao = Aceleracao::build(scene, params.ray_tracing.acceleration.split);
+            let aceleracao = Aceleracao::build(
+                scene,
+                params.ray_tracing.acceleration.split,
+                params.transform.method,
+            );
 
             contador.atualiza(|s| {
                 s.bvh_build_time = inicio.elapsed();
@@ -169,14 +173,15 @@ impl<'a> Contexto<'a> {
     /// A cor que chega pela direção contrária ao raio.
     ///
     /// ```text
-    /// L = Σ_luzes V · reflectancia · radiancia   <- shading::shade, o termo direto
+    /// L = Le                                     <- shading::shade, o emitido
+    ///   + Σ_luzes V · reflectancia · radiancia   <- shading::shade, o termo direto
     ///   + F(v, n) · L(raio refletido)            <- recursão
     ///   + kt      · L(raio refratado)            <- recursão
     /// ```
     fn trace(&self, raio: Ray, t_min: f32, t_max: f32, profundidade: u32) -> Rgb {
         let opcoes = &self.params.ray_tracing;
 
-        let Some(acerto) = self.mais_proximo(raio, t_min, t_max) else {
+        let Some(acerto) = self.mais_proximo(raio, t_min, t_max, Consulta::Visao) else {
             return self.params.output.background.unwrap_or(Rgb::BLACK);
         };
 
@@ -269,19 +274,33 @@ impl<'a> Contexto<'a> {
     }
 
     // Teoria: bvh.md#dois-niveis
-    /// O acerto mais próximo da origem do raio, entre `t_min` e `t_max`.
+    /// O acerto mais próximo da origem do raio, entre `t_min` e `t_max`, entre
+    /// os objetos que a `consulta` enxerga.
     ///
     /// Os dois níveis da aceleração aparecem aqui, com a mesma forma: a TLAS
     /// escolhe entre os objetos, e o teste de um objeto é uma travessia da
     /// BLAS dele entre as faces.
-    fn mais_proximo(&self, raio: Ray, t_min: f32, t_max: f32) -> Option<Acerto<'a>> {
+    fn mais_proximo(
+        &self,
+        raio: Ray,
+        t_min: f32,
+        t_max: f32,
+        consulta: Consulta,
+    ) -> Option<Acerto<'a>> {
         // Teoria: transform.md#o-raio-vai-para-o-espaco-local
         // O rasterizador leva a geometria pro mundo; aqui é o raio que vem pro
         // espaço local do objeto. Isso permite usar equações arbitrárias tipo a
         // da esfera pro teste de interseção. O `t` é igual nos dois espaços.
         let intersecta = |i: usize, limite: f32| -> Option<(f32, Hit)> {
             let objeto = &self.scene.objects[i];
-            let local = objeto.transform.undo_ray(raio);
+
+            if consulta == Consulta::Sombra && !objeto.casts_shadows {
+                return None;
+            }
+
+            let local = objeto
+                .transform
+                .undo_ray(raio, self.params.transform.method);
 
             let hit = match self.aceleracao.as_ref().and_then(|a| a.blas[i].as_ref()) {
                 Some(blas) => {
@@ -334,7 +353,9 @@ impl<'a> Contexto<'a> {
             objeto,
             surface: Surface {
                 point: raio.at(hit.t),
-                normal: objeto.transform.apply_normal(hit.normal),
+                normal: objeto
+                    .transform
+                    .apply_normal(hit.normal, self.params.transform.method),
                 uv: hit.uv,
             },
         })
@@ -344,7 +365,7 @@ impl<'a> Contexto<'a> {
     /// Existe alguma coisa entre o ponto e a luz?
     fn ocluido(&self, superficie: &Surface, luz: &Light) -> bool {
         let (direcao, distancia) = match *luz {
-            Light::Point { position, .. } => {
+            Light::Point { position, .. } | Light::Spot { position, .. } => {
                 let ate_a_luz = position - superficie.point;
                 (ate_a_luz.normalized(), ate_a_luz.length())
             }
@@ -361,8 +382,17 @@ impl<'a> Contexto<'a> {
 
         self.contador.raio();
 
-        self.mais_proximo(sombra, EPSILON, distancia).is_some()
+        self.mais_proximo(sombra, EPSILON, distancia, Consulta::Sombra)
+            .is_some()
     }
+}
+
+/// Pra que serve o raio. O de sombra não enxerga quem tem `casts_shadows`
+/// desligado, e é só nisso que os dois diferem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Consulta {
+    Visao,
+    Sombra,
 }
 
 // Teoria: raytracer.md#o-acne-e-o-epsilon

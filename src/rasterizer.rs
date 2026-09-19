@@ -9,7 +9,7 @@
 
 use crate::color::Rgb;
 use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
-use crate::parameters::{Parameters, ShadingFrequency};
+use crate::parameters::{Parameters, ShadingFrequency, TransformMethod};
 use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
 use crate::scene::{Camera, Light, Material, Scene};
 use crate::shading::{self, Surface};
@@ -61,7 +61,19 @@ impl Renderer for Rasterizer {
                 // Local -> mundo -> câmera. Aqui o rasterizador transforma a
                 // *geometria*; o ray tracer resolve o mesmo problema no sentido
                 // contrário, transformando o raio.
-                let triangulo = face.map(|v| transforma(v, objeto.transform, &scene.camera, base));
+                let triangulo = face.map(|v| Vertex {
+                    position: para_camera(
+                        &scene.camera,
+                        base,
+                        objeto
+                            .transform
+                            .apply_point(v.position, params.transform.method),
+                    ),
+                    normal: objeto
+                        .transform
+                        .apply_normal(v.normal, params.transform.method),
+                    uv: v.uv,
+                });
 
                 let poligono = if params.clipping.enabled {
                     recorta(triangulo, &planos, &mut stats)
@@ -253,20 +265,6 @@ struct Triangulo<'a> {
     area: f32,
     shading: Shading,
     material: &'a Material,
-}
-
-// Teoria: transform.md#o-transform
-fn transforma(
-    vertice: Vertex,
-    transform: Transform,
-    camera: &Camera,
-    base: (Vec3, Vec3, Vec3),
-) -> Vertex {
-    Vertex {
-        position: para_camera(camera, base, transform.apply_point(vertice.position)),
-        normal: transform.apply_normal(vertice.normal),
-        uv: vertice.uv,
-    }
 }
 
 // Teoria: rasterizer.md#o-frustum

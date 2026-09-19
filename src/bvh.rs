@@ -9,7 +9,7 @@
 //! cada nó pela mediana ou pelo SAH, conforme `AccelerationOptions.split`.
 
 use crate::math::{Aabb, Ray, Vec3};
-use crate::parameters::BvhSplit;
+use crate::parameters::{BvhSplit, TransformMethod};
 use crate::raytracer::Contador;
 use crate::scene::{Primitive, Scene};
 
@@ -38,7 +38,7 @@ pub(crate) struct Aceleracao {
 }
 
 impl Aceleracao {
-    pub fn build(scene: &Scene, split: BvhSplit) -> Aceleracao {
+    pub fn build(scene: &Scene, split: BvhSplit, method: TransformMethod) -> Aceleracao {
         let blas: Vec<Option<Bvh>> = scene
             .objects
             .iter()
@@ -72,7 +72,7 @@ impl Aceleracao {
                         .geometry
                         .bounds()
                         .corners()
-                        .map(|canto| objeto.transform.apply_point(canto)),
+                        .map(|canto| objeto.transform.apply_point(canto, method)),
                 ),
                 // Teoria: bvh.md#o-custo-de-um-objeto
                 custo: blas.as_ref().map_or(CUSTO_PRIMITIVO, Bvh::custo_esperado),

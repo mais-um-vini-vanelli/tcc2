@@ -22,7 +22,7 @@ pub mod prelude {
     pub use crate::parameters::{
         AccelerationOptions, BvhSplit, ClippingOptions, Filtering, OutputOptions, Parameters,
         RasterizationOptions, RayTracingOptions, ReflectanceModel, ShadingFrequency,
-        ShadingOptions, TextureOptions, Tonemap,
+        ShadingOptions, TextureOptions, Tonemap, TransformMethod, TransformOptions,
     };
     pub use crate::rasterizer::Rasterizer;
     pub use crate::raytracer::RayTracer;
