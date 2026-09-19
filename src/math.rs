@@ -252,6 +252,13 @@ impl Aabb {
         (self.min + self.max) * 0.5
     }
 
+    // Teoria: bvh.md#o-custo-esperado
+    /// Área da superfície. Infinita na `EMPTY`.
+    pub fn area(self) -> f32 {
+        let d = self.max - self.min;
+        2.0 * (d.x * d.y + d.y * d.z + d.z * d.x)
+    }
+
     pub fn corners(self) -> [Vec3; 8] {
         let (a, b) = (self.min, self.max);
 
@@ -273,21 +280,6 @@ impl Aabb {
     pub fn hit(self, ray: Ray, t_min: f32, t_max: f32) -> Option<f32> {
         // O intervalo de `t` em que o raio está entre os dois planos de um eixo.
         let slab = |origem: f32, direcao: f32, min: f32, max: f32| {
-            // Um plano x = k é cruzado pelo raio O + t·D quando O.x + t·D.x = k, ou seja: t = (k − O.x) / D.x
-            // Usamos essa ideia pra descobrir o t em que o raio cruza os dois planos paralelos de cada eixo.
-            //
-            // A divisão por direção pode ser uma divisão por 0, e isso é proposital.
-            // Se a direção tem componente 0 em um eixo, é porque o raio passa paralelo a ele; então
-            // ele só está dentro dos dois planos se a origem está dentro dos dois planos.
-            // A divisão é de f32 e segue a IEEE 754: divisão por 0 não causa panic e devolve ±∞ dependendo do sinal do
-            // numerador.
-            //
-            // Visualize os planos x_min = 0 e x_max = 1, e um raio com direção.x = 0 e origem.x = -1, 0.5 e 2, respectivamente:
-            // dentro,  d=+0 : (-inf, inf)
-            // fora(-), d=+0 : (inf, inf)
-            // fora(+), d=+0 : (-inf, -inf)
-            // Note que só o caso em que o raio está dentro do plano retorna (-inf, inf), que são valores neutros de t;
-            // não deixam o intervalo mais restritivo.
             let t0 = (min - origem) / direcao;
             let t1 = (max - origem) / direcao;
 

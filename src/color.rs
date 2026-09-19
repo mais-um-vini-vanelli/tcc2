@@ -2,8 +2,6 @@
 //!
 //! Internamente a cor é `f32` e **linear**. Converte pra `u8` só na saída, e
 //! é nessa conversão que a codificação sRGB entra.
-//!
-//! Teoria: color.md#linear-e-srgb
 
 use std::ops::{Add, Div, Mul, Sub};
 
@@ -54,7 +52,6 @@ impl Rgb {
     }
 
     // TODO: trocar pela curva sRGB completa (trecho reto + potência)
-    // Teoria: color.md#a-curva-de-transferencia
     const GAMMA: f32 = 2.2;
 
     fn linear_para_srgb(c: f32) -> f32 {

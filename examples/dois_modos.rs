@@ -10,8 +10,8 @@
 //! reflete a cena e o vidro a refrata, os dois por recursão do modelo de
 //! Whitted.
 //!
-//! No fim, o mesmo render do ray tracer com a BVH ligada e desligada: a imagem
-//! é igual, e o que muda é o trabalho.
+//! No fim, o mesmo render do ray tracer com a BVH pelo SAH, pela mediana e
+//! desligada: a imagem é igual, e o que muda é o trabalho.
 //!
 //! ```text
 //! cargo run --example dois_modos
@@ -170,10 +170,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    for bvh in [true, false] {
+    for (acceleration, nome) in [
+        (AccelerationOptions::default(), "bvh pelo sah"),
+        (
+            AccelerationOptions {
+                split: BvhSplit::Median,
+                ..AccelerationOptions::default()
+            },
+            "bvh pela mediana",
+        ),
+        (
+            AccelerationOptions {
+                bvh: false,
+                ..AccelerationOptions::default()
+            },
+            "sem bvh",
+        ),
+    ] {
         let params = Parameters {
             ray_tracing: RayTracingOptions {
-                acceleration: AccelerationOptions { bvh },
+                acceleration,
                 ..params.ray_tracing
             },
             ..params.clone()
@@ -183,8 +199,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let stats = RayTracer.render(&scene, &params).stats;
 
         println!(
-            "bvh {}: {:.1?}, {} testes de primitivo, {} caixas testadas, profundidade {} na tlas e {} na blas mais funda, construída em {:.1?}",
-            if bvh { "ligada" } else { "desligada" },
+            "{nome}: {:.1?}, {} testes de primitivo, {} caixas testadas, profundidade {} na tlas e {} na blas mais funda, construída em {:.1?}",
             inicio.elapsed(),
             stats.primitive_tests,
             stats.bvh_nodes_visited,

@@ -54,7 +54,7 @@ impl Renderer for RayTracer {
 
         let aceleracao = params.ray_tracing.acceleration.bvh.then(|| {
             let inicio = Instant::now();
-            let aceleracao = Aceleracao::build(scene);
+            let aceleracao = Aceleracao::build(scene, params.ray_tracing.acceleration.split);
 
             contador.atualiza(|s| {
                 s.bvh_build_time = inicio.elapsed();
@@ -99,6 +99,8 @@ impl Renderer for RayTracer {
                 }
             }
         }
+
+        cor.apply_output(&params.output);
 
         RenderResult {
             color: Some(cor),
@@ -383,17 +385,6 @@ fn reflete(d: Vec3, n: Vec3) -> Vec3 {
 /// total. `d` e `n` unitários, `indice` o índice de refração do objeto (o meio
 /// de fora é sempre o vácuo).
 fn refrata(d: Vec3, n: Vec3, indice: f32) -> Option<Vec3> {
-    //             n ^
-    //               |
-    //         -d    |
-    //           \   |
-    //            \θ₁|
-    //             \ |
-    //     ----------+----------> û    (a superfície)
-    //               | \
-    //               |θ₂\
-    //               |   \
-    //               |    t
     let cos_i = -d.dot(n);
 
     // cos_i negativo é o raio saindo de dentro do objeto: a normal aponta pro
@@ -404,10 +395,6 @@ fn refrata(d: Vec3, n: Vec3, indice: f32) -> Option<Vec3> {
         (n, 1.0 / indice, cos_i)
     };
 
-    // sin θ₂ = η · sin θ₁
-    // Eleva tudo ao quadrado:
-    // sin²θ₂ = η² · sin²θ₁
-    // Com pitágoras sin²θ₁ = 1 − cos²θ₁, então trocamos:
     // sin²θ₂ = η² · (1 − cos²θ₁)
     let sen2_t = eta * eta * (1.0 - cos_i * cos_i);
     if sen2_t > 1.0 {
@@ -415,27 +402,9 @@ fn refrata(d: Vec3, n: Vec3, indice: f32) -> Option<Vec3> {
         return None;
     }
 
-    // Pra descobrir cos θ₂ usamos pitágoras:
-    // |t|² = (sin θ₂)² + (cos θ₂)²
-    // cos θ₂ = √(1 - (sin θ₂)²)
     let cos_t = (1.0 - sen2_t).sqrt();
 
-    // Podemos decompor d e t em componente paralelo à normal + componente tangente à superfície:
-    //  d = sin θ₁ · û  +  cos θ₁ · -n
-    //  t = sin θ₂ · û  +  cos θ₂ · -n
-    //
-    // A lei de Snell: n₁ sin θ₁ = n₂ sin θ₂ -> sin θ₂ = η · sin θ₁, com η = n₁/n₂
-    // Onde n1 e n2 são os índices de refração dos dois meios
-    //
-    // Então:
-    //  t = sin θ₂ · û  +  cos θ₂ · -n
-    //  t = (η ·  sin θ₁) · û  −  cos θ₂ · n
-    //  t =  η · (sin θ₁  · û) −  cos θ₂ · n
-    // Podemos conseguir a componente tangente de d com: d_tan = d - (componente paralela) = d - (cos θ₁ · -n);
-    // ou seja, removendo o deslocamento na direção da normal e deixando apenas o descolamento na direção da tangente:
-    //  t =  η · (d + cos θ₁·n) −  cos θ₂ · n
-    //  t =  η·d + η·cos θ₁·n   −  cos θ₂ · n
-    //  t =  η·d + (η·cos θ₁ − cos θ₂)·n
+    // t = η·d + (η·cos θ₁ − cos θ₂)·n
     Some(d * eta + n * (eta * cos_i - cos_t))
 }
 

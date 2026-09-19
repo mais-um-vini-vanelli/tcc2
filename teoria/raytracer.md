@@ -268,86 +268,154 @@ baricêntricas do acerto.
 
 ### O sistema
 
-Um ponto dentro do triângulo se escreve pelos três pesos baricêntricos (os
-mesmos de `rasterizer.md#pesos-sob-perspectiva`), aqui na forma de dois
-parâmetros livres:
+Ancore-se em `p0` e olhe para as duas arestas que saem dele como se fossem eixos:
 
 ```text
-P(u, v) = (1 − u − v)·V0 + u·V1 + v·V2      com u ≥ 0, v ≥ 0, u + v ≤ 1
+        p2
+        ●
+       ╱ ╲
+ E2   ╱   ╲
+     ╱     ╲
+    ●───────●
+   p0   E1   p1
 ```
 
-Reagrupando em torno de `V0`, com as duas arestas que saem dele:
+`E1` e `E2` não são perpendiculares nem unitários, mas isso não importa:
+qualquer ponto do plano do triângulo é `p0 + u·E1 + v·E2` para exatamente um par
+`(u, v)`. É um sistema de coordenadas oblíquo, com origem em `p0`.
+
+Podemos visualizar os pontos do triângulo no plano UV:
 
 ```text
-E1 = V1 − V0
-E2 = V2 − V0
-
-P(u, v) = V0 + u·E1 + v·E2
+ v
+ │
+1┤● p2
+ │  ╲
+ │   ╲
+ │    ╲
+ │     ╲
+0┤●──────●────
+ p0      p1   u
+ 0       1
 ```
 
-E o ponto a `t` do raio é `O + t·D`. Igualar os dois é pedir que o raio e o
-plano do triângulo se encontrem **dentro** do triângulo:
+Um ponto está dentro do triângulo se:
 
 ```text
-  O + t·D = V0 + u·E1 + v·E2
-> −t·D + u·E1 + v·E2 = O − V0
+u ≥ 0
+v ≥ 0
+u + v ≤ 1    (não passou da aresta p1p2)
 ```
 
-Chamando `T = O − V0`, isso é um sistema linear de três equações (uma por eixo)
-e três incógnitas (`t`, `u`, `v`):
+Um raio é `O + t·D`, então pra achar o ponto de interseção com o triângulo
+usamos:
 
 ```text
-┌              ┐ ┌   ┐   ┌   ┐
-│ −D   E1   E2 │ │ t │ = │ T │
-└              ┘ │ u │   └   ┘
-                 │ v │
-                 └   ┘
+O + t·D = p0 + u·E1 + v·E2
 ```
 
-As três colunas da matriz são vetores, e é isso que dá o atalho: o determinante
-de uma matriz 3×3 escrita por colunas é o **produto misto** dessas colunas.
+Isolando as incógnitas à esquerda e definindo `T = O − p0`:
+
+```text
+−t·D + u·E1 + v·E2 = T
+```
+
+Isso é uma equação de vetores, então podemos expandir pra equações de escalares:
+
+```text
+−t·Dx + u·E1x + v·E2x = Tx
+−t·Dy + u·E1y + v·E2y = Ty
+−t·Dz + u·E1z + v·E2z = Tz
+```
+
+Vamos resolver isso por Cramer, então precisa reorganizar como multiplicação de
+matrizes:
+
+```text
+┌                 ┐ ┌   ┐   ┌    ┐
+│ −Dx   E1x   E2x │ │ t │   │ Tx │
+│ −Dy   E1y   E2y │ │ u │ = │ Ty │
+│ −Dz   E1z   E2z │ │ v │   │ Tz │
+└                 ┘ └   ┘   └    ┘
+```
 
 ### Resolvendo por Cramer
 
-A regra de Cramer diz que cada incógnita é a razão entre dois determinantes: o
-da matriz com a coluna daquela incógnita trocada pelo lado direito, e o da
-matriz original.
+Organizamos as operações de Cramer:
 
 ```text
-det(M) = |−D, E1, E2|
-t = |T, E1, E2| / det(M)
-u = |−D, T, E2| / det(M)
-v = |−D, E1, T| / det(M)
+det(M) = det(−D, E1, E2)
+t = det( T, E1, E2) / det(M)
+u = det(−D,  T, E2) / det(M)
+v = det(−D, E1,  T) / det(M)
 ```
 
-Duas propriedades do produto misto `|a, b, c| = a · (b × c)` deixam tudo isso em
-função de **dois** produtos vetoriais só:
+E agora reorganizamos pra precisar calcular menos coisa. Identidades:
 
 ```text
-M1 é cíclico       -> a · (b × c) = b · (c × a) = c · (a × b)
-M2 troca de sinal  -> trocar dois vetores de lugar inverte o sinal
+1) det(a, b, c) = a · (b × c)
+2) det(a, b, c) = det(b, c, a) = det(c, a, b)
 ```
 
-Aplicando nas quatro linhas acima, com `P = D × E2` e `Q = T × E1`:
+Com isso, vamos definir `P = D × E2` e `Q = T × E1` e reorganizar os cálculos de
+determinante:
 
 ```text
-det(M) = E1 · P
-t      = E2 · Q  / det(M)
-u      = T  · P  / det(M)
-v      = D  · Q  / det(M)
-```
+det(M) = det(−D, E1, E2)
+       = −det(D, E1, E2) <-  det(-1·a, b, c) = -1 · det(a, b, c)
+       = −det(E1, E2, D) <-  Prop 2
+       = −E1 · (E2 × D)  <-  Prop 1
+       =  E1 · (D × E2)  <-  E2×D = −(D×E2)
+       =  E1 · P         <-  Substituindo P
 
-`P` e `Q` são calculados uma vez cada, e as quatro respostas saem de produtos
-escalares. É por isso que o método é rápido: nenhuma matriz é montada, e a
-equação do plano do triângulo nunca é escrita.
+t:   det(T, E1, E2)
+   = det(E2, T, E1) <-  Prop 2
+   = E2 · (T × E1)  <-  Prop 1
+   = E2 · Q         <-  Substituindo Q
+
+u:   det(−D, T, E2)
+  = −det(T, E2, D)
+  = −T · (E2 × D)
+  =  T · (D × E2)
+  =  T · P
+
+v:   det(−D, E1, T)
+   = −det(D, E1, T)
+   = −D · (E1 × T)
+   =  D · (T × E1)
+   =  D · Q
+```
 
 ### O que cada teste rejeita
 
+`det(M)` tem um significado especial: é o volume com sinal de `E1 x D x E2`.
+Volume 0 significa que os 3 estão no mesmo plano. Como `E1` e `E2` são as duas
+direções que geram o plano do triângulo, `D` ser coplanar com eles quer dizer que
+`D` não tem nenhuma componente saindo do plano:
+
+```text
+det ≠ 0                          det = 0
+
+    D
+     ╲                           ────D────→
+  ════╳══════                     ═══════════
+
+ o raio sai do plano           o raio fica no plano (passa paralelo ao triângulo)
+```
+
+`det(M) = 0` significa que um desses aconteceu:
+
+- O raio é paralelo ao plano e está fora dele (não encosta no triângulo)
+- O raio está deitado dentro do plano (triângulo tem espessura 0, então não encosta também)
+- O triângulo é degenerado, com `E1` e `E2` paralelos e área zero (não encosta também)
+
+Então não houve interseção e o triângulo pode ser descartado.
+
 ```text
 det ≈ 0        o raio corre paralelo ao plano do triângulo
-u < 0, u > 1   o acerto no plano caiu fora, do lado da aresta V0V2
-v < 0          idem, do lado da aresta V0V1
-u + v > 1      caiu fora pela hipotenusa V1V2
+u < 0, u > 1   o acerto no plano caiu fora, do lado da aresta p0p2
+v < 0          idem, do lado da aresta p0p1
+u + v > 1      caiu fora pela hipotenusa p1p2
 t ≤ 0          o triângulo está atrás da origem do raio
 ```
 
@@ -366,7 +434,7 @@ verso e ganhar velocidade; um que refrata, não.
 
 ### E as baricêntricas saem de graça
 
-`u` e `v` são exatamente os pesos de `V1` e `V2`, e o de `V0` é `1 − u − v`. É
+`u` e `v` são exatamente os pesos de `p1` e `p2`, e o de `p0` é `1 − u − v`. É
 com eles que a normal e o uv do acerto são interpolados — e, diferente do
 rasterizador, **sem correção de perspectiva nenhuma**: aqui os pesos foram
 medidos na geometria em 3D, não numa projeção em tela. O rasterizador só chega
@@ -669,28 +737,71 @@ n1 · sen θ1 = n2 · sen θ2          n1, n2 = índices dos dois meios
 ```
 
 ```text
-        d    n
-         \   ^
-          \  |          θ1
-       ----X--------  superfície
-          /|
-         / |            θ2 < θ1: entrando num meio mais denso,
-        /  |            o raio se aproxima da normal
-       t
+            n ^
+              |
+        -d    |
+          \   |
+           \θ₁|
+            \ |
+    ----------+----------> û    (a superfície)
+              | \
+              |θ₂\
+              |   \
+              |    t
 ```
 
-Com `η = n1/n2`, `cos θ1 = −d·n` e os vetores todos unitários, a direção
-transmitida sai em forma fechada:
+Com `η = n1/n2` e `cos θ1 = −d·n`:
 
 ```text
-sen²θ2 = η² · (1 − cos²θ1)
-cos θ2 = √(1 − sen²θ2)
-
-t = η·d + (η·cos θ1 − cos θ2)·n
+sin θ₂ = η · sin θ₁
 ```
 
-O primeiro termo dobra a direção original pelo fator dos meios; o segundo
-recoloca a componente ao longo da normal no ângulo que Snell pede.
+Eleva tudo ao quadrado:
+
+```text
+sin²θ₂ = η² · sin²θ₁
+```
+
+Com pitágoras `sin²θ₁ = 1 − cos²θ₁`, então trocamos:
+
+```text
+sin²θ₂ = η² · (1 − cos²θ₁)
+```
+
+Se `sin²θ₂ > 1` é o caso de reflexão interna total (abaixo). Pra descobrir
+`cos θ₂` usamos pitágoras:
+
+```text
+|t|² = (sin θ₂)² + (cos θ₂)²
+cos θ₂ = √(1 - (sin θ₂)²)
+```
+
+Podemos decompor `d` e `t` em componente paralelo à normal + componente tangente
+à superfície:
+
+```text
+d = sin θ₁ · û  +  cos θ₁ · -n
+t = sin θ₂ · û  +  cos θ₂ · -n
+```
+
+Então:
+
+```text
+t = sin θ₂ · û  +  cos θ₂ · -n
+t = (η ·  sin θ₁) · û  −  cos θ₂ · n
+t =  η · (sin θ₁  · û) −  cos θ₂ · n
+```
+
+Podemos conseguir a componente tangente de `d` com
+`d_tan = d - (componente paralela) = d - (cos θ₁ · -n)`; ou seja, removendo o
+deslocamento na direção da normal e deixando apenas o deslocamento na direção da
+tangente:
+
+```text
+t =  η · (d + cos θ₁·n) −  cos θ₂ · n
+t =  η·d + η·cos θ₁·n   −  cos θ₂ · n
+t =  η·d + (η·cos θ₁ − cos θ₂)·n
+```
 
 ### Entrando e saindo
 

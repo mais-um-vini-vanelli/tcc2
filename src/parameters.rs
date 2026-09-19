@@ -135,12 +135,28 @@ pub enum ReflectanceModel {
 pub struct AccelerationOptions {
     /// Desligar cai para força bruta (todo raio testa todo primitivo).
     pub bvh: bool,
+    /// Onde a construção corta cada nó da BVH.
+    pub split: BvhSplit,
 }
 
 impl Default for AccelerationOptions {
     fn default() -> Self {
-        AccelerationOptions { bvh: true }
+        AccelerationOptions {
+            bvh: true,
+            split: BvhSplit::default(),
+        }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BvhSplit {
+    /// Metade dos itens pra cada lado, no eixo mais comprido. A árvore sai
+    /// balanceada, mas cega ao tamanho das caixas.
+    Median,
+    /// O corte de menor custo esperado pela *Surface Area Heuristic*
+    /// (MacDonald e Booth, 1990), que também decide quando parar de dividir.
+    #[default]
+    Sah,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,13 +184,18 @@ impl Default for RayTracingOptions {
     }
 }
 
-/// Saída da imagem: dimensões e cor de fundo.
+/// Saída da imagem: dimensões, cor de fundo e como a radiância calculada, que
+/// não tem teto, vira uma cor entre 0 e 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OutputOptions {
     pub width: u32,
     pub height: u32,
     /// Cor dos pixels que nenhum primitivo cobriu.
     pub background: Option<Rgb>,
+    /// Multiplica a radiância antes do tone mapping, como a exposição de uma
+    /// câmera: clareia ou escurece a imagem sem mexer nas luzes.
+    pub exposure: f32,
+    pub tonemap: Tonemap,
 }
 
 impl Default for OutputOptions {
@@ -183,6 +204,19 @@ impl Default for OutputOptions {
             width: 800,
             height: 600,
             background: Some(Rgb::BLACK),
+            exposure: 1.0,
+            tonemap: Tonemap::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Tonemap {
+    /// Nada: o que passa de 1 é cortado canal por canal na gravação. Estoura
+    /// os claros e desvia a cor
+    #[default]
+    None,
+    /// `c / (1 + c)` em cada canal (Reinhard et al., 2002). Quase a identidade
+    /// nos escuros, e os claros se aproximam de 1 sem chegar.
+    Reinhard,
 }

@@ -123,6 +123,10 @@ impl Renderer for Rasterizer {
             }
         }
 
+        if let Some(cor) = &mut resultado.color {
+            cor.apply_output(&params.output);
+        }
+
         resultado.stats = stats;
         resultado
     }

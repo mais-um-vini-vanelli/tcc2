@@ -158,8 +158,8 @@ impl Nivel {
     /// O texel que contém `uv`. uv fora de [0,1] faz wrap, e `v` cresce para
     /// baixo, como nas imagens.
     fn nearest(&self, uv: Vec2) -> Rgb {
-        let x = (repete(uv.x) * self.width as f32) as u32;
-        let y = (repete(uv.y) * self.height as f32) as u32;
+        let x = (Self::repete(uv.x) * self.width as f32) as u32;
+        let y = (Self::repete(uv.y) * self.height as f32) as u32;
 
         // O produto acima pode chegar em width/height.
         self.texel(
@@ -179,8 +179,8 @@ impl Nivel {
         let (largura, altura) = (self.width as i32, self.height as i32);
 
         // O centro do texel i fica em (i + 0.5) / largura: daí o -0.5.
-        let x = repete(uv.x) * largura as f32 - 0.5;
-        let y = repete(uv.y) * altura as f32 - 0.5;
+        let x = Self::repete(uv.x) * largura as f32 - 0.5;
+        let y = Self::repete(uv.y) * altura as f32 - 0.5;
         let (x0, y0) = (x.floor(), y.floor());
         let (fx, fy) = (x - x0, y - y0);
 
@@ -226,10 +226,10 @@ impl Nivel {
             texels,
         }
     }
-}
 
-fn repete(c: f32) -> f32 {
-    c - c.floor()
+    fn repete(c: f32) -> f32 {
+        c - c.floor()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

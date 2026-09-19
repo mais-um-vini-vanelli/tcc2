@@ -20,9 +20,9 @@ pub mod prelude {
     pub use crate::color::Rgb;
     pub use crate::math::{Aabb, Baricentrics, Plane, Ray, Vec2, Vec3, Vertex};
     pub use crate::parameters::{
-        AccelerationOptions, ClippingOptions, Filtering, OutputOptions, Parameters,
+        AccelerationOptions, BvhSplit, ClippingOptions, Filtering, OutputOptions, Parameters,
         RasterizationOptions, RayTracingOptions, ReflectanceModel, ShadingFrequency,
-        ShadingOptions, TextureOptions,
+        ShadingOptions, TextureOptions, Tonemap,
     };
     pub use crate::rasterizer::Rasterizer;
     pub use crate::raytracer::RayTracer;

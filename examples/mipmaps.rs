@@ -61,6 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             width: LARGURA,
             height: ALTURA,
             background: Some(CEU),
+            ..OutputOptions::default()
         },
         ..Parameters::default()
     };

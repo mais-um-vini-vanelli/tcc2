@@ -24,7 +24,8 @@ o custo de um raio cai para perto de `log n` quando a árvore é boa.
 
 ```text
 render():
-  -> uma BLAS por malha, sobre as faces, em espaço local   (Construção pela mediana)
+  -> uma BLAS por malha, sobre as faces, em espaço local   (Construção pela mediana,
+                                                            Construção pelo SAH)
   -> a TLAS sobre os objetos, em espaço de mundo           (Dois níveis)
 
 para cada raio:
@@ -72,8 +73,9 @@ devolve a outra, então ela é o ponto de partida de toda união.
 ## O teste dos slabs
 
 Kay e Kajiya (1986). Uma AABB é a interseção de três *fatias* (*slabs*): em
-cada eixo, a região entre os dois planos paralelos que a limitam. O raio
-`O + t·D` cruza os dois planos do eixo `x` em
+cada eixo, a região entre os dois planos paralelos que a limitam. Um plano
+`x = k` é cruzado pelo raio `O + t·D` quando `O.x + t·D.x = k`, ou seja
+`t = (k − O.x) / D.x`. Nos dois planos do eixo `x`:
 
 ```text
 t0 = (min.x − O.x) / D.x
@@ -121,12 +123,23 @@ Três detalhes que o código herda de graça:
   comparação descarta a caixa que está atrás da origem do raio e a que está
   depois do acerto mais próximo achado até ali — que é o que a travessia usa
   para podar.
-- **Divisão por zero dá a resposta certa.** Raio paralelo aos planos `x`
-  (`D.x = 0`) dá `±∞` nas duas contas: se a origem está entre os planos o
-  intervalo é `−∞..∞` e o eixo não restringe nada; se está fora, os dois `t`
-  têm o mesmo sinal e o intervalo fica vazio. O IEEE 754 faz a análise de casos.
-  O único caso ruim é a origem exatamente sobre o plano (`0/0 = NaN`), e o
-  `min`/`max` do `f32` ignora `NaN`, então aquele eixo só deixa de restringir.
+- **A divisão por zero é proposital.** Se a direção tem componente 0 em um
+  eixo, é porque o raio passa paralelo a ele; então ele só está dentro dos dois
+  planos se a origem está dentro dos dois planos. A divisão é de `f32` e segue a
+  IEEE 754: divisão por 0 não causa panic e devolve `±∞` dependendo do sinal do
+  numerador. Visualize os planos `x_min = 0` e `x_max = 1`, e um raio com
+  `D.x = +0`:
+
+  ```text
+  dentro,  O.x = 0.5 : (−∞, ∞)
+  fora(−), O.x = −1  : (∞, ∞)
+  fora(+), O.x = 2   : (−∞, −∞)
+  ```
+
+  Note que só o caso em que o raio está dentro dos planos devolve `(−∞, ∞)`, que
+  são valores neutros de `t`; não deixam o intervalo mais restritivo. O único
+  caso ruim é a origem exatamente sobre o plano (`0/0 = NaN`), e o `min`/`max`
+  do `f32` ignora `NaN`, então aquele eixo só deixa de restringir.
 - **A direção não precisa ser unitária.** O `t` sai na mesma parametrização do
   raio, qualquer que seja o comprimento de `D`. É o que deixa a BLAS receber o
   raio de `undo_ray`, que sai sem normalizar.
@@ -172,14 +185,132 @@ seções da travessia.
 
 ### Quando parar de dividir
 
-A folha fica com até dois itens (`ITENS_POR_FOLHA`). É um compromisso: descer
+Na mediana, a folha fica com até dois itens (`ITENS_POR_FOLHA`). É um compromisso: descer
 um nível custa dois testes de caixa, e deixar um item a mais na folha custa um
 teste de primitivo a mais. Folha de um item só dá uma árvore mais funda; folha
 grande testa primitivo à toa.
 
 O número é o mesmo nos dois níveis, e é uma simplificação: um item da TLAS é um
 objeto inteiro (às vezes uma BLAS inteira), bem mais caro que o triângulo de
-uma BLAS. O SAH troca o número fixo por uma estimativa de custo em cada nó.
+uma BLAS. O SAH troca o número fixo por uma estimativa de custo em cada nó, e
+o custo de um objeto pelo da BLAS dele.
+
+## Construção pelo SAH
+
+A mediana escolhe o corte olhando só a contagem. O *Surface Area Heuristic*
+(MacDonald e Booth, 1990) escolhe o corte que deixa a travessia mais barata, e
+para isso precisa de um modelo do quanto um raio custa. A recursão, o formato da
+árvore e a travessia são os mesmos da mediana; muda só a pergunta que `divide`
+faz em cada nó. Qual das duas vale é `AccelerationOptions.split`.
+
+### O custo esperado
+
+Um raio que chega num nó `P` já cruzou a caixa dele. A chance de ele cruzar
+também a caixa de um filho `F`, que está dentro de `P`, é a razão entre as
+áreas de superfície:
+
+```text
+chance(cruza F | cruza P) = área(F) / área(P)
+```
+
+Vem de um resultado de geometria (teorema de Cauchy): a área da sombra de um
+convexo, na média sobre todas as direções, é um quarto da área da superfície
+dele. Vale para retas que atravessam a cena em direções uniformes. Os raios de
+verdade não são assim: saem de dentro da cena, param no primeiro acerto e vêm
+quase todos da câmera. É uma heurística, e o nome não esconde isso.
+
+Com a chance, o custo das duas escolhas num nó:
+
+```text
+folha:  Σ custo(item)
+corte:  2·C_caixa + área(E)/área(P) · Σ custo(E) + área(D)/área(P) · Σ custo(D)
+```
+
+O `2·C_caixa` é o que a travessia paga para descer: ela testa as caixas dos dois
+filhos, acerte ou não. Depois disso, cada lado só custa se o raio entrar nele.
+
+Cada nó fica com o corte mais barato e, se nem ele sai mais barato que a folha,
+**vira folha**. É o critério de parada que faltava na mediana: em vez de um
+número fixo de itens, a folha fecha quando dividir deixa de compensar. Triângulos
+amontoados, com caixas quase iguais, fecham numa folha só, porque os dois filhos
+teriam a área do pai e o corte só somaria o `2·C_caixa`. E o chão de dois
+triângulos sai da estátua logo no primeiro corte: a área dele é grande, mas pesa
+sobre só dois itens, e a estátua fica com uma caixa justa.
+
+As constantes estão na unidade de um teste de primitivo: `CUSTO_PRIMITIVO = 1` e
+`CUSTO_CAIXA = 0.5`. O teste dos slabs faz seis contas por eixo; o
+Möller-Trumbore, dois produtos vetoriais e três escalares antes de decidir. Com
+`CUSTO_CAIXA = 1` as folhas saem maiores, e a cena do `dois_modos` testa 707 mil
+primitivos em vez de 252 mil.
+
+Na implementação, os custos são comparados já multiplicados por `área(P)`, que é
+a mesma para todos os cortes do nó: não há divisão, e um nó degenerado, de área
+zero, não vira `NaN`. Duas guardas completam a regra: acima de oito itens
+(`MAX_ITENS_POR_FOLHA`) o nó é dividido mesmo que a folha pareça mais barata, e
+se todos os centros coincidem, nenhum plano os separa, e cada metade dos itens
+vai para um lado.
+
+### Os baldes
+
+Os cortes candidatos são planos perpendiculares a um eixo. Um plano entre cada
+par de itens vizinhos exigiria ordenar os itens nos três eixos em cada nó. A
+versão com baldes (Wald, 2007) troca isso por uma aproximação linear:
+
+```text
+para cada eixo:
+    divide a caixa dos centros em 12 baldes iguais
+    passa pelos itens: cada um junta caixa, custo e contagem no balde do centro
+    de cima pra baixo: acima[p] = baldes de p em diante
+    de baixo pra cima: abaixo = baldes antes de p, e avalia o plano p
+fica o (eixo, plano) mais barato
+particiona os itens no lugar: quem está num balde abaixo do plano vai pra frente
+```
+
+São 11 planos por eixo, e cada nó custa `O(n)`, como a seleção da mediana, só
+que com três passadas em vez de uma. Planos com um lado vazio são pulados: não
+separam nada, e a área da caixa vazia é infinita (`Aabb::EMPTY` tem `min = +∞` e
+`max = −∞`), o que daria `0 · ∞ = NaN` no custo.
+
+### O custo de um objeto
+
+Na TLAS o item é um objeto inteiro. Uma esfera ou um cubo custam um teste de
+primitivo; uma malha custa uma travessia da BLAS dela. A BLAS é construída antes
+da TLAS, então esse custo sai da própria árvore, com a mesma chance por área:
+
+```text
+custo(malha) = C_caixa                                      a raiz
+             + Σ internos  área(nó)/área(raiz) · 2·C_caixa
+             + Σ folhas    área(nó)/área(raiz) · itens · C_primitivo
+```
+
+É o custo esperado de um raio que cruzou a caixa do objeto
+(`Bvh::custo_esperado`). A razão entre áreas é calculada em espaço local e não
+muda com escala uniforme nem com translação; rotação e escala não uniforme a
+deixam aproximada. Com isso a TLAS não junta uma malha pesada numa folha com
+outros objetos, a menos que as caixas digam que compensa.
+
+### Mediana contra SAH
+
+A imagem é a mesma nas duas (o `.png` sai idêntico byte a byte). O que muda é o
+trabalho:
+
+| cena                                  | divisão | primitivos testados | caixas testadas | construção | profundidade da BLAS |
+| ------------------------------------- | ------- | ------------------- | --------------- | ---------- | -------------------- |
+| `dois_modos`, 320×240                 | mediana | 512 mil             | 1,61 milhão     | —          | 1                    |
+| `dois_modos`, 320×240                 | SAH     | 252 mil             | 1,73 milhão     | —          | 1                    |
+| malha de 612 mil triângulos, 320×240  | mediana | 1,8 por raio        | 31,3 por raio   | 250 ms     | 20                   |
+| malha de 612 mil triângulos, 320×240  | SAH     | 1,3 por raio        | 26,9 por raio   | 940 ms     | 26                   |
+
+A cena do `dois_modos` é o caso da estátua sobre o chão: um chão grande, um cubo
+e esferas. O SAH corta pela metade os testes de primitivo e o render cai de
+~112 ms para ~86 ms, a troco de um pouco mais de caixas (a TLAS desce de 3 para
+5 níveis, separando o que a mediana deixava junto).
+
+Na malha escaneada, de triângulos pequenos e parecidos, a mediana já é boa, e o
+SAH ainda tira 28% dos testes de primitivo e 14% das caixas. Mas a construção
+custa quase quatro vezes mais, e ela é paga a cada `render()`. A 320×240 isso
+come o ganho; o ganho cresce com o número de raios, e a construção não. É por
+isso que as duas continuam disponíveis.
 
 ## A travessia
 
@@ -361,13 +492,3 @@ Os dois saem dos mesmos contadores do `RenderStats`, como a diferença entre o
 valor antes e depois de cada pixel. Então o passe e o total sempre concordam: a
 soma do `RayCount` é o `stats.rays`, e a do `BvhHeatmap` é o
 `stats.bvh_nodes_visited`.
-
-## O próximo passo: o SAH
-
-A mediana balanceia a contagem e ignora o tamanho das caixas. O *Surface Area
-Heuristic* (MacDonald e Booth, 1990) escolhe o corte que minimiza o custo
-esperado da travessia, usando o fato de que a chance de um raio que cruza a
-caixa do pai cruzar também a de um filho é proporcional à razão entre as áreas
-de superfície das duas. Muda só a função que divide: a travessia e o formato da
-árvore são os mesmos, e a comparação entre os dois é por testes de primitivo por
-raio, não só por tempo.
