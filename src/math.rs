@@ -330,14 +330,82 @@ impl Plane {
     }
 }
 
+/// A tangente por vértice: pra onde a superfície anda quando o `u` da uv
+/// cresce.
+///
+/// Junto com a normal ela monta a base em que um normal map guarda os seus
+/// vetores: `T` no eixo do `u`, `B` no eixo do `v`, `N` pra fora da superfície.
+/// `B` não é guardado porque sai de `N × T`, com handedness definindo a direção.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tangent {
+    /// Unitário e perpendicular à normal do vértice.
+    pub vector: Vec3,
+    /// +1 ou -1: o sinal da bitangente.
+    pub handedness: f32,
+}
+
+impl Default for Tangent {
+    fn default() -> Self {
+        Tangent {
+            vector: Vec3::new(1.0, 0.0, 0.0),
+            handedness: 1.0,
+        }
+    }
+}
+
+impl Tangent {
+    pub fn new(vector: Vec3, handedness: f32) -> Self {
+        Tangent {
+            vector,
+            // O `handedness` só existe em +1 e -1.
+            handedness: if handedness < 0.0 { -1.0 } else { 1.0 },
+        }
+    }
+
+    /// A tangente de uma superfície de parametrização conhecida: `du` e `dv`
+    /// são as direções em que a uv cresce ali.
+    ///
+    /// A tangente é o `du` projetado no plano da superfície (Gram-Schmidt), e o
+    /// sinal sai de comparar o `N × T` que a base vai usar com o `dv` que a uv
+    /// realmente tem.
+    pub fn from_uv_axes(normal: Vec3, du: Vec3, dv: Vec3) -> Self {
+        let vector = (du - normal * normal.dot(du)).normalized();
+
+        if vector == Vec3::ZERO {
+            return Tangent::any_perpendicular(normal);
+        }
+
+        Tangent::new(vector, normal.cross(vector).dot(dv))
+    }
+
+    /// Uma tangente qualquer perpendicular à normal, pra quando não há uv de
+    /// onde tirar a de verdade. O relevo sai girado, mas a base fecha.
+    pub fn any_perpendicular(normal: Vec3) -> Self {
+        // Cruzar com o eixo menos alinhado à normal evita o produto vetorial
+        // quase nulo de dois vetores paralelos.
+        let eixo = if normal.x.abs() < 0.9 {
+            Vec3::new(1.0, 0.0, 0.0)
+        } else {
+            Vec3::new(0.0, 1.0, 0.0)
+        };
+
+        Tangent {
+            vector: eixo.cross(normal).normalized(),
+            handedness: 1.0,
+        }
+    }
+}
+
 /// Um vértice e os atributos que viajam junto com ele pelo pipeline.
 ///
-/// `position` troca de espaço no caminho (mundo -> câmera -> tela); `normal` e
-/// `uv` ficam como estão (só são ajustados na interpolação do triângulo).
+/// `position` troca de espaço no caminho (mundo -> câmera -> tela); `normal`,
+/// `tangent` e `uv` ficam como estão (só são ajustados na interpolação do
+/// triângulo).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
+    pub tangent: Tangent,
     pub uv: Vec2,
 }
 
@@ -348,6 +416,10 @@ impl Vertex {
         Vertex {
             position: self.position + (outro.position - self.position) * t,
             normal: self.normal + (outro.normal - self.normal) * t,
+            tangent: Tangent {
+                vector: self.tangent.vector + (outro.tangent.vector - self.tangent.vector) * t,
+                handedness: self.tangent.handedness,
+            },
             uv: self.uv + (outro.uv - self.uv) * t,
         }
     }
@@ -394,6 +466,13 @@ impl Baricentrics {
 
     pub fn interpolate_vec3(&self, valores: [Vec3; 3]) -> Vec3 {
         valores[0] * self.weights[0] + valores[1] * self.weights[1] + valores[2] * self.weights[2]
+    }
+
+    pub fn interpolate_tangent(&self, valores: [Tangent; 3]) -> Tangent {
+        Tangent {
+            vector: self.interpolate_vec3(valores.map(|t| t.vector)),
+            handedness: valores[0].handedness,
+        }
     }
 
     pub fn interpolate_rgb(&self, valores: [Rgb; 3]) -> Rgb {

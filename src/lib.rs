@@ -18,7 +18,7 @@ pub mod transform;
 
 pub mod prelude {
     pub use crate::color::Rgb;
-    pub use crate::math::{Aabb, Baricentrics, Plane, Ray, Vec2, Vec3, Vertex};
+    pub use crate::math::{Aabb, Baricentrics, Plane, Ray, Tangent, Vec2, Vec3, Vertex};
     pub use crate::parameters::{
         AccelerationOptions, BvhSplit, ClippingOptions, Filtering, OutputOptions, Parameters,
         RasterizationOptions, RayTracingOptions, ReflectanceModel, ShadingFrequency,
@@ -31,7 +31,7 @@ pub mod prelude {
         ScalarBuffer,
     };
     pub use crate::scene::{
-        Camera, Light, Material, MaterialSample, Mesh, Object, Primitive, Scene, Value,
+        Camera, Light, Material, MaterialSample, Mesh, Object, Primitive, Scene, Value, eixos_da_uv,
     };
     pub use crate::shading::{Surface, shade};
     pub use crate::texture::{Footprint, Texture, TextureError};

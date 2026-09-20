@@ -72,6 +72,9 @@ impl Renderer for Rasterizer {
                     normal: objeto
                         .transform
                         .apply_normal(v.normal, params.transform.method),
+                    tangent: objeto
+                        .transform
+                        .apply_tangent(v.tangent, params.transform.method),
                     uv: v.uv,
                 });
 
@@ -447,6 +450,7 @@ fn preenche(
     let [a, b, c] = triangulo.tela.map(|v| v.position.xy());
     let profundidades = triangulo.tela.map(|v| v.position.z);
     let normais = triangulo.tela.map(|v| v.normal);
+    let tangentes = triangulo.tela.map(|v| v.tangent);
     let uvs = triangulo.tela.map(|v| v.uv);
     let area = triangulo.area;
 
@@ -521,6 +525,15 @@ fn preenche(
                 dx: uv_em(Vec2::new(p.x + 1.0, p.y)) - uv,
                 dy: uv_em(Vec2::new(p.x, p.y + 1.0)) - uv,
             };
+
+            // Aplicar os desvios do normal_map se tiver.
+            let normal = triangulo.material.shading_normal(
+                uv,
+                params.texturing.mipmaps.then_some(footprint),
+                params.texturing,
+                normal,
+                baricentricas.interpolate_tangent(tangentes),
+            );
 
             profundidade.set(x, y, z);
             cor.set(

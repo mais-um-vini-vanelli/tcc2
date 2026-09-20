@@ -1,7 +1,7 @@
 //! Descrição da cena: câmera, luzes e objetos.
 
 use crate::color::Rgb;
-use crate::math::{Aabb, Baricentrics, Ray, Vec2, Vec3, Vertex};
+use crate::math::{Aabb, Baricentrics, Ray, Tangent, Vec2, Vec3, Vertex};
 use crate::parameters::TextureOptions;
 use crate::texture::{Footprint, Texture};
 use crate::transform::Transform;
@@ -235,6 +235,12 @@ pub struct Material {
     // Teoria: shading.md#o-termo-emitido
     /// Luz que a superfície emite por conta própria, sem depender de luzes externas.
     pub emissive: Value<Rgb>,
+    /// Mapa de normais, ou `None` pra deixar a normal da geometria como ela
+    /// chegou.
+    ///
+    /// Cada texel guarda um vetor unitário em **espaço tangente** — a base `(T, B, N)` que
+    /// acompanha a superfície.
+    pub normal: Option<Texture>,
 
     // Modelo de Whitted (M3), ortogonais ao acima.
     /// Do que **entra** na superfície, quanto atravessa em vez de voltar
@@ -251,6 +257,7 @@ impl Default for Material {
             metallic: Value::Constant(0.0),
             roughness: Value::Constant(0.5),
             emissive: Value::Constant(Rgb::BLACK),
+            normal: None,
             transparency: 0.0,
             refractive_index: 1.0,
         }
@@ -321,6 +328,58 @@ impl Material {
         }
     }
 
+    /// A normal que o shading usa no ponto: a da geometria, torcida pelo mapa
+    /// de normais quando existe um.
+    ///
+    /// `normal` e `tangent` chegam em espaço de mundo e já interpolados. A base
+    /// TBN é montada aqui — `T` no eixo do u, `B` no eixo do v, `N` pra fora —
+    /// e é ela que leva o vetor do mapa do espaço tangente de volta pro mundo:
+    pub fn shading_normal(
+        &self,
+        uv: Vec2,
+        footprint: Option<Footprint>,
+        options: TextureOptions,
+        normal: Vec3,
+        tangent: Tangent,
+    ) -> Vec3 {
+        if self.normal.is_none() {
+            return normal;
+        }
+
+        let tangent = {
+            // Gram-Schmidt: tiramos de T a componente que está ao longo de N (normal * normal.dot(tangent.vector)) e renormalizamos.
+            let vector = (tangent.vector - normal * normal.dot(tangent.vector)).normalized();
+
+            if vector == Vec3::ZERO {
+                // Se a tangente e a normal são paralelas, escolher uma tangente qualquer que seja perpendicular a N.
+                Tangent::new(
+                    Tangent::any_perpendicular(normal).vector,
+                    tangent.handedness,
+                )
+            } else {
+                Tangent {
+                    vector,
+                    handedness: tangent.handedness,
+                }
+            }
+        };
+
+        let texel = self.normal.as_ref().unwrap().sample(uv, footprint, options);
+
+        // A textura guarda valores em [0,1], mas uma normal tem componentes em [-1,1]; precisamos converter.
+        let n = Vec3::new(
+            texel.r * 2.0 - 1.0,
+            texel.g * 2.0 - 1.0,
+            texel.b * 2.0 - 1.0,
+        )
+        .normalized();
+
+        // Agora convertemos a normal do normal_map de espaço tangente (TBN) para espaço de mundo, multiplicando os componentes da normal
+        // pela base: (T * n.x + B * n.y + N * n.z).normalized()
+        let bitangente = normal.cross(tangent.vector) * tangent.handedness;
+        (tangent.vector * n.x + bitangente * n.y + normal * n.z).normalized()
+    }
+
     const MIN_ROUGHNESS: f32 = 0.045;
 }
 
@@ -344,6 +403,9 @@ pub struct Mesh {
     /// Normais por vértice. Se None, cada face recebe uma normal calculada a
     /// partir da geometria.
     pub normals: Option<Vec<Vec3>>,
+    /// Tangentes por vértice. Só são usadas no sampling do mapa de normais; Se None, a
+    /// base do espaço tangente sai da uv do próprio triângulo.
+    pub tangents: Option<Vec<Tangent>>,
     pub uvs: Option<Vec<Vec2>>,
 }
 
@@ -354,6 +416,7 @@ impl Mesh {
             vertices,
             indices,
             normals: None,
+            tangents: None,
             uvs: None,
         }
     }
@@ -385,6 +448,7 @@ impl Mesh {
         Some(monta_triangulo(
             pontos,
             self.normals.as_deref().and_then(|n| tres(n, trio)),
+            self.tangents.as_deref().and_then(|t| tres(t, trio)),
             self.uvs.as_deref().and_then(|u| tres(u, trio)),
         ))
     }
@@ -394,7 +458,11 @@ impl Mesh {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Hit {
     pub t: f32,
+    /// A normal do shading: interpolada entre os vértices nos triângulos.
     pub normal: Vec3,
+    /// A normal da superfície de verdade, usada pro deslocamento dos raios secundários precisa.
+    pub geometric_normal: Vec3,
+    pub tangent: Tangent,
     pub uv: Vec2,
 }
 
@@ -405,6 +473,8 @@ pub enum Primitive {
         points: [Vec3; 3],
         /// Normais por vértice.
         normals: Option<[Vec3; 3]>,
+        /// Tangentes por vértice.
+        tangents: Option<[Tangent; 3]>,
         uvs: Option<[Vec2; 3]>,
     },
     Mesh(Mesh),
@@ -424,6 +494,7 @@ impl Primitive {
         Primitive::Triangle {
             points,
             normals: None,
+            tangents: None,
             uvs: None,
         }
     }
@@ -449,11 +520,13 @@ impl Primitive {
             Primitive::Triangle {
                 points,
                 normals,
+                tangents,
                 uvs,
             } => Mesh {
                 vertices: points.to_vec(),
                 indices: vec![0, 1, 2],
                 normals: normals.map(|n| n.to_vec()),
+                tangents: tangents.map(|t| t.to_vec()),
                 uvs: uvs.map(|u| u.to_vec()),
             },
 
@@ -482,6 +555,8 @@ impl Primitive {
                 Some(Hit {
                     t,
                     normal,
+                    geometric_normal: normal,
+                    tangent: tangente_da_esfera(normal),
                     uv: uv_da_esfera(normal),
                 })
             }
@@ -489,8 +564,9 @@ impl Primitive {
             Primitive::Triangle {
                 points,
                 normals,
+                tangents,
                 uvs,
-            } => intersecao_triangulo(ray, monta_triangulo(*points, *normals, *uvs)),
+            } => intersecao_triangulo(ray, monta_triangulo(*points, *normals, *tangents, *uvs)),
 
             Primitive::Mesh(malha) => (0..malha.face_count())
                 .filter_map(|i| intersecao_triangulo(ray, malha.face(i)?))
@@ -531,6 +607,7 @@ impl Primitive {
 
         let mut vertices = Vec::with_capacity(24);
         let mut normals = Vec::with_capacity(24);
+        let mut tangents = Vec::with_capacity(24);
         let mut uvs = Vec::with_capacity(24);
         let mut indices = Vec::with_capacity(36);
 
@@ -565,9 +642,14 @@ impl Primitive {
                 Vec2::new(0.0, 1.0),
             ];
 
+            // A uv da face anda pra `direita` quando o u cresce e pra `baixo`
+            // quando o v cresce.
+            let tangente = Tangent::from_uv_axes(normal, direita, baixo);
+
             for (canto, uv) in cantos.into_iter().zip(uvs_dos_cantos) {
                 vertices.push(center + canto * h);
                 normals.push(normal);
+                tangents.push(tangente);
                 uvs.push(uv);
             }
 
@@ -580,6 +662,7 @@ impl Primitive {
             vertices,
             indices,
             normals: Some(normals),
+            tangents: Some(tangents),
             uvs: Some(uvs),
         }
     }
@@ -596,6 +679,7 @@ impl Primitive {
         let total = (paralelos + 1) as usize * por_linha as usize;
         let mut vertices = Vec::with_capacity(total);
         let mut normals = Vec::with_capacity(total);
+        let mut tangents = Vec::with_capacity(total);
         let mut uvs = Vec::with_capacity(total);
 
         for i in 0..=paralelos {
@@ -618,6 +702,7 @@ impl Primitive {
                 // Agora a gente só precisa fazer translate e scale pra fechar com a posição e raio que o usuário pediu.
                 vertices.push(center + normal * radius);
                 normals.push(normal);
+                tangents.push(tangente_da_esfera(normal));
                 uvs.push(Vec2::new(v, u));
 
                 // Note que nos polos (theta = 0, theta = PI) e na emenda dos meridianos (phi = TAU) a gente tem vários vértices na
@@ -658,6 +743,7 @@ impl Primitive {
             vertices,
             indices,
             normals: Some(normals),
+            tangents: Some(tangents),
             uvs: Some(uvs),
         }
     }
@@ -673,10 +759,12 @@ fn uv_do_cubo(a: f32, b: f32) -> Vec2 {
 }
 
 /// Resolve os atributos de um triângulo solto: sem normais informadas, a normal
-/// é a da própria face; sem uv, a origem da textura.
+/// é a da própria face; sem uv, a origem da textura; sem tangentes, a base que
+/// a uv do próprio triângulo define.
 fn monta_triangulo(
     pontos: [Vec3; 3],
     normais: Option<[Vec3; 3]>,
+    tangentes: Option<[Tangent; 3]>,
     uvs: Option<[Vec2; 3]>,
 ) -> [Vertex; 3] {
     let normais = normais.unwrap_or_else(|| {
@@ -688,11 +776,79 @@ fn monta_triangulo(
 
     let uvs = uvs.unwrap_or([Vec2::ZERO; 3]);
 
+    let tangentes = tangentes.unwrap_or_else(|| match eixos_da_uv(pontos, uvs) {
+        Some((du, dv)) => [0, 1, 2].map(|k| Tangent::from_uv_axes(normais[k], du, dv)),
+        // Se o triângulo de uvs é degenerado, qualquer perpendicular à normal serve.
+        None => normais.map(Tangent::any_perpendicular),
+    });
+
     [0, 1, 2].map(|k| Vertex {
         position: pontos[k],
         normal: normais[k],
+        tangent: tangentes[k],
         uv: uvs[k],
     })
+}
+
+/// As direções, no espaço, em que o `u` e o `v` da uv crescem sobre um
+/// triângulo. `None` quando a uv é degenerada e não define direção nenhuma.
+///
+/// Dentro do triângulo o mapeamento é afim, então cada aresta é uma combinação
+/// dos dois eixos com os pesos que a uv dá:
+///
+/// ```text
+/// e1 = d1.x·T + d1.y·B
+/// e2 = d2.x·T + d2.y·B
+///
+/// ┌            ┐ ┌   ┐   ┌    ┐
+/// │ d1.x  d1.y │ │ T │ = │ e1 │
+/// │ d2.x  d2.y │ │ B │   │ e2 │
+/// └            ┘ └   ┘   └    ┘
+/// ```
+///
+/// Com cramer, fixando x:
+///
+/// ```text
+///       │ e1.x  d1.y │             │ d1.x  e1.x │
+///       │ e2.x  d2.y │             │ d2.x  e2.x │
+/// T.x = ──────────────       B.x =  ──────────────
+///       │ d1.x  d1.y │             │ d1.x  d1.y │
+///       │ d2.x  d2.y │             │ d2.x  d2.y │
+/// ```
+///
+/// Agora é fazer o mesmo pra y e z.
+pub fn eixos_da_uv(pontos: [Vec3; 3], uvs: [Vec2; 3]) -> Option<(Vec3, Vec3)> {
+    let e1 = pontos[1] - pontos[0];
+    let e2 = pontos[2] - pontos[0];
+
+    let d1 = uvs[1] - uvs[0];
+    let d2 = uvs[2] - uvs[0];
+
+    let det = d1.x * d2.y - d2.x * d1.y;
+    if det.abs() < 1e-12 {
+        // determinante perto de 0 quer dizer que du e dv são paralelos; não tem eixos
+        return None;
+    }
+
+    Some(((e1 * d2.y - e2 * d1.y) / det, (e2 * d1.x - e1 * d2.x) / det))
+}
+
+fn tangente_da_esfera(normal: Vec3) -> Tangent {
+    // A fórmula da normal é N(θ,ϕ) = (sinθcosϕ, cosθ, sinθsinϕ).
+    //
+    // A tangente é a direção em que u cresce, ou seja cresce junto com ϕ, ou seja é a derivada de N com
+    // relação a ϕ: dN/dϕ = (−sinθsinϕ, 0, sinθcosϕ)
+    //
+    // Comparando a fórmula da normal com a fórmula da derivada, dá de conseguir a derivada com:
+    // (-normal.z, 0, normal.x)
+    let du = Vec3::new(-normal.z, 0.0, normal.x);
+
+    // Nos polos o paralelo tem raio zero e a direção do u não existe.
+    if du.length() < 1e-6 {
+        return Tangent::any_perpendicular(normal);
+    }
+
+    Tangent::new(du.normalized(), 1.0)
 }
 
 fn mais_perto(a: Hit, b: Hit) -> Hit {
@@ -706,11 +862,24 @@ pub(crate) fn intersecao_triangulo(ray: Ray, face: [Vertex; 3]) -> Option<Hit> {
     // corrigir isso.
     let baricentricas = Baricentrics::orthographic(pesos);
 
+    let normal = baricentricas
+        .interpolate_vec3(face.map(|v| v.normal))
+        .normalized();
+
+    // A normal do plano do triângulo, apontando pro mesmo lado que a normal de shading.
+    let geometrica = {
+        let n = (face[1].position - face[0].position)
+            .cross(face[2].position - face[0].position)
+            .normalized();
+
+        if n.dot(normal) < 0.0 { -n } else { n }
+    };
+
     Some(Hit {
         t,
-        normal: baricentricas
-            .interpolate_vec3(face.map(|v| v.normal))
-            .normalized(),
+        normal,
+        geometric_normal: geometrica,
+        tangent: baricentricas.interpolate_tangent(face.map(|v| v.tangent)),
         uv: baricentricas.interpolate_vec2(face.map(|v| v.uv)),
     })
 }
@@ -790,39 +959,48 @@ fn intersecao_cubo(r: Ray, centro: Vec3, meia_aresta: f32) -> Option<Hit> {
 
     let mut perto: Option<Hit> = None;
 
-    // `(a, b)` são as coordenadas, em meias arestas, do ponto em que o raio
-    // cruza o plano da face. O plano é infinito: o acerto só vale dentro do
-    // quadrado a, b ∈ [-1, 1].
-    let mut face = |t: f32, normal: Vec3, (a, b): (f32, f32)| {
+    // Cada face: a normal, e pra onde apontam a direita e o "pra baixo" de quem
+    // olha a face de fora. Mesma tabela de `cubo`, pra que a textura caia igual
+    // na malha e aqui.
+    #[rustfmt::skip]
+    let faces = [
+        (Vec3::new( 1.0,  0.0,  0.0), Vec3::new( 0.0, 0.0, -1.0), Vec3::new(0.0, -1.0,  0.0)),
+        (Vec3::new( 0.0,  1.0,  0.0), Vec3::new( 1.0, 0.0,  0.0), Vec3::new(0.0,  0.0,  1.0)),
+        (Vec3::new( 0.0,  0.0,  1.0), Vec3::new( 1.0, 0.0,  0.0), Vec3::new(0.0, -1.0,  0.0)),
+        (Vec3::new(-1.0,  0.0,  0.0), Vec3::new( 0.0, 0.0,  1.0), Vec3::new(0.0, -1.0,  0.0)),
+        (Vec3::new( 0.0, -1.0,  0.0), Vec3::new( 1.0, 0.0,  0.0), Vec3::new(0.0,  0.0, -1.0)),
+        (Vec3::new( 0.0,  0.0, -1.0), Vec3::new(-1.0, 0.0,  0.0), Vec3::new(0.0, -1.0,  0.0)),
+    ];
+
+    // O plano da face é n·x = h, cruzado quando n·o + t·(n·d) = h, ou seja
+    // t = (h − n·o) / (n·d). Como a normal é um eixo, o produto escalar só
+    // escolhe a componente e o sinal.
+    //
+    // Raio paralelo ao plano dá n·d = 0, e a divisão dá ±∞ (ou NaN, com a
+    // origem em cima do plano). Como em `Aabb::hit`, isso é proposital: um t
+    // infinito leva o ponto pro infinito e ele cai fora do quadrado, e NaN
+    // falha o t > 0.
+
+    for (normal, direita, baixo) in faces {
+        let t = (h - o.dot(normal)) / d.dot(normal);
+        let p = o + d * t;
+
+        // `(a, b)` são as coordenadas, em meias arestas, do ponto em que o raio
+        // cruza o plano da face. O plano é infinito: o acerto só vale dentro do
+        // quadrado a, b ∈ [-1, 1].
+        let (a, b) = (p.dot(direita) / h, p.dot(baixo) / h);
+
         if t > 0.0 && a.abs() <= 1.0 && b.abs() <= 1.0 {
             let hit = Hit {
                 t,
                 normal,
+                geometric_normal: normal,
+                tangent: Tangent::from_uv_axes(normal, direita, baixo),
                 uv: uv_do_cubo(a, b),
             };
+
             perto = Some(perto.map_or(hit, |p| mais_perto(p, hit)));
         }
-    };
-
-    // O raio cruza o plano x = s·h quando o.x + t·d.x = s·h, ou seja
-    // t = (s·h − o.x) / d.x; o mesmo nos outros dois eixos.
-    //
-    // Raio paralelo ao plano dá d.x = 0, e a divisão dá ±∞ (ou NaN, com a
-    // origem em cima do plano). Como em `Aabb::hit`, isso é proposital: um t
-    // infinito leva o ponto pro infinito e ele cai fora do quadrado, e NaN
-    // falha o t > 0.
-    for s in [1.0, -1.0] {
-        let t = (s * h - o.x) / d.x;
-        let p = o + d * t;
-        face(t, Vec3::new(s, 0.0, 0.0), (-s * p.z / h, -p.y / h));
-
-        let t = (s * h - o.y) / d.y;
-        let p = o + d * t;
-        face(t, Vec3::new(0.0, s, 0.0), (p.x / h, s * p.z / h));
-
-        let t = (s * h - o.z) / d.z;
-        let p = o + d * t;
-        face(t, Vec3::new(0.0, 0.0, s), (s * p.x / h, -p.y / h));
     }
 
     perto

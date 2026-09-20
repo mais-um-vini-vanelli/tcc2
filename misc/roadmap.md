@@ -198,7 +198,7 @@ Decisões e o que ficou de fora em [design_api.md](design_api.md), seção
   [x] unidades de medida luzes
   [x] `Material.emissive` (`Value<Rgb>`, sem `KHR_materials_emissive_strength`),
     somado no `shade` como o `Le` da equação; `Object.casts_shadows` junto
-  - normal map, normal por vértice, tangentes por vértice
+  [x] normal map, normal por vértice, tangentes por vértice
 
 - permitir acompanhar 1 pixel
 

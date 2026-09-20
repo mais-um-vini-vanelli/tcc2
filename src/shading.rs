@@ -22,8 +22,8 @@ use crate::math::{Vec2, Vec3};
 use crate::parameters::ReflectanceModel;
 use crate::scene::{Light, MaterialSample};
 
-/// O ponto que recebe o shading. Todos os vetores em espaço de mundo, e a
-/// normal unitária.
+/// O ponto que recebe o shading. Todos os vetores em espaço de mundo, e as
+/// normais unitárias.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Surface {
     pub point: Vec3,

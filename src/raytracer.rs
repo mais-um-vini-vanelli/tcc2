@@ -166,6 +166,7 @@ struct Contexto<'a> {
 struct Acerto<'a> {
     objeto: &'a Object,
     surface: Surface,
+    normal_geometrica: Vec3,
 }
 
 impl<'a> Contexto<'a> {
@@ -186,6 +187,7 @@ impl<'a> Contexto<'a> {
         };
 
         let superficie = acerto.surface;
+        let geometrica = acerto.normal_geometrica;
         let material = &acerto.objeto.material;
         // Um raio não sabe dos raios vizinhos, então não há footprint: a textura
         // fica no nível 0.
@@ -204,7 +206,11 @@ impl<'a> Contexto<'a> {
                     return 1.0;
                 }
 
-                if self.ocluido(s, luz) { 0.0 } else { 1.0 }
+                if self.ocluido(s.point, geometrica, luz) {
+                    0.0
+                } else {
+                    1.0
+                }
             };
 
             shading::shade(
@@ -238,7 +244,7 @@ impl<'a> Contexto<'a> {
             self.contador.raio();
 
             let vindo_do_espelho = self.trace(
-                Ray::new(desloca(superficie.point, n, refletida), refletida),
+                Ray::new(desloca(superficie.point, geometrica, refletida), refletida),
                 EPSILON,
                 f32::INFINITY,
                 profundidade + 1,
@@ -257,7 +263,10 @@ impl<'a> Contexto<'a> {
             self.contador.raio();
 
             let vindo_de_dentro = self.trace(
-                Ray::new(desloca(superficie.point, n, transmitida), transmitida),
+                Ray::new(
+                    desloca(superficie.point, geometrica, transmitida),
+                    transmitida,
+                ),
                 EPSILON,
                 f32::INFINITY,
                 profundidade + 1,
@@ -349,24 +358,37 @@ impl<'a> Contexto<'a> {
 
         let objeto = &self.scene.objects[i];
 
+        let normal = objeto.material.shading_normal(
+            hit.uv,
+            None,
+            self.params.texturing,
+            objeto
+                .transform
+                .apply_normal(hit.normal, self.params.transform.method),
+            objeto
+                .transform
+                .apply_tangent(hit.tangent, self.params.transform.method),
+        );
+
         Some(Acerto {
             objeto,
             surface: Surface {
                 point: raio.at(hit.t),
-                normal: objeto
-                    .transform
-                    .apply_normal(hit.normal, self.params.transform.method),
+                normal,
                 uv: hit.uv,
             },
+            normal_geometrica: objeto
+                .transform
+                .apply_normal(hit.geometric_normal, self.params.transform.method),
         })
     }
 
     // Teoria: raytracer.md#o-raio-de-sombra
     /// Existe alguma coisa entre o ponto e a luz?
-    fn ocluido(&self, superficie: &Surface, luz: &Light) -> bool {
+    fn ocluido(&self, ponto: Vec3, geometrica: Vec3, luz: &Light) -> bool {
         let (direcao, distancia) = match *luz {
             Light::Point { position, .. } | Light::Spot { position, .. } => {
-                let ate_a_luz = position - superficie.point;
+                let ate_a_luz = position - ponto;
                 (ate_a_luz.normalized(), ate_a_luz.length())
             }
             // Luz direcional não tem posição: qualquer coisa no caminho bloqueia,
@@ -375,10 +397,7 @@ impl<'a> Contexto<'a> {
             Light::Ambient { .. } => return false,
         };
 
-        let sombra = Ray::new(
-            desloca(superficie.point, superficie.normal, direcao),
-            direcao,
-        );
+        let sombra = Ray::new(desloca(ponto, geometrica, direcao), direcao);
 
         self.contador.raio();
 

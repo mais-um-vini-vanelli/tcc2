@@ -7,7 +7,7 @@
 //! sentidos opostos: o rasterizador transforma a geometria (`apply_*`), o ray
 //! tracer transforma o raio com a inversa (`undo_*`).
 
-use crate::math::{Ray, Vec3};
+use crate::math::{Ray, Tangent, Vec3};
 use crate::parameters::TransformMethod;
 
 /// Escala, rotação e translação, aplicadas nessa ordem.
@@ -53,6 +53,17 @@ impl Transform {
             method,
         )
         .normalized()
+    }
+
+    pub fn apply_tangent(&self, t: Tangent, method: TransformMethod) -> Tangent {
+        // A transformação pode mexer no *lado* da bitangente: uma escala
+        // com um número ímpar de eixos negativos espelha o espaço.
+        let espelha = self.scale.x * self.scale.y * self.scale.z < 0.0;
+
+        Tangent::new(
+            self.apply_direction(t.vector, method).normalized(),
+            if espelha { -t.handedness } else { t.handedness },
+        )
     }
 
     // Teoria: transform.md#desfazendo
