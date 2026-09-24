@@ -16,9 +16,9 @@
 //! cargo run --release --example mipmaps
 //! ```
 
+mod comum;
+
 use std::error::Error;
-use std::fs::{self, File};
-use std::io::BufWriter;
 use std::time::Instant;
 
 use tcc2::prelude::*;
@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
 
         let arquivo = format!("./renders/mipmaps_{nome}.png");
-        grava_png(&arquivo, imagem)?;
+        comum::grava_textura(&arquivo, imagem, Rgb::to_srgb)?;
 
         println!("{nome}: {tempo:.1?} -> {arquivo}");
     }
@@ -125,6 +125,7 @@ fn chao(alcance: f32) -> Primitive {
         vertices: cantos.to_vec(),
         indices: vec![0, 1, 2, 0, 2, 3],
         normals: Some(vec![Vec3::new(0.0, 1.0, 0.0); 4]),
+        tangents: None,
         uvs: Some(
             cantos
                 .iter()
@@ -149,27 +150,4 @@ fn xadrez(lado: u32, quadrados: u32) -> Texture {
     }
 
     Texture::new(lado, lado, texels).unwrap()
-}
-
-fn grava_png(caminho: &str, buffer: &ColorBuffer) -> Result<(), Box<dyn Error>> {
-    fs::create_dir_all("./renders")?;
-
-    let mut bytes = Vec::with_capacity(buffer.pixels().len() * 3);
-    for pixel in buffer.pixels() {
-        bytes.extend_from_slice(&pixel.to_bytes());
-    }
-
-    let mut encoder = png::Encoder::new(
-        BufWriter::new(File::create(caminho)?),
-        buffer.width(),
-        buffer.height(),
-    );
-    encoder.set_color(png::ColorType::Rgb);
-    encoder.set_depth(png::BitDepth::Eight);
-
-    let mut escritor = encoder.write_header()?;
-    escritor.write_image_data(&bytes)?;
-    escritor.finish()?;
-
-    Ok(())
 }

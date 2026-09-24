@@ -5,6 +5,9 @@
 
 mod bvh;
 
+#[cfg(feature = "glb")]
+pub mod glb;
+
 pub mod color;
 pub mod math;
 pub mod parameters;

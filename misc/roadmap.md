@@ -215,35 +215,64 @@ Decisões e o que ficou de fora em [design_api.md](design_api.md), seção
 - (talvez) filtro anisotrópico
 - (talvez) tonemap ACES
 
-## M6 — Cena em `.glb`
+## M6 — Cena em `*.tcc2.glb`
 
-O formato é desenhado em [design_api.md](design_api.md) antes do código, sem
-depender do editor de M6: o editor é um produtor do formato, não a definição
-dele.
+O formato está documentado em `src/glb.rs`, e a regra é uma só: **o glTF padrão
+manda sempre que ele representa o dado**; a extensão própria guarda o que não
+cabe em glTF nenhum. Assim uma ferramenta externa abre o arquivo e vê a cena
+inteira, e a lib lê de volta o que gravou.
 
-- `Scene` → `.glb` e `.glb` → `Scene` fora do núcleo, em módulo à parte e atrás
-  de feature, como `import`: o core continua sem dependências
-- objetos como lista **plana** de nós. A hierarquia de um `.glb` de terceiros é
-  achatada na importação: a subárvore vira uma `Mesh` só, com o transform
-  aplicado nos vértices (que absorvem até cisalhamento), ou vários objetos
-- `Sphere` e `Cube` gravados como malha tesselada, com uma extensão própria
-  (`TCC2_primitive`, não `KHR_`) dizendo qual primitivo exato é. Fora de
-  `extensionsRequired`, pra que outros visualizadores mostrem a malha
-- `Material` em `pbrMetallicRoughness`, com `transparency` e `refractive_index`
-  em `KHR_materials_transmission` e `KHR_materials_ior`. Os mapas de metallic
-  (canal B) e roughness (canal G) são empacotados numa textura só, e só o albedo
-  é codificado em sRGB
-- `Camera` como nó olhando para −Z: `look_at` e `up` saem da rotação do nó. Na
-  ortográfica, `xmag`/`ymag` são metade de `width`/`height`
-- `Light::Point` e `Light::Directional` em `KHR_lights_punctual`, com a
+- [x] `Scene` → `.glb` e `.glb` → `Scene` fora do núcleo, em `src/glb.rs` e
+  atrás da feature `glb`: o core continua sem dependências. A API é
+  `encode(&Scene, Option<&Parameters>) -> Vec<u8>` e
+  `decode(&[u8]) -> (Scene, Option<Parameters>)` — bytes, não caminho, que a lib
+  não toca em arquivo
+- [x] objetos como lista **plana** de nós, sem `children`
+- ~~a hierarquia de um `.glb` de terceiros é achatada na importação~~ —
+  **fora**: o decoder de M6 assume cena gerada pela lib. Quem lê `.glb`
+  arbitrário é o carregador dos exemplos (`examples/comum/mod.rs`), que já faz
+  esse achatamento
+- [x] `Sphere` e `Cube` gravados como malha tesselada, com uma extensão própria
+  dizendo qual primitivo exato é. Fora de `extensionsRequired`, pra que outros
+  visualizadores mostrem a malha. A extensão é **`TCC2_extras`** (uma só, pra
+  tudo que é da lib), e não `TCC2_primitive`: junto do primitivo ela guarda
+  `Light::Ambient` e `Object.casts_shadows`, que também não têm lugar no glTF
+- [x] `Material` em `pbrMetallicRoughness`, com `transparency` e
+  `refractive_index` em `KHR_materials_transmission` e `KHR_materials_ior`. Os
+  mapas de metallic (canal B) e roughness (canal G) são empacotados numa textura
+  só, e só o albedo e o emissivo são codificados em sRGB
+- [x] **(a mais)** o emissivo passa de 1 e o `emissiveFactor` do glTF não: o
+  excesso vira `KHR_materials_emissive_strength`. Sem isso o emissivo de
+  `dois_modos` seria cortado na gravação
+- [x] **(a mais)** o truque do fator × textura: um canal constante vira *fator*
+  com o texel em 1.0, e um canal com mapa vira *texel* com o fator em 1.0. É o
+  que faz a constante voltar exata apesar do PNG de 8 bits, e o que desfaz o
+  empacotamento de metallic/roughness sem precisar de campo extra
+- [x] `Camera` como nó olhando para −Z: `look_at` e `up` saem da rotação do nó.
+  Na ortográfica, `xmag`/`ymag` são metade de `width`/`height`. Como só a
+  orientação é gravada, os dois voltam reescritos — outro par de valores, a
+  mesma base
+- [x] `Light::Point`, `Directional` e `Spot` em `KHR_lights_punctual`, com a
   intensidade gravada crua, sem converter para candela/lux. `Ambient` não existe
-  no glTF e vai na extensão própria
-- `Transform` com Euler XYZ ↔ quaternion. A volta dá a mesma rotação, mas não
+  no glTF e vai na extensão própria, o que a tira do lugar que ocupava em
+  `Scene.lights` e a devolve no fim da lista
+- [x] `Transform` com Euler XYZ ↔ quaternion. A volta dá a mesma rotação, mas não
   necessariamente os mesmos ângulos
-- `Parameters` opcional no arquivo, como preset e fora da `Scene`: a importação
-  devolve `(Scene, Option<Parameters>)`
-- o exemplo `gltf_raytracing` passa a usar a importação da lib
-- scene to json for inspecting
+- [x] `Parameters` opcional no arquivo, como preset e fora da `Scene`: a
+  importação devolve `(Scene, Option<Parameters>)`
+- ~~o exemplo `gltf_raytracing` passa a usar a importação da lib~~ — **fora**:
+  ele carrega `.glb` de terceiros, e o decoder daqui assume cena da lib. O
+  exemplo do formato é o `formato`, que monta uma cena, grava, lê de volta,
+  compara campo a campo e renderiza as duas
+- ~~scene to json for inspecting~~ — **coberto pelo formato**: o chunk 0 de um
+  `.glb` já é a cena inteira em JSON, e `npx gltf-transform inspect
+  renders/cena.tcc2.glb` (ou qualquer leitor de GLB) a imprime
+
+O arquivo do exemplo passa pelo validador da Khronos com **zero erros**. Sobra um
+aviso, `MESH_PRIMITIVE_GENERATED_TANGENT_SPACE`, na malha que tem normal map e
+não tem `TANGENT` — e ele está certo: é exatamente a `Mesh { tangents: None }` da
+lib, que calcula a base pela uv do triângulo na hora, e gravar tangentes
+inventadas ali quebraria a ida e volta.
 
 ## M7 — Editor de cenas em Godot
 
@@ -252,13 +281,14 @@ interface do Blender pra montar uma cena.
 
 - adicionar primitivos da lib como nós próprios, com os campos dela (raio,
   meia-aresta), além de câmera, luzes e `.glb` importado
-- cena plana, sem objetos aninhados; `.glb` importado é achatado como em M5
+- cena plana, sem objetos aninhados; `.glb` importado é achatado como em M6
 - `rotation_order` XYZ nos nós (o padrão do Godot é YXZ), pra que os ângulos do
   inspetor sejam os do `Transform`
 - preview neutro, sem prometer a imagem da lib
-- exportação para o formato de M5 com `GLTFDocument` e uma
-  `GLTFDocumentExtension` que grava `TCC2_primitive`, a intensidade crua das
-  luzes, `Ambient` e o preset de `Parameters`
+- exportação para o formato de M6 com `GLTFDocument` e uma
+  `GLTFDocumentExtension` que grava `TCC2_extras` (o primitivo analítico e o
+  `casts_shadows`), a intensidade crua das luzes, `Ambient` e o preset de
+  `Parameters`
 
 ## M8 — Validação
 

@@ -39,27 +39,29 @@ impl Rgb {
         self + (outra - self) * t
     }
 
-    /// Pixel sRGB -> cor linear.
-    pub fn from_bytes(bytes: [u8; 3]) -> Self {
+    const GAMMA: f32 = 2.2;
+
+    /// [u8; 3] sRGB -> [f32; 3] linear.
+    pub fn from_srgb(bytes: [u8; 3]) -> Self {
         Rgb::new(bytes[0] as f32, bytes[1] as f32, bytes[2] as f32)
-            .map(|c| Self::srgb_para_linear(c / 255.0))
+            .map(|c| (c / 255.0).powf(Self::GAMMA))
     }
 
-    /// Cor linear -> pixel sRGB.
-    pub fn to_bytes(self) -> [u8; 3] {
-        let codificada = self.clamped().map(Self::linear_para_srgb);
+    /// [f32; 3] linear -> [u8; 3] sRGB.
+    pub fn to_srgb(self) -> [u8; 3] {
+        let codificada = self.clamped().map(|c| c.powf(1.0 / Self::GAMMA));
         [codificada.r, codificada.g, codificada.b].map(|c| (c * 255.0 + 0.5) as u8)
     }
 
-    // TODO: trocar pela curva sRGB completa (trecho reto + potência)
-    const GAMMA: f32 = 2.2;
-
-    fn linear_para_srgb(c: f32) -> f32 {
-        c.powf(1.0 / Self::GAMMA)
+    /// [u8; 3] linear -> [f32; 3] linear.
+    pub fn from_linear(bytes: [u8; 3]) -> Self {
+        Rgb::new(bytes[0] as f32, bytes[1] as f32, bytes[2] as f32).map(|c| c / 255.0)
     }
 
-    fn srgb_para_linear(c: f32) -> f32 {
-        c.powf(Self::GAMMA)
+    /// [f32; 3] linear -> [u8; 3] linear.
+    pub fn to_linear(self) -> [u8; 3] {
+        let codificada = self.clamped();
+        [codificada.r, codificada.g, codificada.b].map(|c| (c * 255.0 + 0.5) as u8)
     }
 }
 

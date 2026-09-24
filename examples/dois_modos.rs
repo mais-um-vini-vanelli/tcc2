@@ -20,9 +20,9 @@
 //! cargo run --example dois_modos
 //! ```
 
+mod comum;
+
 use std::error::Error;
-use std::fs::{self, File};
-use std::io::BufWriter;
 use std::time::Instant;
 
 use tcc2::prelude::*;
@@ -144,7 +144,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let resultado = Rasterizer.render(&scene, &params);
         if let Some(buffer) = resultado.color.as_ref() {
-            grava_png(&format!("./renders/shading_{nome}.png"), buffer)?;
+            comum::grava_textura(
+                &format!("./renders/shading_{nome}.png"),
+                buffer,
+                Rgb::to_srgb,
+            )?;
         }
     }
 
@@ -187,7 +191,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let resultado = RayTracer.render(&scene, &params);
         if let Some(buffer) = resultado.color.as_ref() {
-            grava_png(&format!("./renders/whitted_{nome}.png"), buffer)?;
+            comum::grava_textura(
+                &format!("./renders/whitted_{nome}.png"),
+                buffer,
+                Rgb::to_srgb,
+            )?;
         }
     }
 
@@ -247,6 +255,7 @@ fn chao() -> Primitive {
         ],
         indices: vec![0, 1, 2, 0, 2, 3],
         normals: Some(vec![Vec3::new(0.0, 1.0, 0.0); 4]),
+        tangents: None,
         uvs: Some(vec![
             Vec2::new(0.0, 0.0),
             Vec2::new(4.0, 0.0),
@@ -281,8 +290,6 @@ fn renderiza(
 ) -> Result<(), Box<dyn Error>> {
     let resultado = renderer.render(scene, params);
 
-    fs::create_dir_all("./renders")?;
-
     let mut gravados = Vec::new();
 
     for (passe, nome) in [
@@ -298,7 +305,7 @@ fn renderiza(
         };
 
         let arquivo = format!("./renders/{prefixo}_{nome}.png");
-        grava_png(&arquivo, &buffer.to_color())?;
+        comum::grava_textura(&arquivo, &buffer.to_color(), Rgb::to_srgb)?;
 
         gravados.push(nome);
     }
@@ -316,29 +323,6 @@ fn renderiza(
         resultado.stats.backfaces_culled,
         gravados.join(", "),
     );
-
-    Ok(())
-}
-
-fn grava_png(caminho: &str, buffer: &ColorBuffer) -> Result<(), Box<dyn Error>> {
-    fs::create_dir_all("./renders")?;
-
-    let mut bytes = Vec::with_capacity(buffer.pixels().len() * 3);
-    for pixel in buffer.pixels() {
-        bytes.extend_from_slice(&pixel.to_bytes());
-    }
-
-    let mut encoder = png::Encoder::new(
-        BufWriter::new(File::create(caminho)?),
-        buffer.width(),
-        buffer.height(),
-    );
-    encoder.set_color(png::ColorType::Rgb);
-    encoder.set_depth(png::BitDepth::Eight);
-
-    let mut escritor = encoder.write_header()?;
-    escritor.write_image_data(&bytes)?;
-    escritor.finish()?;
 
     Ok(())
 }

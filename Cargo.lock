@@ -308,7 +308,8 @@ name = "tcc2"
 version = "0.1.0"
 dependencies = [
  "gltf",
- "png",
+ "image",
+ "serde_json",
 ]
 
 [[package]]
