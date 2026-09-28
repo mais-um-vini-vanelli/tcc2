@@ -11,7 +11,7 @@
 use crate::math::{Aabb, Ray, Vec3};
 use crate::parameters::{BvhSplit, TransformMethod};
 use crate::raytracer::Contador;
-use crate::scene::{Primitive, Scene};
+use crate::scene::{Instance, Primitive};
 
 // Teoria: bvh.md#quando-parar-de-dividir
 /// Na mediana, a folha fecha com até este número de itens.
@@ -33,16 +33,15 @@ const MAX_ITENS_POR_FOLHA: usize = 8;
 /// As duas árvores da cena.
 pub(crate) struct Aceleracao {
     pub tlas: Bvh,
-    /// Uma por objeto, na ordem de `Scene.objects`. Só malha tem.
+    /// Uma por instância, na ordem de `Scene::flatten`. Só malha tem.
     pub blas: Vec<Option<Bvh>>,
 }
 
 impl Aceleracao {
-    pub fn build(scene: &Scene, split: BvhSplit, method: TransformMethod) -> Aceleracao {
-        let blas: Vec<Option<Bvh>> = scene
-            .objects
+    pub fn build(instancias: &[Instance], split: BvhSplit, method: TransformMethod) -> Aceleracao {
+        let blas: Vec<Option<Bvh>> = instancias
             .iter()
-            .map(|objeto| match &objeto.geometry {
+            .map(|instancia| match instancia.geometry {
                 Primitive::Mesh(malha) => Some(Bvh::build(
                     (0..malha.face_count())
                         .filter_map(|i| {
@@ -59,20 +58,19 @@ impl Aceleracao {
             })
             .collect();
 
-        let itens = scene
-            .objects
+        let itens = instancias
             .iter()
             .zip(&blas)
             .enumerate()
-            .map(|(i, (objeto, blas))| Item {
+            .map(|(i, (instancia, blas))| Item {
                 indice: i,
                 // A caixa local girada deixa de ser alinhada aos eixos; o que vai pra TLAS é a caixa alinhada em volta dos oito cantos dela.
                 caixa: Aabb::around(
-                    objeto
+                    instancia
                         .geometry
                         .bounds()
                         .corners()
-                        .map(|canto| objeto.transform.apply_point(canto, method)),
+                        .map(|canto| instancia.chain.apply_point(canto, method)),
                 ),
                 // Teoria: bvh.md#o-custo-de-um-objeto
                 custo: blas.as_ref().map_or(CUSTO_PRIMITIVO, Bvh::custo_esperado),

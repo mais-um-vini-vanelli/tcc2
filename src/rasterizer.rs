@@ -9,12 +9,11 @@
 
 use crate::color::Rgb;
 use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
-use crate::parameters::{Parameters, ShadingFrequency, TransformMethod};
+use crate::parameters::{Parameters, ShadingFrequency};
 use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
 use crate::scene::{Camera, Light, Material, Scene};
 use crate::shading::{self, Surface};
 use crate::texture::Footprint;
-use crate::transform::Transform;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Rasterizer;
@@ -39,19 +38,26 @@ impl Renderer for Rasterizer {
 
         let mut stats = RenderStats::default();
 
-        let base = scene.camera.basis();
-        let planos = frustum(&scene.camera);
-        let perspectiva = matches!(scene.camera, Camera::Perspective { .. });
+        let (camera, lights, instances) = scene.flatten(params.transform.method);
+
+        let Some(camera) = camera else {
+            // Sem câmera não há de onde olhar: sobra o fundo.
+            return resultado;
+        };
+
+        let base = camera.basis();
+        let planos = frustum(&camera);
+        let perspectiva = matches!(camera, Camera::Perspective { .. });
 
         let contexto = Contexto {
-            camera: &scene.camera,
-            lights: &scene.lights,
+            camera: &camera,
+            lights: &lights,
             params,
             perspectiva,
         };
 
-        for objeto in &scene.objects {
-            let malha = objeto.geometry.tessellate();
+        for instancia in &instances {
+            let malha = instancia.geometry.tessellate();
 
             for indice in 0..malha.face_count() {
                 let Some(face) = malha.face(indice) else {
@@ -63,17 +69,17 @@ impl Renderer for Rasterizer {
                 // contrário, transformando o raio.
                 let triangulo = face.map(|v| Vertex {
                     position: para_camera(
-                        &scene.camera,
+                        &camera,
                         base,
-                        objeto
-                            .transform
+                        instancia
+                            .chain
                             .apply_point(v.position, params.transform.method),
                     ),
-                    normal: objeto
-                        .transform
+                    normal: instancia
+                        .chain
                         .apply_normal(v.normal, params.transform.method),
-                    tangent: objeto
-                        .transform
+                    tangent: instancia
+                        .chain
                         .apply_tangent(v.tangent, params.transform.method),
                     uv: v.uv,
                 });
@@ -87,7 +93,7 @@ impl Renderer for Rasterizer {
                 // O recorte devolve um polígono convexo de N vértices; desenhar com triangle fan.
                 for i in 1..poligono.len().saturating_sub(1) {
                     let recortado = [poligono[0], poligono[i], poligono[i + 1]];
-                    let tela = recortado.map(|v| para_tela(&scene.camera, v, largura, altura));
+                    let tela = recortado.map(|v| para_tela(&camera, v, largura, altura));
 
                     let [Some(a), Some(b), Some(c)] = tela else {
                         // Só entra aqui com clipping desligado. Daí o triângulo que cruza o near plane
@@ -113,10 +119,10 @@ impl Renderer for Rasterizer {
                     }
 
                     // O shading acontece no espaço de mundo.
-                    let mundo = recortado.map(|v| de_camera(&scene.camera, base, v.position));
+                    let mundo = recortado.map(|v| de_camera(&camera, base, v.position));
 
                     let shading = contexto.shade_vertex(
-                        &objeto.material,
+                        instancia.material,
                         mundo,
                         recortado.map(|v| v.normal),
                         recortado.map(|v| v.uv),
@@ -129,7 +135,7 @@ impl Renderer for Rasterizer {
                             mundo,
                             area,
                             shading,
-                            material: &objeto.material,
+                            material: instancia.material,
                         },
                         &contexto,
                         &mut stats,

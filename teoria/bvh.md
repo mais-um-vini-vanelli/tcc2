@@ -417,8 +417,16 @@ níveis ser simples.
 
 Os nomes vêm das APIs de ray tracing em hardware (DirectX Raytracing, Vulkan),
 que dividem a aceleração exatamente assim — e reaproveitam a mesma BLAS para
-todo objeto que usa a mesma malha (*instancing*). Aqui cada objeto constrói a
-sua.
+todo objeto que usa a mesma malha (*instancing*).
+
+Aqui as duas árvores são construídas sobre as **instâncias** que
+`Scene::flatten` devolve, e cada instância constrói a BLAS dela. O
+compartilhamento do *instancing* não acontece porque não há o que compartilhar:
+a `Instance` empresta a geometria em vez de copiá-la, mas quem é dono dela
+continua sendo o nó da árvore, e cada nó tem a sua. Para duas instâncias
+apontarem para a mesma malha, a geometria precisaria ser compartilhável — um
+`Rc`, ou uma tabela de geometrias na cena — e aí a BLAS sairia uma por
+geometria.
 
 ### A caixa do objeto no mundo
 

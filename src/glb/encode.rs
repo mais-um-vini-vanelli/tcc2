@@ -8,10 +8,10 @@ use serde_json::{Map, Value, json};
 
 use crate::color::Rgb;
 use crate::math::{Aabb, Vec3};
-use crate::parameters::Parameters;
-use crate::scene::{self, Camera, Light, Material, Mesh, Object, Primitive, Scene};
+use crate::parameters::{Parameters, TransformMethod};
+use crate::scene::{self, Camera, Content, Light, Material, Mesh, Object, Primitive, Scene};
 use crate::texture::Texture;
-use crate::transform::Transform;
+use crate::transform::{Chain, Transform};
 
 use super::{EXTENSION, Error, VERSION};
 
@@ -19,7 +19,6 @@ pub fn encode(scene: &Scene, parameters: Option<&Parameters>) -> Result<Vec<u8>,
     let mut json_gltf = json::Root::default();
 
     let mut bin = Vec::new();
-    let mut ambients = Vec::new();
     let mut materiais = Vec::new();
 
     json_gltf.asset.generator = Some(format!("tcc2 {}", env!("CARGO_PKG_VERSION")));
@@ -41,22 +40,13 @@ pub fn encode(scene: &Scene, parameters: Option<&Parameters>) -> Result<Vec<u8>,
         extras: Default::default(),
     });
 
-    encode_camera(scene.camera, &mut json_gltf);
-
-    for luz in &scene.lights {
-        encode_light(*luz, &mut json_gltf, &mut ambients);
-    }
-
     for objeto in &scene.objects {
-        encode_object(objeto, &mut json_gltf, &mut bin, &mut materiais)?;
+        let indice = encode_object(objeto, &mut json_gltf, &mut bin, &mut materiais)?;
+        json_gltf.scenes[0].nodes.push(indice);
     }
 
     let mut extras = Map::new();
     extras.insert("version".into(), json!(VERSION));
-
-    if !ambients.is_empty() {
-        extras.insert("ambient".into(), json!(ambients));
-    }
 
     if let Some(parameters) = parameters {
         extras.insert("parameters".into(), super::parameters::encode(parameters));
@@ -101,7 +91,7 @@ pub fn encode(scene: &Scene, parameters: Option<&Parameters>) -> Result<Vec<u8>,
     .map_err(Error::from)
 }
 
-fn encode_camera(camera: Camera, json_gltf: &mut json::Root) {
+fn encode_camera(camera: Camera, json_gltf: &mut json::Root) -> json::Node {
     let camera_gltf = match camera {
         Camera::Perspective {
             fov,
@@ -152,26 +142,29 @@ fn encode_camera(camera: Camera, json_gltf: &mut json::Root) {
 
     let (direita, cima, frente) = camera.basis();
 
-    let indice = json_gltf.push(json::Node {
+    json::Node {
         camera: Some(camera_gltf),
         // A câmera do glTF olha para o −z local, com +y para cima.
         matrix: Some(matrix(direita, cima, -frente, camera.position())),
         ..Default::default()
-    });
-
-    json_gltf.scenes[0].nodes.push(indice);
+    }
 }
 
-fn encode_light(luz: Light, json_gltf: &mut json::Root, ambients: &mut Vec<Value>) {
+fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
     use json::extensions::scene::khr_lights_punctual as khr;
 
     if let Light::Ambient { color, intensity } = luz {
         // A ambiente não tem equivalente no glTF: ela vai para uma extension.
-        ambients.push(json!({
-            "color": json!([color.r, color.g, color.b]),
-            "intensity": intensity,
-        }));
-        return;
+        return json::Node {
+            extensions: Some(json::extensions::scene::Node {
+                others: Map::from_iter([(
+                    EXTENSION.into(),
+                    json!({ "ambient": { "color": [color.r, color.g, color.b], "intensity": intensity } }),
+                )]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
     }
 
     let punctual = |tipo, spot| khr::Light {
@@ -235,16 +228,14 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root, ambients: &mut Vec<Value
         (x, z.cross(x), z)
     };
 
-    let indice = json_gltf.push(json::Node {
+    json::Node {
         matrix: Some(matrix(direita, cima, frente, posicao)),
         extensions: Some(json::extensions::scene::Node {
             khr_lights_punctual: Some(khr::KhrLightsPunctual { light: light_gltf }),
             ..Default::default()
         }),
         ..Default::default()
-    });
-
-    json_gltf.scenes[0].nodes.push(indice);
+    }
 }
 
 fn encode_object(
@@ -252,57 +243,92 @@ fn encode_object(
     json_gltf: &mut json::Root,
     bin: &mut Vec<u8>,
     materiais: &mut Vec<(Material, json::Index<json::Material>)>,
-) -> Result<(), Error> {
-    let material_gltf = encode_material(&objeto.material, json_gltf, bin, materiais)?;
+) -> Result<json::Index<json::Node>, Error> {
+    let filhos = objeto
+        .children
+        .iter()
+        .map(|filho| encode_object(filho, json_gltf, bin, materiais))
+        .collect::<Result<Vec<_>, Error>>()?;
 
-    let tesselada = objeto.geometry.tessellate();
+    let filhos = (!filhos.is_empty()).then_some(filhos);
 
-    if tesselada.vertices.is_empty() || tesselada.indices.is_empty() {
-        return Err("objeto sem nenhum triângulo".into());
-    }
+    let transform = Chain::from_root_first(&[objeto.transform]);
 
-    let malha_gltf = encode_mesh(&tesselada, material_gltf, json_gltf, bin);
+    let mut no = match &objeto.content {
+        None => json::Node::default(),
 
-    // Esfera e cubo vão com a malha tesselada **e** com os campos exatos: o
-    // decoder daqui lê os campos e ignora a malha, e quem não conhece a
-    // extensão fica com a malha.
-    let primitivo = match &objeto.geometry {
-        Primitive::Mesh(_) => None,
-        Primitive::Triangle { .. } => Some(json!("triangle")),
-        Primitive::Sphere { center, radius } => Some(json!({
-            "sphere": { "center": json!([center.x, center.y, center.z]), "radius": radius }
-        })),
-        Primitive::Cube { center, half_edge } => Some(json!({
-            "cube": { "center": json!([center.x, center.y, center.z]), "half_edge": half_edge }
-        })),
+        Some(Content::Camera(camera)) => encode_camera(
+            camera.transformed(&transform, TransformMethod::Stepwise),
+            json_gltf,
+        ),
+
+        Some(Content::Light(luz @ Light::Ambient { .. })) => encode_light(*luz, json_gltf),
+
+        Some(Content::Light(luz)) => encode_light(
+            luz.transformed(&transform, TransformMethod::Stepwise),
+            json_gltf,
+        ),
+
+        Some(Content::Geometry {
+            geometry,
+            material,
+            casts_shadows,
+        }) => {
+            let material_gltf = encode_material(material, json_gltf, bin, materiais)?;
+
+            let tesselada = geometry.tessellate();
+
+            if tesselada.vertices.is_empty() || tesselada.indices.is_empty() {
+                return Err("objeto sem nenhum triângulo".into());
+            }
+
+            let malha_gltf = encode_mesh(&tesselada, material_gltf, json_gltf, bin);
+
+            // Esfera e cubo vão com a malha tesselada **e** com os campos exatos: o
+            // decoder daqui lê os campos e ignora a malha, e quem não conhece a
+            // extensão fica com a malha.
+            let primitivo = match geometry {
+                Primitive::Mesh(_) => None,
+                Primitive::Triangle { .. } => Some(json!("triangle")),
+                Primitive::Sphere { center, radius } => Some(json!({
+                    "sphere": { "center": json!([center.x, center.y, center.z]), "radius": radius }
+                })),
+                Primitive::Cube { center, half_edge } => Some(json!({
+                    "cube": { "center": json!([center.x, center.y, center.z]), "half_edge": half_edge }
+                })),
+            };
+
+            json_gltf.meshes[malha_gltf.value()].extensions =
+                primitivo.map(|primitivo| json::extensions::mesh::Mesh {
+                    others: Map::from_iter([(EXTENSION.into(), json!({ "primitive": primitivo }))]),
+                });
+
+            json::Node {
+                mesh: Some(malha_gltf),
+                extensions: (!casts_shadows).then(|| json::extensions::scene::Node {
+                    others: Map::from_iter([(EXTENSION.into(), json!({ "casts_shadows": false }))]),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }
+        }
     };
 
-    json_gltf.meshes[malha_gltf.value()].extensions =
-        primitivo.map(|primitivo| json::extensions::mesh::Mesh {
-            others: Map::from_iter([(EXTENSION.into(), json!({ "primitive": primitivo }))]),
-        });
+    if no.matrix.is_none() {
+        let Transform {
+            translation,
+            rotation,
+            scale,
+        } = objeto.transform;
 
-    let Transform {
-        translation,
-        rotation,
-        scale,
-    } = objeto.transform;
+        no.translation = Some([translation.x, translation.y, translation.z]);
+        no.rotation = Some(json::scene::UnitQuaternion(quaternion(rotation)));
+        no.scale = Some([scale.x, scale.y, scale.z]);
+    }
 
-    let indice = json_gltf.push(json::Node {
-        mesh: Some(malha_gltf),
-        translation: Some([translation.x, translation.y, translation.z]),
-        rotation: Some(json::scene::UnitQuaternion(quaternion(rotation))),
-        scale: Some([scale.x, scale.y, scale.z]),
-        extensions: (!objeto.casts_shadows).then(|| json::extensions::scene::Node {
-            others: Map::from_iter([(EXTENSION.into(), json!({ "casts_shadows": false }))]),
-            ..Default::default()
-        }),
-        ..Default::default()
-    });
+    no.children = filhos;
 
-    json_gltf.scenes[0].nodes.push(indice);
-
-    Ok(())
+    Ok(json_gltf.push(no))
 }
 
 fn encode_mesh(

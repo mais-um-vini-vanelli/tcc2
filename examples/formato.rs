@@ -121,56 +121,60 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
             scale: Vec3::ONE,
         }),
     )
-    // Cubo analítico com rotação nos três eixos e escala não uniforme: é o
-    // caminho do Euler XYZ ↔ quatérnio.
     .with_object(
-        Object::new(
-            Primitive::cube(Vec3::ZERO, 0.8),
-            Material {
-                albedo: Value::Map(xadrez(
-                    32,
-                    Rgb::new(0.8, 0.25, 0.2),
-                    Rgb::new(0.95, 0.9, 0.8),
-                )?),
-                roughness: Value::Map(gradiente(32)?),
-                ..Material::default()
-            },
-        )
-        .with_transform(Transform {
-            translation: Vec3::new(1.4, 0.8, 0.6),
-            rotation: Vec3::new(18.0, 35.0, 12.0),
-            scale: Vec3::new(1.0, 1.3, 1.0),
-        }),
-    )
-    // Vidro, com transmissão e índice de refração.
-    .with_object(
-        Object::new(
-            Primitive::sphere(Vec3::ZERO, 0.7),
-            Material {
-                albedo: Value::Constant(Rgb::gray(0.06)),
-                roughness: Value::Constant(0.03),
-                transparency: 0.95,
-                refractive_index: 1.52,
-                ..Material::default()
-            },
-        )
-        .with_transform(Transform {
-            translation: Vec3::new(0.0, 0.7, 2.4),
-            ..Transform::IDENTITY
-        }),
-    )
-    // Emissivo acima de 1, que o `emissiveFactor` sozinho cortaria, e sem
-    // sombra própria.
-    .with_object(
-        Object::new(
-            Primitive::sphere(Vec3::ZERO, 0.28),
-            Material::emissive(Rgb::new(2.6, 1.7, 0.8)),
-        )
-        .with_transform(Transform {
-            translation: Vec3::new(2.6, 2.4, -1.2),
-            ..Transform::IDENTITY
-        })
-        .with_shadows(false),
+        Object::group()
+            .with_transform(Transform {
+                translation: Vec3::new(0.3, 0.0, 0.0),
+                rotation: Vec3::new(0.0, 24.0, 0.0),
+                scale: Vec3::ONE,
+            })
+            .with_child(
+                Object::new(
+                    Primitive::cube(Vec3::ZERO, 0.8),
+                    Material {
+                        albedo: Value::Map(xadrez(
+                            32,
+                            Rgb::new(0.8, 0.25, 0.2),
+                            Rgb::new(0.95, 0.9, 0.8),
+                        )?),
+                        roughness: Value::Map(gradiente(32)?),
+                        ..Material::default()
+                    },
+                )
+                .with_transform(Transform {
+                    translation: Vec3::new(1.4, 0.8, 0.6),
+                    rotation: Vec3::new(18.0, 35.0, 12.0),
+                    scale: Vec3::new(1.0, 1.3, 1.0),
+                })
+                .with_child(
+                    Object::new(
+                        Primitive::sphere(Vec3::ZERO, 0.28),
+                        Material::emissive(Rgb::new(2.6, 1.7, 0.8)),
+                    )
+                    .with_transform(Transform {
+                        translation: Vec3::new(1.0, 1.4, -1.6),
+                        ..Transform::IDENTITY
+                    })
+                    .with_shadows(false),
+                ),
+            )
+            // Vidro, com transmissão e índice de refração.
+            .with_child(
+                Object::new(
+                    Primitive::sphere(Vec3::ZERO, 0.7),
+                    Material {
+                        albedo: Value::Constant(Rgb::gray(0.06)),
+                        roughness: Value::Constant(0.03),
+                        transparency: 0.95,
+                        refractive_index: 1.52,
+                        ..Material::default()
+                    },
+                )
+                .with_transform(Transform {
+                    translation: Vec3::new(0.0, 0.7, 2.4),
+                    ..Transform::IDENTITY
+                }),
+            ),
     )
     // Triângulo solto, pra checar que ele não volta como malha.
     .with_object(Object::new(

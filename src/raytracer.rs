@@ -21,7 +21,7 @@ use crate::color::Rgb;
 use crate::math::{Ray, Vec3};
 use crate::parameters::Parameters;
 use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
-use crate::scene::{self, Camera, Hit, Light, Object, Primitive, Scene};
+use crate::scene::{self, Camera, Hit, Instance, Light, Material, Primitive, Scene};
 use crate::shading::{self, Surface};
 
 use crate::bvh::Aceleracao;
@@ -52,10 +52,21 @@ impl Renderer for RayTracer {
 
         let contador = Contador::default();
 
+        let (camera, lights, instancias) = scene.flatten(params.transform.method);
+
+        let Some(camera) = camera else {
+            // Sem câmera não há de onde partir raio: sobra o fundo.
+            return RenderResult {
+                color: Some(cor),
+                ray_count: Some(raios),
+                ..RenderResult::new()
+            };
+        };
+
         let aceleracao = params.ray_tracing.acceleration.bvh.then(|| {
             let inicio = Instant::now();
             let aceleracao = Aceleracao::build(
-                scene,
+                &instancias,
                 params.ray_tracing.acceleration.split,
                 params.transform.method,
             );
@@ -73,20 +84,21 @@ impl Renderer for RayTracer {
             .then(|| ScalarBuffer::new(largura, altura));
 
         let contexto = Contexto {
-            scene,
+            lights,
+            instancias,
             params,
             aceleracao,
             contador,
         };
 
-        let base = scene.camera.basis();
-        let (near, far) = scene.camera.clip_planes();
+        let base = camera.basis();
+        let (near, far) = camera.clip_planes();
 
         for y in 0..altura {
             for x in 0..largura {
                 let antes = contexto.contador.stats();
 
-                let raio = raio_primario(&scene.camera, base, x, y, largura, altura);
+                let raio = raio_primario(&camera, base, x, y, largura, altura);
                 contexto.contador.raio();
 
                 cor.set(x, y, contexto.trace(raio, near, far, 0));
@@ -155,16 +167,18 @@ impl Contador {
 
 /// O que todo raio do render consulta.
 struct Contexto<'a> {
-    scene: &'a Scene,
+    lights: Vec<Light>,
+    instancias: Vec<Instance<'a>>,
     params: &'a Parameters,
     /// `None` com a BVH desligada: aí todo raio testa todo objeto.
     aceleracao: Option<Aceleracao>,
     contador: Contador,
 }
 
-/// O objeto acertado e a superfície no ponto de acerto, já em espaço de mundo.
+/// O material da instância acertada e a superfície no ponto de acerto, já em
+/// espaço de mundo.
 struct Acerto<'a> {
-    objeto: &'a Object,
+    material: &'a Material,
     surface: Surface,
     normal_geometrica: Vec3,
 }
@@ -188,7 +202,7 @@ impl<'a> Contexto<'a> {
 
         let superficie = acerto.surface;
         let geometrica = acerto.normal_geometrica;
-        let material = &acerto.objeto.material;
+        let material = acerto.material;
         // Um raio não sabe dos raios vizinhos, então não há footprint: a textura
         // fica no nível 0.
         let amostra = material.sample(superficie.uv, None, self.params.texturing);
@@ -216,7 +230,7 @@ impl<'a> Contexto<'a> {
             shading::shade(
                 &superficie,
                 &amostra,
-                &self.scene.lights,
+                &self.lights,
                 v,
                 self.params.shading.reflectance,
                 &visibilidade,
@@ -301,19 +315,17 @@ impl<'a> Contexto<'a> {
         // espaço local do objeto. Isso permite usar equações arbitrárias tipo a
         // da esfera pro teste de interseção. O `t` é igual nos dois espaços.
         let intersecta = |i: usize, limite: f32| -> Option<(f32, Hit)> {
-            let objeto = &self.scene.objects[i];
+            let instancia = &self.instancias[i];
 
-            if consulta == Consulta::Sombra && !objeto.casts_shadows {
+            if consulta == Consulta::Sombra && !instancia.casts_shadows {
                 return None;
             }
 
-            let local = objeto
-                .transform
-                .undo_ray(raio, self.params.transform.method);
+            let local = instancia.chain.undo_ray(raio, self.params.transform.method);
 
             let hit = match self.aceleracao.as_ref().and_then(|a| a.blas[i].as_ref()) {
                 Some(blas) => {
-                    let Primitive::Mesh(ref malha) = objeto.geometry else {
+                    let Primitive::Mesh(malha) = instancia.geometry else {
                         unreachable!();
                     };
 
@@ -330,12 +342,12 @@ impl<'a> Contexto<'a> {
 
                 None => {
                     // Sem BLAS a malha testa face por face, e a conta tem que mostrar.
-                    self.contador.testes(match objeto.geometry {
-                        Primitive::Mesh(ref malha) => malha.face_count() as u64,
+                    self.contador.testes(match instancia.geometry {
+                        Primitive::Mesh(malha) => malha.face_count() as u64,
                         _ => 1,
                     });
 
-                    objeto.geometry.intersect(local)?
+                    instancia.geometry.intersect(local)?
                 }
             };
 
@@ -349,37 +361,32 @@ impl<'a> Contexto<'a> {
                     .percorre(raio, t_min, t_max, &self.contador, intersecta)?
             }
 
-            // Força bruta: testa todo objeto e fica com o menor t.
-            None => (0..self.scene.objects.len())
+            // Força bruta: testa toda instância e fica com o menor t.
+            None => (0..self.instancias.len())
                 .filter_map(|i| Some((i, intersecta(i, t_max)?.1)))
                 .filter(|(_, hit)| hit.t >= t_min && hit.t < t_max)
                 .min_by(|(_, a), (_, b)| a.t.total_cmp(&b.t))?,
         };
 
-        let objeto = &self.scene.objects[i];
+        let instancia = &self.instancias[i];
+        let method = self.params.transform.method;
 
-        let normal = objeto.material.shading_normal(
+        let normal = instancia.material.shading_normal(
             hit.uv,
             None,
             self.params.texturing,
-            objeto
-                .transform
-                .apply_normal(hit.normal, self.params.transform.method),
-            objeto
-                .transform
-                .apply_tangent(hit.tangent, self.params.transform.method),
+            instancia.chain.apply_normal(hit.normal, method),
+            instancia.chain.apply_tangent(hit.tangent, method),
         );
 
         Some(Acerto {
-            objeto,
+            material: instancia.material,
             surface: Surface {
                 point: raio.at(hit.t),
                 normal,
                 uv: hit.uv,
             },
-            normal_geometrica: objeto
-                .transform
-                .apply_normal(hit.geometric_normal, self.params.transform.method),
+            normal_geometrica: instancia.chain.apply_normal(hit.geometric_normal, method),
         })
     }
 

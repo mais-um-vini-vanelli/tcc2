@@ -2,28 +2,24 @@
 
 use crate::color::Rgb;
 use crate::math::{Aabb, Baricentrics, Ray, Tangent, Vec2, Vec3, Vertex};
-use crate::parameters::TextureOptions;
+use crate::parameters::{TextureOptions, TransformMethod};
 use crate::texture::{Footprint, Texture};
-use crate::transform::Transform;
+use crate::transform::{Chain, Transform};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Scene {
-    pub camera: Camera,
-    pub lights: Vec<Light>,
     pub objects: Vec<Object>,
 }
 
 impl Scene {
     pub fn new(camera: Camera) -> Self {
         Scene {
-            camera,
-            lights: Vec::new(),
-            objects: Vec::new(),
+            objects: vec![Object::camera(camera)],
         }
     }
 
     pub fn with_light(mut self, light: Light) -> Self {
-        self.lights.push(light);
+        self.objects.push(Object::light(light));
         self
     }
 
@@ -31,26 +27,122 @@ impl Scene {
         self.objects.push(object);
         self
     }
+
+    /// Percorre a árvore e devolve o que os renderizadores consomem: a câmera, as
+    /// luzes e as instâncias.
+    pub fn flatten(
+        &self,
+        method: TransformMethod,
+    ) -> (Option<Camera>, Vec<Light>, Vec<Instance<'_>>) {
+        let mut saida = (None, Vec::new(), Vec::new());
+        let mut cadeia = Vec::new();
+
+        for raiz in &self.objects {
+            Self::desce(raiz, &mut cadeia, method, &mut saida);
+        }
+
+        saida
+    }
+
+    fn desce<'a>(
+        no: &'a Object,
+        cadeia: &mut Vec<Transform>,
+        method: TransformMethod,
+        saida: &mut (Option<Camera>, Vec<Light>, Vec<Instance<'a>>),
+    ) {
+        let (camera, lights, instances) = &mut *saida;
+
+        cadeia.push(no.transform);
+
+        match &no.content {
+            None => {}
+
+            Some(Content::Geometry {
+                geometry,
+                material,
+                casts_shadows,
+            }) => instances.push(Instance {
+                geometry,
+                material,
+                casts_shadows: *casts_shadows,
+                chain: Chain::from_root_first(cadeia),
+            }),
+
+            Some(Content::Camera(local)) => {
+                let chain = Chain::from_root_first(cadeia);
+                camera.get_or_insert_with(|| local.transformed(&chain, method));
+            }
+
+            Some(Content::Light(luz)) => {
+                let chain = Chain::from_root_first(cadeia);
+                lights.push(luz.transformed(&chain, method));
+            }
+        }
+
+        for filho in &no.children {
+            Self::desce(filho, cadeia, method, saida);
+        }
+
+        cadeia.pop();
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Object {
-    pub geometry: Primitive,
-    pub material: Material,
-    pub transform: Transform,
-    /// Se o objeto entra no caminho do raio de sombra. Desligar é o truque que
-    /// deixa uma `Light` morar dentro de um objeto emissivo sem ele bloquear a
-    /// própria luz.
+pub struct Instance<'a> {
+    pub geometry: &'a Primitive,
+    pub material: &'a Material,
     pub casts_shadows: bool,
+    pub chain: Chain,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Content {
+    Camera(Camera),
+    Light(Light),
+    Geometry {
+        geometry: Primitive,
+        material: Material,
+        casts_shadows: bool,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Object {
+    /// O transform deste elo, relativo ao pai.
+    pub transform: Transform,
+    pub content: Option<Content>,
+    pub children: Vec<Object>,
 }
 
 impl Object {
     pub fn new(geometry: Primitive, material: Material) -> Self {
         Object {
-            geometry,
-            material,
-            transform: Transform::default(),
-            casts_shadows: true,
+            content: Some(Content::Geometry {
+                geometry,
+                material,
+                casts_shadows: true,
+            }),
+            ..Object::group()
+        }
+    }
+
+    /// Nó sem conteúdo: existe pelo transform, que vale pra árvore toda
+    /// pendurada nele.
+    pub fn group() -> Self {
+        Object::default()
+    }
+
+    pub fn camera(camera: Camera) -> Self {
+        Object {
+            content: Some(Content::Camera(camera)),
+            ..Object::group()
+        }
+    }
+
+    pub fn light(light: Light) -> Self {
+        Object {
+            content: Some(Content::Light(light)),
+            ..Object::group()
         }
     }
 
@@ -59,8 +151,19 @@ impl Object {
         self
     }
 
+    /// Sem efeito num nó que não é geometria.
     pub fn with_shadows(mut self, casts_shadows: bool) -> Self {
-        self.casts_shadows = casts_shadows;
+        if let Some(Content::Geometry {
+            casts_shadows: c, ..
+        }) = &mut self.content
+        {
+            *c = casts_shadows;
+        }
+        self
+    }
+
+    pub fn with_child(mut self, child: Object) -> Self {
+        self.children.push(child);
         self
     }
 }
@@ -132,6 +235,47 @@ impl Camera {
         (right, up, forward)
     }
 
+    /// A câmera com `position`/`look_at`/`up` levados pro mundo pelos transforms.
+    pub fn transformed(&self, chain: &Chain, method: TransformMethod) -> Camera {
+        match *self {
+            Camera::Perspective {
+                fov,
+                aspect,
+                near,
+                far,
+                position,
+                look_at,
+                up,
+            } => Camera::Perspective {
+                fov,
+                aspect,
+                near,
+                far,
+                position: (|p| chain.apply_point(p, method))(position),
+                look_at: (|p| chain.apply_point(p, method))(look_at),
+                up: (|d| chain.apply_direction(d, method))(up),
+            },
+
+            Camera::Orthographic {
+                width,
+                height,
+                near,
+                far,
+                position,
+                look_at,
+                up,
+            } => Camera::Orthographic {
+                width,
+                height,
+                near,
+                far,
+                position: (|p| chain.apply_point(p, method))(position),
+                look_at: (|p| chain.apply_point(p, method))(look_at),
+                up: (|d| chain.apply_direction(d, method))(up),
+            },
+        }
+    }
+
     /// Direção do ponto **para** a câmera.
     ///
     /// Sob perspectiva todos os raios de visão convergem na posição da câmera;
@@ -191,6 +335,49 @@ impl Light {
             | Light::Directional { intensity, .. }
             | Light::Spot { intensity, .. }
             | Light::Ambient { intensity, .. } => intensity,
+        }
+    }
+
+    /// A luz com `position`/`direction` levados pro mundo pelos transforms.
+    pub fn transformed(&self, chain: &Chain, method: TransformMethod) -> Light {
+        match *self {
+            Light::Point {
+                position,
+                color,
+                intensity,
+            } => Light::Point {
+                position: (|p| chain.apply_point(p, method))(position),
+                color,
+                intensity,
+            },
+
+            Light::Directional {
+                direction,
+                color,
+                intensity,
+            } => Light::Directional {
+                direction: (|d| chain.apply_direction(d, method).normalized())(direction),
+                color,
+                intensity,
+            },
+
+            Light::Spot {
+                position,
+                direction,
+                inner_angle,
+                outer_angle,
+                color,
+                intensity,
+            } => Light::Spot {
+                position: (|p| chain.apply_point(p, method))(position),
+                direction: (|d| chain.apply_direction(d, method).normalized())(direction),
+                inner_angle,
+                outer_angle,
+                color,
+                intensity,
+            },
+
+            Light::Ambient { .. } => *self,
         }
     }
 }

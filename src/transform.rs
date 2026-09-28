@@ -147,3 +147,64 @@ impl Transform {
         Vec3::new(v.x * cos - v.y * sin, v.x * sin + v.y * cos, v.z)
     }
 }
+
+/// Os transforms de um nó da árvore da cena até a raiz; o primeiro elemento é o do próprio nó, o último é o da raiz.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Chain(Vec<Transform>);
+
+impl Chain {
+    pub const IDENTITY: Chain = Chain(Vec::new());
+
+    /// Monta a cadeia a partir dos elos **da raiz até o nó** (a ordem em que a
+    /// travessia da árvore os encontra).
+    pub fn from_root_first(links: &[Transform]) -> Chain {
+        Chain(links.iter().rev().copied().collect())
+    }
+
+    pub fn links(&self) -> &[Transform] {
+        &self.0
+    }
+
+    pub fn apply_point(&self, p: Vec3, method: TransformMethod) -> Vec3 {
+        self.0.iter().fold(p, |p, link| link.apply_point(p, method))
+    }
+
+    pub fn apply_direction(&self, d: Vec3, method: TransformMethod) -> Vec3 {
+        self.0
+            .iter()
+            .fold(d, |d, link| link.apply_direction(d, method))
+    }
+
+    pub fn apply_normal(&self, n: Vec3, method: TransformMethod) -> Vec3 {
+        self.0
+            .iter()
+            .fold(n, |n, link| link.apply_normal(n, method))
+    }
+
+    pub fn apply_tangent(&self, t: Tangent, method: TransformMethod) -> Tangent {
+        self.0
+            .iter()
+            .fold(t, |t, link| link.apply_tangent(t, method))
+    }
+
+    pub fn undo_point(&self, p: Vec3, method: TransformMethod) -> Vec3 {
+        self.0
+            .iter()
+            .rev()
+            .fold(p, |p, link| link.undo_point(p, method))
+    }
+
+    pub fn undo_direction(&self, d: Vec3, method: TransformMethod) -> Vec3 {
+        self.0
+            .iter()
+            .rev()
+            .fold(d, |d, link| link.undo_direction(d, method))
+    }
+
+    pub fn undo_ray(&self, r: Ray, method: TransformMethod) -> Ray {
+        Ray {
+            origin: self.undo_point(r.origin, method),
+            direction: self.undo_direction(r.direction, method),
+        }
+    }
+}

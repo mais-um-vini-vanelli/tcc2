@@ -254,8 +254,10 @@ inteira, e a lib lê de volta o que gravou.
   mesma base
 - [x] `Light::Point`, `Directional` e `Spot` em `KHR_lights_punctual`, com a
   intensidade gravada crua, sem converter para candela/lux. `Ambient` não existe
-  no glTF e vai na extensão própria, o que a tira do lugar que ocupava em
-  `Scene.lights` e a devolve no fim da lista
+  no glTF e vai na extensão própria — ~~o que a tira do lugar que ocupava em
+  `Scene.lights` e a devolve no fim da lista~~: desde M7.2b ela é um **nó** com
+  `TCC2_extras` em cima, em vez de uma entrada numa lista no documento, e volta
+  no lugar dela na árvore
 - [x] `Transform` com Euler XYZ ↔ quaternion. A volta dá a mesma rotação, mas não
   necessariamente os mesmos ângulos
 - [x] `Parameters` opcional no arquivo, como preset e fora da `Scene`: a
@@ -279,18 +281,167 @@ inventadas ali quebraria a ida e volta.
 Para quem está começando em Computação Gráfica, que não deveria precisar da
 interface do Blender pra montar uma cena.
 
-- adicionar primitivos da lib como nós próprios, com os campos dela (raio,
-  meia-aresta), além de câmera, luzes e `.glb` importado
-- cena plana, sem objetos aninhados; `.glb` importado é achatado como em M6
-- `rotation_order` XYZ nos nós (o padrão do Godot é YXZ), pra que os ângulos do
-  inspetor sejam os do `Transform`
-- preview neutro, sem prometer a imagem da lib
-- exportação para o formato de M6 com `GLTFDocument` e uma
-  `GLTFDocumentExtension` que grava `TCC2_extras` (o primitivo analítico e o
-  `casts_shadows`), a intensidade crua das luzes, `Ambient` e o preset de
-  `Parameters`
+Em três etapas, e a ordem importa: primeiro o editor, que fecha sozinho sem
+gravar nada da lib; depois o scene graph na lib, que é o que a árvore do editor
+cobra do outro lado; e só então a gravação em `.tcc2.glb`, que é onde o arquivo
+de terceiro aparece e precisa ser normalizado.
 
-## M8 — Validação
+### M7.1 — Editor, sem persistir a cena em `.tcc2.glb`
+
+A cena é salva na `.tscn` do próprio Godot. A ida para o formato de M6 é M7.3, e
+até lá o editor é avaliado pelo que mostra, não pelo que grava.
+
+- [x] adicionar primitivos da lib como nós próprios, com os campos dela (raio,
+  meia-aresta), além de câmera, luzes e `.glb` importado
+- [x] `rotation_order` XYZ nos nós (o padrão do Godot é YXZ), pra que os ângulos do
+  inspetor sejam os do `Transform`
+- [x] os campos que o glTF não tem já aparecem no inspetor — `casts_shadows`,
+  `Light::Ambient`, o preset de `Parameters` — mesmo sem destino ainda: são eles
+  que viram `TCC2_extras` em M7.3
+- [x] preview neutro, sem prometer a imagem da lib
+- [x] hierarquia livre, objeto dentro de objeto: o editor é uma árvore do Godot, e é
+  essa árvore que pede o scene graph de M7.2. Proibir o aninhamento só porque a
+  `Scene` de hoje é plana seria espremer o editor pra caber na lib, e não o
+  contrário
+
+### M7.2 — Scene graph na lib
+
+A hierarquia entra na `Scene`, e o achatamento vira um passo explícito: a
+geometria de um lado, a cadeia de transforms do outro.
+
+Teoria em [teoria/transform.md](../teoria/transform.md), seção "A cadeia da
+árvore".
+
+- [x] a lista plana de `Object` vira árvore — um nó com `transform`, `children` e
+  o conteúdo (geometria + material). O achatamento de M6 ("objetos como lista
+  plana de nós, sem `children`") fica substituído por isto
+- [x] **(a mais)** `Object.geometry` vira `Option<Primitive>`: o nó sem
+  geometria só agrupa, e é o `Tcc2Node` do editor e o nó sem `mesh` do glTF.
+  Nada de tipo novo — `Object::group()` monta um, e `Scene::flatten` não emite
+  instância pra ele
+- [x] `flatten()` percorre a árvore uma vez e devolve o que os dois
+  renderizadores já consomem: uma lista de instâncias. A geometria **não é
+  copiada** — cada instância aponta para ela e carrega o **array de transforms**
+  do nó até a raiz
+- [x] composição sem `Mat4`: a decisão de M1.5 (`scale` → `rotate` →
+  `translate` passo a passo) continua valendo, porque a cadeia é aplicada elo a
+  elo, do nó para a raiz. Pai com rotação e filho com escala não uniforme não
+  colapsa num único TRS, e guardar o array evita introduzir a matriz só por
+  causa desse caso; o preço é um laço curto por ponto em vez de uma
+  multiplicação. O array mora num tipo próprio, `transform::Chain`, com o mesmo
+  conjunto de `apply_*`/`undo_*` do `Transform`
+- [x] `undo_point`/`undo_ray` andam a mesma cadeia ao contrário, e
+  `apply_normal` aplica a escala recíproca elo a elo — a folha da TLAS e a
+  `Sphere` analítica continuam como estão
+- ~~a BLAS passa a ser construída **uma vez por geometria**, não uma por
+  instância~~ — **fora**: continua uma por instância. A separação entre
+  geometria e transform só foi até a `Instance`, que **empresta** a geometria em
+  vez de copiá-la; o `Object` continua **dono** do `Primitive` dele, e o
+  `flatten` visita cada nó uma vez, então duas instâncias nunca apontam para a
+  mesma geometria e não há o que compartilhar. Chegou a existir uma deduplicação
+  por ponteiro aqui, e ela nunca disparava: em toda cena dava *n* instâncias e
+  *n* geometrias distintas. O ganho depende de a geometria poder ser
+  compartilhada — `Rc<Primitive>` no `Object`, ou uma tabela de geometrias na
+  `Scene` com o nó guardando um índice —, que é mudança de API e fica para
+  quando o `.glb` de terceiro pedir: o glTF já reusa `mesh` entre nós, e hoje o
+  `decode.rs` clona uma por nó
+- [x] `encode.rs`: os nós saem com `children`, e o `transform` de cada um é o do
+  elo, não o acumulado — é o que um `.glb` de terceiro já parece
+- [x] `decode.rs`: o laço de hoje olha só os nós de raiz da cena padrão e
+  ignoraria qualquer filho; passa a descer recursivamente, remontando a árvore
+- [x] a ida e volta do exemplo `formato` tem que continuar batendo campo a
+  campo, agora com cena aninhada. A cena dele ganhou um grupo que gira com um
+  cubo de escala não uniforme dentro, e uma esfera pendurada no cubo — a cadeia
+  de três elos e o caso que não colapsa num TRS. O `confere()` do exemplo
+  compara a forma da árvore, o primitivo de cada nó e o `casts_shadows`, e
+  depois a cadeia de cada instância pelo efeito dela em pontos de prova (o
+  Euler volta com a mesma rotação, não com os mesmos ângulos). O arquivo
+  aninhado continua passando pelo validador da Khronos com zero erros
+- [x] **(a mais)** `tests/chain.rs`: a cadeia batendo com a composição feita à
+  mão, `undo_*` desfazendo `apply_*`, o `t` valendo nos dois espaços, a normal
+  continuando perpendicular sob escala não uniforme encadeada, e o grupo sumindo
+  no `flatten`
+- ~~câmera e luz continuam **fora** da árvore~~ — **entraram**:
+  o preço de ficarem fora era o editor não poder pendurar uma luz num objeto
+
+### M7.3 — Persistência da cena em `.tcc2.glb`
+
+- exportação com `GLTFDocument` e uma `GLTFDocumentExtension` que grava
+  `TCC2_extras` (o primitivo analítico e o `casts_shadows`), a intensidade crua
+  das luzes, `Ambient` e o preset de `Parameters`
+- a hierarquia do editor sai direto em `children`, já que M7.2 ensinou a árvore
+  para os dois lados do formato
+- o arquivo gerado passa pelo validador da Khronos com zero erros, como o
+  exemplo de M6
+- normalização do que vem de fora — é aqui que está o trabalho, porque o `.glb`
+  importado no editor é arbitrário e o decoder da lib é estrito:
+  - textura fora de `R8G8B8` (RGBA, cinza, 16 bits, JPEG): hoje o `pop_image` de
+    `decode.rs` devolve "imagem não está em RGB8"
+  - malha com mais de um `primitive`: o `decode_object` pega só o primeiro. Cada
+    `primitive` vira um `Object`, que é exatamente o contorno já previsto em M5
+    para "1 material per face"
+  - atributos que faltam ou sobram: sem `NORMAL`/`TEXCOORD_0`, com `TEXCOORD_1`,
+    com cor por vértice, com skin e animação. O que a lib não lê é descartado de
+    forma explícita, não silenciosa
+  - material fora do subconjunto: `alphaMode`, `doubleSided`, oclusão,
+    `KHR_texture_transform`, sampler com wrap diferente do padrão, extensões
+    desconhecidas
+  - ? onde a normalização roda: no editor, deixando o `decode.rs` estrito como
+    está — o Godot já importa e normaliza boa parte, e a regra de M6 ("o decoder
+    da lib lê o que a lib gravou") fica de pé —, ou na lib, num caminho de
+    importação de cena de terceiro ao lado do `decode` atual
+
+## M8 — Documentação em VitePress
+
+A lib já tem a teoria escrita em `teoria/*.md`; falta o lugar onde ela é lida na
+ordem, com a figura ao lado do texto. O site é um projeto Node.js separado, e a
+regra do núcleo não muda: nada de JS entra no crate, e `cargo build` continua
+funcionando sem Node instalado.
+
+- projeto VitePress em `docs/`, com `package.json` próprio e `node_modules`/
+  build no `.gitignore`
+- o conteúdo é o que já existe: `teoria/*.md` são os capítulos. O roadmap e as
+  notas de `misc/` ficam de fora — são nota de projeto, não documentação
+- ? como os `teoria/*.md` chegam no `srcDir` do VitePress sem virarem cópia que
+  desatualiza: apontar o `srcDir` para a raiz com `includes`, ou um passo de
+  build que copia. Duplicar o arquivo à mão está fora
+- referência da API vem do `cargo doc`, servida ao lado e linkada — o rustdoc
+  dos tipos já é bom, e reescrever assinatura em Markdown envelhece
+- **Plotly** nas figuras que são função ou dado medido, no lugar da imagem
+  estática: distribuição GGX por `roughness`, Fresnel de Schlick por ângulo, a
+  curva do sRGB, atenuação por distância, custo do SAH por balde, e os tempos de
+  render com e sem BVH que o exemplo `dois_modos` já imprime
+- as três figuras de hoje (`teoria/figuras/*.html`) são páginas avulsas escritas
+  à mão; viram componente dentro da página do capítulo, e o que for gráfico de
+  função passa para Plotly
+- as imagens de `renders/` que ilustram um trecho (xadrez com e sem
+  `perspective_correct`, o `BvhHeatmap`, os filtros de mipmap) entram como par
+  antes/depois, geradas pelos exemplos e não à mão
+- publicação em página estática (GitHub Pages ou equivalente), com o build
+  rodando a partir do repositório
+
+## M9 — *(opcional)* Backend de rasterização em Vulkan
+
+Fora do caminho crítico do TCC: só entra se M7 e M8 fecharem com folga. O valor
+é didático — mostrar onde o rasterizador escrito à mão em M1 corresponde ao que
+a GPU faz em hardware, e onde não corresponde.
+
+- feature flag própria (`vulkan`), no mesmo molde da `glb`: o núcleo continua
+  sem dependência, e quem não liga a flag nem compila o módulo
+- um terceiro `Renderer` implementando a mesma trait, lendo a mesma `Scene` e os
+  mesmos `Parameters` — se algum campo não couber, é sinal sobre o design, como
+  foi em M0.5 com os dois primeiros modos
+- a correspondência é o conteúdo: vertex/fragment shader contra a tesselação e o
+  `shade()` da lib, z-buffer contra o teste de profundidade, o clipping que o
+  hardware faz sozinho contra o Sutherland-Hodgman de M1, e o sampler contra a
+  pirâmide de mipmaps de M4
+- o que não corresponde fica dito: `RenderPass::RayCount` e `BvhHeatmap` não
+  existem do lado da GPU, e a imagem não vai bater pixel a pixel com a do
+  rasterizador em CPU
+- ? escopo mínimo que ainda ensina alguma coisa: só o caminho opaco com uma luz
+  e textura, ou o material inteiro. O primeiro é o que cabe num marco opcional
+
+## M10 — Validação
 
 - aplicar a lib num exercício real de disciplina de Computação Gráfica
 - coletar feedback dos alunos/uso

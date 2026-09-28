@@ -251,3 +251,114 @@ espaços:
 p(t)      = o + t d           no mundo
 p_local(t) = T⁻¹(o) + t · T⁻¹(d)     no espaço local, mesmo t
 ```
+
+## A cadeia da árvore
+
+Até aqui cada objeto tinha **um** transform, e a cena era uma lista plana. Com o
+scene graph a cena vira árvore: cada nó tem o transform dele, relativo ao pai, e
+o que leva a geometria de uma folha até o mundo é a sequência de transforms dali
+até a raiz.
+
+```text
+raiz
+ └── grupo        T_g   (gira 24° em Y)
+      └── cubo    T_c   (escala 1, 1.3, 1)
+           └── esfera   T_e
+
+um ponto local da esfera vai pro mundo assim:
+
+p_mundo = T_g( T_c( T_e(p) ) )
+```
+
+`Scene::flatten` percorre a árvore uma vez e devolve uma **instância** por nó com
+geometria. A instância não copia a geometria — aponta pra ela — e carrega a
+cadeia `[T_e, T_c, T_g]`, guardada **do nó para a raiz**. Nó sem geometria some
+no achatamento: ele existe só pelo transform, e o transform dele continua vivo
+como um elo na cadeia dos filhos.
+
+### Por que a cadeia não vira um transform só
+
+O reflexo é compor os elos num `Transform` só e voltar pro caso de sempre. Não
+dá: `Transform` é um TRS, escala → rotação → translação nessa ordem, e o conjunto
+dos TRS **não é fechado** sob composição.
+
+O contraexemplo é o desenho acima. O pai gira, o filho tem escala não uniforme,
+e a composição é
+
+```text
+R_g · (T_c ∘ S_c)
+```
+
+onde a escala do filho acontece **antes** da rotação do pai. Um TRS só sabe
+escalar antes de girar, e aqui é preciso girar (o filho), escalar de novo... a
+ordem alterna, e o que sai é uma matriz com *shear* — um paralelepípedo torto,
+que nenhum `(translation, rotation, scale)` descreve.
+
+A saída padrão é guardar uma `Mat4`, que é fechada sob composição justamente
+porque aceita o shear. Mas `Mat4` foi deixada de fora de propósito em M1.5: a
+ordem das três etapas fica explícita no código, e `apply_normal` fica sendo a
+escala recíproca em vez da inversa transposta de uma matriz.
+
+Guardar o **array** de elos preserva as duas coisas. Cada elo continua sendo um
+TRS legível, e a composição vira um laço:
+
+```text
+apply_point   p, do nó para a raiz:   elo.apply_point(p)   pra cada elo, em ordem
+undo_point    p, da raiz para o nó:   elo.undo_point(p)    pra cada elo, ao contrário
+apply_normal  n:                      a escala recíproca, elo a elo
+```
+
+O preço é um laço curto por ponto em vez de uma multiplicação de matriz. Numa
+árvore de editor a cadeia tem dois ou três elos, e o custo some perto do resto
+do render.
+
+### A normal, elo a elo
+
+`Transform::apply_normal` normaliza no fim. Aplicá-lo elo a elo normaliza no
+meio do caminho — e isso não muda a direção que sai, porque escala e rotação são
+lineares: `S(k·v) = k·S(v)`. O comprimento intermediário é jogado fora de
+qualquer jeito.
+
+### Câmera e luz também são nós
+
+A cena inteira mora na árvore: um nó ou tem geometria, ou é a câmera, ou é uma
+luz — ou não é nada e só agrupa.
+
+O que não muda de lugar é `position`/`look_at` da câmera e `position`/`direction`
+da luz. Eles continuam onde sempre estiveram, só que agora querem dizer
+**local ao nó**, e o `flatten` aplica a cadeia neles antes de entregar:
+
+```text
+Light::Point { position: (1,0,0) }   pendurada num pai girado 90° em Y
+                                      e transladado para (2,3,-1)
+
+           (1,0,0)  --gira-->  (0,0,-1)  --translada-->  (2,3,-2)
+```
+
+Num nó de raiz com transform identidade a cadeia não faz nada, e local é igual a
+mundo — que é exatamente o que a cena era antes de existir hierarquia. Por isso o
+`shade()` nunca soube, e continua não sabendo: o que chega nele é uma `Light` de
+mundo, como sempre foi.
+
+O que a cadeia **não** alcança é o que não é ponto nem direção: `fov`, `near` e
+`far`, `width` e `height`, os ângulos do cone do spot. São escalares, e uma escala
+na cadeia não tem como entrar neles. A direção da câmera escapa de graça, porque
+sai de `look_at − position` e é renormalizada em `basis()`. O glTF tem o mesmo
+buraco, e resolve desaconselhando escalar um nó de câmera.
+
+### O ray tracer continua andando na contramão
+
+Nada muda no contraste dos dois pipelines; só o número de passos. O rasterizador
+leva o vértice pro mundo subindo a cadeia, e o ray tracer traz o raio pro espaço
+local da folha descendo-a:
+
+```text
+rasterizador                          ray tracer
+
+  p --T_e--> --T_c--> --T_g--> mundo    mundo --T_g⁻¹--> --T_c⁻¹--> --T_e⁻¹--> p
+```
+
+E o `t` continua valendo nos dois espaços pelo mesmo motivo de antes: cada
+`undo_direction` da cadeia deixa a direção esticada pelo fator que a escala
+daquele elo aplicou, então a razão entre distâncias ao longo da reta se mantém
+em todos eles.

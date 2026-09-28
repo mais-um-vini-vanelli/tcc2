@@ -34,9 +34,10 @@ pub mod prelude {
         ScalarBuffer,
     };
     pub use crate::scene::{
-        Camera, Light, Material, MaterialSample, Mesh, Object, Primitive, Scene, Value, eixos_da_uv,
+        Camera, Content, Instance, Light, Material, MaterialSample, Mesh, Object, Primitive,
+        Scene, Value, eixos_da_uv,
     };
     pub use crate::shading::{Surface, shade};
     pub use crate::texture::{Footprint, Texture, TextureError};
-    pub use crate::transform::Transform;
+    pub use crate::transform::{Chain, Transform};
 }

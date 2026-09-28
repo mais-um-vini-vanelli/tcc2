@@ -4,7 +4,9 @@ use serde_json::Value;
 use crate::color::Rgb;
 use crate::math::{Tangent, Vec2, Vec3};
 use crate::parameters::Parameters;
-use crate::scene::{Camera, Light, Material, Mesh, Object, Primitive, Scene, Value as Canal};
+use crate::scene::{
+    Camera, Content, Light, Material, Mesh, Object, Primitive, Scene, Value as Canal,
+};
 use crate::texture::Texture;
 use crate::transform::Transform;
 
@@ -21,59 +23,18 @@ pub fn decode(bytes: &[u8]) -> Result<(Scene, Option<Parameters>), Error> {
         .default_scene()
         .ok_or("o arquivo não tem cena padrão")?;
 
-    let mut camera = None;
-    let mut lights = Vec::new();
     let mut objects = Vec::new();
     let mut materiais = Vec::new();
 
     for no in cena_gltf.nodes() {
-        if let Some(projecao) = no.camera() {
-            camera = Some(decode_camera(&projecao, &no));
-        } else if let Some(luz) = no.light() {
-            lights.push(decode_light(&luz, &no));
-        } else if let Some(malha) = no.mesh() {
-            objects.push(decode_object(
-                &no,
-                &malha,
-                &buffers,
-                &imagens,
-                &mut materiais,
-            )?);
-        }
+        objects.push(decode_object(&no, &buffers, &imagens, &mut materiais)?);
     }
 
-    let camera = camera.ok_or("a cena não tem câmera")?;
-
-    // As ambientes voltam no fim da lista.
-    if let Some(ambientes) = non_null_field(extras, "ambient").and_then(Value::as_array) {
-        for ambiente in ambientes {
-            lights.push(Light::Ambient {
-                color: non_null_field(ambiente, "color")
-                    .and_then(|c| {
-                        Some(Rgb::new(
-                            c.get(0)?.as_f64()? as f32,
-                            c.get(1)?.as_f64()? as f32,
-                            c.get(2)?.as_f64()? as f32,
-                        ))
-                    })
-                    .unwrap_or(Rgb::WHITE),
-                intensity: non_null_field(ambiente, "intensity")
-                    .and_then(|i| i.as_f64().map(|i| i as f32))
-                    .unwrap_or(1.0),
-            });
-        }
-    }
+    let scene = Scene { objects };
 
     let parameters = non_null_field(extras, "parameters").map(super::parameters::decode);
 
-    Ok((
-        Scene {
-            camera,
-            lights,
-            objects,
-        },
-        parameters,
-    ))
+    Ok((scene, parameters))
 }
 
 fn decode_camera(projecao: &gltf::Camera, no: &gltf::Node) -> Camera {
@@ -144,33 +105,72 @@ fn decode_light(luz: &gltf::khr_lights_punctual::Light, no: &gltf::Node) -> Ligh
 
 fn decode_object(
     no: &gltf::Node,
-    malha: &gltf::Mesh,
     buffers: &[gltf::buffer::Data],
     imagens: &[gltf::image::Data],
     materiais: &mut Vec<(Option<usize>, Material)>,
 ) -> Result<Object, Error> {
-    let primitive = malha.primitives().next().ok_or("malha sem primitive")?;
+    let extras = no.extension_value(EXTENSION);
 
-    let material = decode_material(&primitive.material(), imagens, materiais)?;
-    let geometry = decode_geometry(malha, &primitive, buffers)?;
+    let content = if let Some(projecao) = no.camera() {
+        Some(Content::Camera(decode_camera(&projecao, no)))
+    } else if let Some(luz) = no.light() {
+        Some(Content::Light(decode_light(&luz, no)))
+    } else if let Some(ambiente) = extras.and_then(|e| non_null_field(e, "ambient")) {
+        Some(Content::Light(Light::Ambient {
+            color: non_null_field(ambiente, "color")
+                .and_then(|c| {
+                    Some(Rgb::new(
+                        c.get(0)?.as_f64()? as f32,
+                        c.get(1)?.as_f64()? as f32,
+                        c.get(2)?.as_f64()? as f32,
+                    ))
+                })
+                .unwrap_or(Rgb::WHITE),
+            intensity: non_null_field(ambiente, "intensity")
+                .and_then(|i| i.as_f64().map(|i| i as f32))
+                .unwrap_or(1.0),
+        }))
+    } else if let Some(malha) = no.mesh() {
+        let primitive = malha.primitives().next().ok_or("malha sem primitive")?;
 
-    let (translation, rotation, scale) = no.transform().decomposed();
+        Some(Content::Geometry {
+            geometry: decode_geometry(&malha, &primitive, buffers)?,
+            material: decode_material(&primitive.material(), imagens, materiais)?,
+            casts_shadows: extras
+                .and_then(|e| non_null_field(e, "casts_shadows"))
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+        })
+    } else {
+        None
+    };
 
-    let casts_shadows = no
-        .extension_value(EXTENSION)
-        .and_then(|extras| non_null_field(extras, "casts_shadows"))
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
+    let children = no
+        .children()
+        .map(|filho| decode_object(&filho, buffers, imagens, materiais))
+        .collect::<Result<Vec<_>, Error>>()?;
+
+    let transform = match &content {
+        Some(Content::Camera(_))
+        | Some(Content::Light(
+            Light::Point { .. } | Light::Directional { .. } | Light::Spot { .. },
+        )) => Transform::IDENTITY,
+
+        _ => {
+            let (translation, rotation, scale) = no.transform().decomposed();
+
+            Transform {
+                translation: Vec3::new(translation[0], translation[1], translation[2]),
+                rotation: euler(rotation),
+                scale: Vec3::new(scale[0], scale[1], scale[2]),
+            }
+        }
+    };
 
     Ok(Object {
-        geometry,
-        material,
-        transform: Transform {
-            translation: Vec3::new(translation[0], translation[1], translation[2]),
-            rotation: euler(rotation),
-            scale: Vec3::new(scale[0], scale[1], scale[2]),
-        },
-        casts_shadows,
+        transform,
+        content,
+        children,
     })
 }
 
