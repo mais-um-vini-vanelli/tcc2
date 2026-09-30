@@ -1,1 +1,0 @@
-class_name Tcc2AmbientLight extends Tcc2Light

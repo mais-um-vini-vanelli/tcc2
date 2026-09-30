@@ -1,10 +1,10 @@
 class_name TranslateGizmo extends TransformGizmo
 
-const REACH := 1.4
+const REACH := 1.5
 const HEAD_LENGTH := 0.25
 const HEAD_RADIUS := 0.08
 
-const SNAP := 0.1
+const SNAP := 0.2
 
 var _offset := 0.0
 

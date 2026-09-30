@@ -156,15 +156,7 @@ func _over_viewport() -> bool:
 	if _flying or _panning:
 		return true
 
-	var mouse_position := get_global_mouse_position()
-	if not get_global_rect().has_point(mouse_position):
-		return false
-
-	for panel in get_tree().get_nodes_in_group("ui_panel"):
-		if panel.visible and panel.get_global_rect().has_point(mouse_position):
-			return false
-	
-	return true
+	return get_global_rect().has_point(get_global_mouse_position())
 		
 func _process(delta: float) -> void:
 	if not _flying:

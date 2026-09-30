@@ -1,35 +1,54 @@
 extends Control
 
-@onready var hierarchy: Tree = $Hierarchy/VBoxContainer/MarginContainer/Tree
-@onready var sub_viewport_container := $SubViewportContainer
-@onready var scene_view: SubViewport = $SubViewportContainer/SceneView
-@onready var v_box_container := $Properties/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer
-@onready var popup_menu := $PopupMenu
+@onready var hierarchy: Tree = $Layout/Sidebar/Hierarchy/VBoxContainer/MarginContainer/Tree
+@onready var sub_viewport_container := $Layout/Viewport/ViewportClip/SubViewportContainer
+@onready var scene_view: SubViewport = $Layout/Viewport/ViewportClip/SubViewportContainer/SceneView
+@onready var properties := $Layout/Sidebar/Properties/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer
+@onready var popup_menu: PopupMenu = $PopupMenu
+
+static var ICONS: Array = [
+	[Tcc2Scene, preload("res://icons/Scene.svg"), Color.WHITE],
+	[Tcc2Light, preload("res://icons/Light.svg"), Color("#bc804e")],
+	[Tcc2Camera, preload("res://icons/Camera.svg"), Color("#a9575f")],
+	[Tcc2Geometry, preload("res://icons/Geometry.svg"), Color("#06af88")],
+]
 
 var root: Tcc2Scene
 var _items := {}
 var _selected: Tcc2Node
 
 func _ready() -> void:
+	var thin_divider = func(split: SplitContainer) -> void:
+		# The default grabber prevents the divider from getting really thin.
+		var image := Image.create_empty(1, 1, false, Image.FORMAT_RGBA8)
+		split.add_theme_icon_override("grabber", ImageTexture.create_from_image(image))
+		split.add_theme_constant_override("minimum_grab_thickness", 8)
+
+	thin_divider.call($Layout)
+	thin_divider.call($Layout/Sidebar)
+	
 	root = Tcc2Scene.new()
 	root.name = "Scene"
 	scene_view.add_child(root)
 
-	var camera := Tcc2PerspectiveCamera.new()
-	camera.name = "Camera"
+	var camera := Tcc2Camera.new()
+	camera.kind = Tcc2Camera.Kind.PERSPECTIVE
+	camera.name = "PerspectiveCamera"
 	camera.position = Vector3(0, 1, 4)
 	root.add_child(camera)
 	camera.rotation_degrees = Vector3(-14, 0, 0)
 	camera.owner = root
 
-	var light := Tcc2DirectionalLight.new()
-	light.name = "Light"
+	var light := Tcc2Light.new()
+	light.kind = Tcc2Light.Kind.DIRECTIONAL
+	light.name = "DirectionalLight"
 	light.position = Vector3(-2, 3, 2)
 	root.add_child(light)
 	light.rotation_degrees = Vector3(-45, -35, 0)
 	light.owner = root
 
-	var sphere := Tcc2Sphere.new()
+	var sphere := Tcc2Geometry.new()
+	sphere.kind = Tcc2Geometry.Kind.SPHERE
 	sphere.name = "Sphere"
 	root.add_child(sphere)
 	sphere.owner = root
@@ -42,7 +61,7 @@ func _ready() -> void:
 	hierarchy.item_mouse_selected.connect(_on_mouse_select)
 	popup_menu.id_pressed.connect(_on_popup_menu_id_pressed)
 	get_window().files_dropped.connect(_on_files_dropped)
-	sub_viewport_container.gizmo_moved.connect(v_box_container.refresh_values)
+	sub_viewport_container.gizmo_moved.connect(properties.refresh_values)
 
 func rebuild_hierarchy() -> void:
 	hierarchy.clear()
@@ -54,6 +73,12 @@ func add_item(node: Tcc2Node, parent_item: TreeItem) -> void:
 	item.set_text(0, node.name)
 	item.set_metadata(0, node)
 	_items[node] = item
+
+	for entry in ICONS:
+		if is_instance_of(node, entry[0]):
+			item.set_icon(0, entry[1])
+			item.set_icon_modulate(0, entry[2])
+			break
 
 	for child in node.get_children():
 		if child is Tcc2Node:
@@ -79,7 +104,7 @@ func _select(node: Tcc2Node) -> void:
 		node.set_selected(true)
 
 	sub_viewport_container.set_target(node)
-	v_box_container.show_node(node)
+	properties.show_node(node)
 
 func _on_selected() -> void:
 	_select(hierarchy.get_selected().get_metadata(0))
@@ -111,24 +136,33 @@ enum {
 	ADD_AMBIENT_LIGHT,
 	ADD_PERSPECTIVE_CAMERA,
 	ADD_ORTHOGRAPHIC_CAMERA,
+	ADD_GROUP,
 }
 
 func _on_mouse_select(_pos: Vector2, button: int) -> void:
 	if button == MOUSE_BUTTON_RIGHT:
 		popup_menu.clear()
-		popup_menu.add_item("Add sphere", ADD_SPHERE)
-		popup_menu.add_item("Add cube", ADD_CUBE)
-		popup_menu.add_item("Add mesh", ADD_MESH)
+		
+		popup_menu.add_item("Add object")
+		popup_menu.set_item_disabled(0, true)
+		popup_menu.add_separator()
+
+		popup_menu.add_item("Sphere", ADD_SPHERE)
+		popup_menu.add_item("Cube", ADD_CUBE)
+		popup_menu.add_item("Mesh", ADD_MESH)
 
 		popup_menu.add_separator()
-		popup_menu.add_item("Add point light", ADD_POINT_LIGHT)
-		popup_menu.add_item("Add directional light", ADD_DIRECTIONAL_LIGHT)
-		popup_menu.add_item("Add spot light", ADD_SPOT_LIGHT)
-		popup_menu.add_item("Add ambient light", ADD_AMBIENT_LIGHT)
+		popup_menu.add_item("Point light", ADD_POINT_LIGHT)
+		popup_menu.add_item("Directional light", ADD_DIRECTIONAL_LIGHT)
+		popup_menu.add_item("Spot light", ADD_SPOT_LIGHT)
+		popup_menu.add_item("Ambient light", ADD_AMBIENT_LIGHT)
 
 		popup_menu.add_separator()
-		popup_menu.add_item("Add perspective camera", ADD_PERSPECTIVE_CAMERA)
-		popup_menu.add_item("Add orthographic camera", ADD_ORTHOGRAPHIC_CAMERA)
+		popup_menu.add_item("Perspective camera", ADD_PERSPECTIVE_CAMERA)
+		popup_menu.add_item("Orthographic camera", ADD_ORTHOGRAPHIC_CAMERA)
+
+		popup_menu.add_separator()
+		popup_menu.add_item("Group", ADD_GROUP)
 
 		popup_menu.reset_size()
 		popup_menu.popup_on_parent(Rect2i(get_global_mouse_position(), Vector2i(1, 1)))
@@ -138,31 +172,52 @@ func _on_popup_menu_id_pressed(id: int) -> void:
 
 	match id:
 		ADD_SPHERE:
-			_add(target, Tcc2Sphere.new(), "Sphere")
+			var geometry := Tcc2Geometry.new()
+			geometry.kind = Tcc2Geometry.Kind.SPHERE
+			_add(target, geometry, "Sphere")
 
 		ADD_CUBE:
-			_add(target, Tcc2Cube.new(), "Cube")
+			var geometry := Tcc2Geometry.new()
+			geometry.kind = Tcc2Geometry.Kind.CUBE
+			_add(target, geometry, "Cube")
 
 		ADD_MESH:
-			_add(target, Tcc2Mesh.new(), "Mesh")
+			var geometry := Tcc2Geometry.new()
+			geometry.kind = Tcc2Geometry.Kind.MESH
+			_add(target, geometry, "Mesh")
 
 		ADD_POINT_LIGHT:
-			_add(target, Tcc2PointLight.new(), "PointLight")
+			var light := Tcc2Light.new()
+			light.kind = Tcc2Light.Kind.POINT
+			_add(target, light, "PointLight")
 
 		ADD_DIRECTIONAL_LIGHT:
-			_add(target, Tcc2DirectionalLight.new(), "DirectionalLight")
+			var light := Tcc2Light.new()
+			light.kind = Tcc2Light.Kind.DIRECTIONAL
+			_add(target, light, "DirectionalLight")
 
 		ADD_SPOT_LIGHT:
-			_add(target, Tcc2SpotLight.new(), "SpotLight")
+			var light := Tcc2Light.new()
+			light.kind = Tcc2Light.Kind.SPOT
+			_add(target, light, "SpotLight")
 
 		ADD_AMBIENT_LIGHT:
-			_add(target, Tcc2AmbientLight.new(), "AmbientLight")
+			var light := Tcc2Light.new()
+			light.kind = Tcc2Light.Kind.AMBIENT
+			_add(target, light, "AmbientLight")
 
 		ADD_PERSPECTIVE_CAMERA:
-			_add(target, Tcc2PerspectiveCamera.new(), "Camera")
+			var cam := Tcc2Camera.new()
+			cam.kind = Tcc2Camera.Kind.PERSPECTIVE
+			_add(target, cam, "PerspectiveCamera")
 
 		ADD_ORTHOGRAPHIC_CAMERA:
-			_add(target, Tcc2OrthographicCamera.new(), "Camera")
+			var cam := Tcc2Camera.new()
+			cam.kind = Tcc2Camera.Kind.ORTHOGRAPHIC
+			_add(target, cam, "OrthographicCamera")
+
+		ADD_GROUP:
+			_add(target, Tcc2Node.new(), "Group")
 
 	rebuild_hierarchy()
 

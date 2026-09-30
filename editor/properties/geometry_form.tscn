@@ -1,0 +1,125 @@
+[gd_scene format=3 uid="uid://8to0fsibkdtp"]
+
+[ext_resource type="Script" uid="uid://clkli1bu12gi6" path="res://properties/geometry_form.gd" id="1_psig0"]
+[ext_resource type="StyleBox" uid="uid://bup0ptwo6e042" path="res://properties/section.tres" id="2_f4kjp"]
+[ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_mplm2"]
+[ext_resource type="PackedScene" uid="uid://ucbcfnd6wi6" path="res://properties/transform_section.tscn" id="4_kxnx1"]
+[ext_resource type="PackedScene" uid="uid://dwiwtshqcrmo" path="res://properties/material_section.tscn" id="5_74bph"]
+
+[node name="GeometryPanel" type="VBoxContainer" unique_id=448446973]
+theme_override_constants/separation = 2
+script = ExtResource("1_psig0")
+
+[node name="Geometry" type="PanelContainer" parent="." unique_id=1217160093]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_styles/panel = ExtResource("2_f4kjp")
+script = ExtResource("3_mplm2")
+
+[node name="Stack" type="VBoxContainer" parent="Geometry" unique_id=40126289]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Button" parent="Geometry/Stack" unique_id=83051248]
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/h_separation = 6
+toggle_mode = true
+button_pressed = true
+text = "Geometry"
+flat = true
+alignment = 0
+
+[node name="Body" type="VBoxContainer" parent="Geometry/Stack" unique_id=1773626277]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Rows" type="GridContainer" parent="Geometry/Stack/Body" unique_id=1179673146]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="RadiusLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=180353191]
+layout_mode = 2
+text = "radius"
+horizontal_alignment = 2
+
+[node name="radius" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1976309586]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+step = 0.01
+allow_greater = true
+
+[node name="HalfEdgeLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=748654486]
+layout_mode = 2
+text = "half edge"
+horizontal_alignment = 2
+
+[node name="half_edge" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1736652733]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+step = 0.01
+allow_greater = true
+
+[node name="SourceLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=2059406977]
+layout_mode = 2
+text = "source"
+horizontal_alignment = 2
+
+[node name="source" type="Button" parent="Geometry/Stack/Body/Rows" unique_id=1412658647]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+clip_text = true
+
+[node name="Dialog" type="FileDialog" parent="Geometry/Stack/Body/Rows/source" unique_id=379975813]
+title = "Open a File"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.glb")
+use_native_dialog = true
+
+[node name="MeshLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=55300576]
+layout_mode = 2
+text = "mesh"
+horizontal_alignment = 2
+
+[node name="mesh" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1732186898]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+rounded = true
+allow_greater = true
+
+[node name="SurfaceLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=2103729376]
+layout_mode = 2
+text = "surface"
+horizontal_alignment = 2
+
+[node name="surface" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=317803915]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+rounded = true
+allow_greater = true
+
+[node name="CastShadowsLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1049310603]
+layout_mode = 2
+text = "casts_shadows"
+horizontal_alignment = 2
+
+[node name="cast_shadows" type="CheckBox" parent="Geometry/Stack/Body/Rows" unique_id=1182490193]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+
+[node name="Transform" parent="." unique_id=1739651481 instance=ExtResource("4_kxnx1")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Material" parent="." unique_id=1918105084 instance=ExtResource("5_74bph")]
+unique_name_in_owner = true
+layout_mode = 2

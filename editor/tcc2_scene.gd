@@ -1,39 +1,46 @@
 class_name Tcc2Scene extends Tcc2Node
 
-@export_group("transform")
-@export_enum("Stepwise") var transform_method: int = 0
+enum TransformMethod {STEPWISE}
+enum Filtering {NEAREST, BILINEAR, TRILINEAR}
+enum ShadingFrequency {FLAT, GOURAUD, PHONG}
+enum ReflectanceModel {BLINN_PHONG}
+enum BvhSplit {MEDIAN, SAH}
+enum Tonemap {NONE, REINHARD}
 
-@export_group("rasterization")
-@export var backface_cull: bool = true
-@export var wireframe: bool = false
-@export var perspective_correct: bool = true
-@export var depth_test: bool = true
+# TransformOptions
+var transform_method := TransformMethod.STEPWISE
 
-@export_group("clipping")
-@export var clipping_enabled: bool = true
+# RasterizationOptions
+var backface_cull := true
+var wireframe := false
+var perspective_correct := true
+var depth_test := true
 
-@export_group("texturing")
-@export var mipmaps: bool = true
-@export_enum("Nearest", "Bilinear", "Trilinear") var filtering: int = 2
+# ClippingOptions
+var clipping_enabled := true
 
-@export_group("shading")
-@export_enum("Flat", "Gouraud", "Phong") var shading_frequency: int = 2
-@export_enum("BlinnPhong") var reflectance_model: int = 0
+# TextureOptions
+var mipmaps := true
+var filtering := Filtering.TRILINEAR
 
-@export_group("ray_tracing")
-@export_range(0, 16) var max_depth: int = 5
-@export var shadows: bool = true
-@export var reflections: bool = true
-@export var refractions: bool = true
+# ShadingOptions
+var shading_frequency := ShadingFrequency.PHONG
+var reflectance_model := ReflectanceModel.BLINN_PHONG
 
-@export_subgroup("acceleration")
-@export var bvh: bool = true
-@export_enum("Median", "Sah") var bvh_split: int = 1
+# RayTracingOptions
+var max_depth := 5
+var shadows := true
+var reflections := true
+var refractions := true
 
-@export_group("output")
-@export_range(1, 4096) var width: int = 800
-@export_range(1, 4096) var height: int = 600
-@export var background_enabled: bool = true
-@export var background: Color = Color.BLACK
-@export var exposure: float = 1.0
-@export_enum("None", "Reinhard") var tonemap: int = 0
+# RayTracingOptions::acceleration
+var bvh := true
+var bvh_split := BvhSplit.SAH
+
+# OutputOptions
+var width := 800
+var height := 600
+var background_enabled := true
+var background := Color.BLACK
+var exposure := 1.0
+var tonemap := Tonemap.NONE

@@ -1,0 +1,91 @@
+[gd_scene format=3 uid="uid://bh0a2tpew4uen"]
+
+[ext_resource type="Script" uid="uid://b4abeywvdg3rf" path="res://properties/light_form.gd" id="1_t7rc5"]
+[ext_resource type="StyleBox" uid="uid://bup0ptwo6e042" path="res://properties/section.tres" id="2_73anl"]
+[ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_valmq"]
+[ext_resource type="PackedScene" uid="uid://ucbcfnd6wi6" path="res://properties/transform_section.tscn" id="4_gn1aa"]
+
+[node name="LightPanel" type="VBoxContainer" unique_id=1698272693]
+theme_override_constants/separation = 2
+script = ExtResource("1_t7rc5")
+
+[node name="Light" type="PanelContainer" parent="." unique_id=1756216043]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_styles/panel = ExtResource("2_73anl")
+script = ExtResource("3_valmq")
+
+[node name="Stack" type="VBoxContainer" parent="Light" unique_id=1585720975]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Button" parent="Light/Stack" unique_id=1488912432]
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/h_separation = 6
+toggle_mode = true
+button_pressed = true
+text = "Light"
+flat = true
+alignment = 0
+
+[node name="Body" type="VBoxContainer" parent="Light/Stack" unique_id=689637804]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Rows" type="GridContainer" parent="Light/Stack/Body" unique_id=105386122]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="InnerAngleLabel" type="Label" parent="Light/Stack/Body/Rows" unique_id=1916186784]
+layout_mode = 2
+text = "inner angle"
+horizontal_alignment = 2
+
+[node name="inner_angle" type="SpinBox" parent="Light/Stack/Body/Rows" unique_id=142158047]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 90.0
+step = 0.01
+
+[node name="OuterAngleLabel" type="Label" parent="Light/Stack/Body/Rows" unique_id=927465930]
+layout_mode = 2
+text = "outer angle"
+horizontal_alignment = 2
+
+[node name="outer_angle" type="SpinBox" parent="Light/Stack/Body/Rows" unique_id=1901818233]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 90.0
+step = 0.01
+
+[node name="ColorLabel" type="Label" parent="Light/Stack/Body/Rows" unique_id=647406638]
+layout_mode = 2
+text = "color"
+horizontal_alignment = 2
+
+[node name="color" type="ColorPickerButton" parent="Light/Stack/Body/Rows" unique_id=459760438]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+edit_alpha = false
+
+[node name="IntensityLabel" type="Label" parent="Light/Stack/Body/Rows" unique_id=699461655]
+layout_mode = 2
+text = "intensity"
+horizontal_alignment = 2
+
+[node name="intensity" type="SpinBox" parent="Light/Stack/Body/Rows" unique_id=1580024247]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+step = 0.01
+allow_greater = true
+
+[node name="Transform" parent="." unique_id=1739651481 instance=ExtResource("4_gn1aa")]
+unique_name_in_owner = true
+layout_mode = 2

@@ -1,15 +1,108 @@
 [gd_scene format=3 uid="uid://cqi7qdnrdfwcf"]
 
 [ext_resource type="Script" uid="uid://dah2h80rhe785" path="res://main.gd" id="1_ig7tw"]
-[ext_resource type="Script" uid="uid://onar4gy43bqc" path="res://v_box_container.gd" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://7r6yin2j4s2m" path="res://properties/properties.gd" id="2_0xm2m"]
 [ext_resource type="Script" uid="uid://c58uqcxu021pt" path="res://sub_viewport_container.gd" id="2_h2yge"]
-[ext_resource type="Script" uid="uid://dwtmvp5p7380x" path="res://viewport_grid.gd" id="3_lquwl"]
-[ext_resource type="Script" uid="uid://nr0suckmtpdb" path="res://floating_panel.gd" id="4_1bvp3"]
+[ext_resource type="Material" uid="uid://kjr4lmkjwarq" path="res://grid.tres" id="3_lquwl"]
+[ext_resource type="Theme" uid="uid://dv2t0njvjq33b" path="res://panel.tres" id="4_1bvp3"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hier_bg"]
+bg_color = Color(0.15686275, 0.15686275, 0.15686275, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.34117648, 0.34117648, 0.34117648, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hier_bar"]
+content_margin_left = 12.0
+content_margin_top = 4.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
+bg_color = Color(0.15686275, 0.15686275, 0.15686275, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_prop_bg"]
+bg_color = Color(0.1882353, 0.1882353, 0.1882353, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.34117648, 0.34117648, 0.34117648, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_prop_bar"]
+content_margin_left = 12.0
+content_margin_top = 4.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1882353, 0.1882353, 0.1882353, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_view_border"]
+bg_color = Color(0.24705882, 0.24705882, 0.24705882, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.34117648, 0.34117648, 0.34117648, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_view"]
+bg_color = Color(0.24705882, 0.24705882, 0.24705882, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
 
 [sub_resource type="Environment" id="Environment_7dm0k"]
 background_mode = 1
 background_color = Color(0.24705882, 0.24705882, 0.24705882, 1)
 ambient_light_source = 2
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_grid"]
+material = ExtResource("3_lquwl")
+size = Vector2(10000, 10000)
+subdivide_width = 32
+subdivide_depth = 32
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_7mycd"]
+content_margin_left = 6.0
+content_margin_top = 8.0
+content_margin_right = 6.0
+content_margin_bottom = 8.0
+bg_color = Color(0.11372549, 0.11372549, 0.11372549, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.22745098, 0.22745098, 0.22745098, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_272bh"]
+bg_color = Color(0.2901961, 0.2901961, 0.2901961, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_7mycd"]
+color = Color(0.22745098, 0.22745098, 0.22745098, 1)
 
 [node name="Main" type="Control" unique_id=350063806]
 layout_mode = 3
@@ -20,91 +113,143 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_ig7tw")
 
-[node name="SubViewportContainer" type="SubViewportContainer" parent="." unique_id=244233698]
+[node name="Background" type="ColorRect" parent="." unique_id=350063807]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
+color = Color(0.08627451, 0.08627451, 0.08627451, 1)
+
+[node name="Layout" type="HSplitContainer" parent="." unique_id=350063808]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 4
+
+[node name="Sidebar" type="VSplitContainer" parent="Layout" unique_id=458687941]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_constants/separation = 4
+split_offsets = PackedInt32Array(340)
+split_offset = 340
+
+[node name="Hierarchy" type="PanelContainer" parent="Layout/Sidebar" unique_id=458687942]
+clip_children = 2
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+theme = ExtResource("4_1bvp3")
+theme_override_styles/panel = SubResource("StyleBoxFlat_hier_bg")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Layout/Sidebar/Hierarchy" unique_id=1640887968]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Label" type="Label" parent="Layout/Sidebar/Hierarchy/VBoxContainer" unique_id=1023361505]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.86, 0.9, 1)
+theme_override_styles/normal = SubResource("StyleBoxFlat_hier_bar")
+text = "Hierarchy"
+
+[node name="MarginContainer" type="MarginContainer" parent="Layout/Sidebar/Hierarchy/VBoxContainer" unique_id=942832023]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 2
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 2
+theme_override_constants/margin_bottom = 2
+
+[node name="Tree" type="Tree" parent="Layout/Sidebar/Hierarchy/VBoxContainer/MarginContainer" unique_id=264687545]
+layout_mode = 2
+
+[node name="Properties" type="PanelContainer" parent="Layout/Sidebar" unique_id=674683924]
+clip_children = 2
+custom_minimum_size = Vector2(0, 160)
+layout_mode = 2
+size_flags_vertical = 3
+theme = ExtResource("4_1bvp3")
+theme_override_styles/panel = SubResource("StyleBoxFlat_prop_bg")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Layout/Sidebar/Properties" unique_id=1156349262]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Label" type="Label" parent="Layout/Sidebar/Properties/VBoxContainer" unique_id=509436398]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.86, 0.9, 1)
+theme_override_styles/normal = SubResource("StyleBoxFlat_prop_bar")
+text = "Properties"
+
+[node name="MarginContainer" type="MarginContainer" parent="Layout/Sidebar/Properties/VBoxContainer" unique_id=403734876]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Layout/Sidebar/Properties/VBoxContainer/MarginContainer" unique_id=792595758]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Layout/Sidebar/Properties/VBoxContainer/MarginContainer/ScrollContainer" unique_id=190241959]
+layout_mode = 2
 size_flags_horizontal = 3
+script = ExtResource("2_0xm2m")
+
+[node name="Viewport" type="PanelContainer" parent="Layout" unique_id=350063809]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_view_border")
+
+[node name="ViewportClip" type="Panel" parent="Layout/Viewport" unique_id=350063810]
+clip_children = 1
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_view")
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="Layout/Viewport/ViewportClip" unique_id=244233698]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 stretch = true
 script = ExtResource("2_h2yge")
 
-[node name="SceneView" type="SubViewport" parent="SubViewportContainer" unique_id=1122104]
+[node name="SceneView" type="SubViewport" parent="Layout/Viewport/ViewportClip/SubViewportContainer" unique_id=1122104]
 handle_input_locally = false
 msaa_3d = 2
-size = Vector2i(1152, 648)
+size = Vector2i(1282, 890)
 render_target_update_mode = 4
 
-[node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SceneView" unique_id=654379406]
+[node name="Camera3D" type="Camera3D" parent="Layout/Viewport/ViewportClip/SubViewportContainer/SceneView" unique_id=654379406]
 transform = Transform3D(0.8660254, -0.21130913, 0.45315388, 0, 0.90630776, 0.42261827, -0.5, -0.36599815, 0.7848855, 4, 3, 6)
 current = true
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="SubViewportContainer/SceneView" unique_id=116312433]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Layout/Viewport/ViewportClip/SubViewportContainer/SceneView" unique_id=116312433]
 environment = SubResource("Environment_7dm0k")
 
-[node name="ViewportGrid" type="MeshInstance3D" parent="SubViewportContainer/SceneView" unique_id=1168395440]
-script = ExtResource("3_lquwl")
-metadata/_custom_type_script = "uid://dwtmvp5p7380x"
+[node name="Grid" type="MeshInstance3D" parent="Layout/Viewport/ViewportClip/SubViewportContainer/SceneView" unique_id=1168395440]
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_grid")
 
 [node name="PopupMenu" type="PopupMenu" parent="." unique_id=1658015771]
 oversampling_override = 1.0
-
-[node name="Hierarchy" type="PanelContainer" parent="." unique_id=458687942]
-custom_minimum_size = Vector2(220, 0)
-layout_mode = 1
-anchors_preset = -1
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = 76.0
-offset_bottom = -12.0
-grow_vertical = 2
-script = ExtResource("4_1bvp3")
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Hierarchy" unique_id=1640887968]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="Hierarchy/VBoxContainer" unique_id=1023361505]
-layout_mode = 2
-text = "Hierarchy"
-
-[node name="MarginContainer" type="MarginContainer" parent="Hierarchy/VBoxContainer" unique_id=942832023]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="Tree" type="Tree" parent="Hierarchy/VBoxContainer/MarginContainer" unique_id=264687545]
-layout_mode = 2
-
-[node name="Properties" type="PanelContainer" parent="." unique_id=674683924]
-custom_minimum_size = Vector2(220, 0)
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = -12.0
-grow_horizontal = 0
-grow_vertical = 2
-script = ExtResource("4_1bvp3")
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Properties" unique_id=1156349262]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="Properties/VBoxContainer" unique_id=509436398]
-layout_mode = 2
-text = "Properties"
-
-[node name="MarginContainer" type="MarginContainer" parent="Properties/VBoxContainer" unique_id=403734876]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="ScrollContainer" type="ScrollContainer" parent="Properties/VBoxContainer/MarginContainer" unique_id=792595758]
-layout_mode = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Properties/VBoxContainer/MarginContainer/ScrollContainer" unique_id=190241959]
-layout_mode = 2
-script = ExtResource("2_0xm2m")
+theme_override_colors/font_color = Color(0.88235295, 0.88235295, 0.88235295, 1)
+theme_override_colors/font_disabled_color = Color(0.5411765, 0.5411765, 0.5411765, 1)
+theme_override_colors/font_hover_color = Color(0.88235295, 0.88235295, 0.88235295, 1)
+theme_override_constants/v_separation = 6
+theme_override_constants/item_start_padding = 8
+theme_override_constants/item_end_padding = 8
+theme_override_styles/panel = SubResource("StyleBoxFlat_7mycd")
+theme_override_styles/hover = SubResource("StyleBoxFlat_272bh")
+theme_override_styles/separator = SubResource("StyleBoxLine_7mycd")

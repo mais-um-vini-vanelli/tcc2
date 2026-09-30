@@ -1,7 +1,7 @@
 class_name TransformGizmo extends Node3D
 
 const AXES := [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
-const AXIS_COLORS := [ViewportGrid.X_COLOR, ViewportGrid.Y_COLOR, ViewportGrid.Z_COLOR]
+const AXIS_COLORS := [Color("#ea334c"), Color("#70a726"), Color("#2d83e8")]
 
 const LENGTH := 1.0
 const SCREEN_SIZE := 0.26
@@ -54,7 +54,7 @@ func _process(_delta: float) -> void:
 		return
 
 	global_position = target.global_position
-	global_basis = Basis.from_scale(Vector3.ONE * _screen_scale())
+	global_basis = _orientation() * Basis.from_scale(Vector3.ONE * _screen_scale())
 
 # Which handle the mouse is over, or -1.
 func handle_at(screen_position: Vector2) -> int:
@@ -105,10 +105,13 @@ func _on_drag(_ray_origin: Vector3, _ray_dir: Vector3) -> void:
 func _build() -> void:
 	pass
 
+func _orientation() -> Basis:
+	return Basis.IDENTITY
+
 # The handle as a world-space polyline, which is all the hit test needs.
 func _outline(axis: int) -> Array[Vector3]:
 	var origin := target.global_position
-	var direction: Vector3 = AXES[axis]
+	var direction: Vector3 = _orientation() * AXES[axis]
 	var reach := _screen_scale()
 	var points: Array[Vector3] = [origin + direction * _from * reach,
 		origin + direction * _to * reach]
@@ -142,7 +145,7 @@ func _along(ray_origin: Vector3, ray_dir: Vector3) -> float:
 	# t − t·a·a   = -d·axis + d·ray_dir·a
 	# t·(1 − a·a) = d·ray_dir·a − d·axis
 	# t           = (d·ray_dir·a − d·axis) / (1 − a·a)
-	var axis: Vector3 = AXES[_axis]
+	var axis: Vector3 = _orientation() * AXES[_axis]
 	var d := _origin - ray_origin
 	var a := axis.dot(ray_dir)
 	var denominator := 1.0 - a * a

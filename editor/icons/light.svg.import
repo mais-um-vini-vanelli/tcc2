@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bonxtjxs6tunb"
-path="res://.godot/imported/light.svg-d4320863725391032be1651bfff96c3b.ctex"
+uid="uid://bhsjtw1nqmvx5"
+path="res://.godot/imported/Light.svg-79d0ac79af9973d9723cea7407303d37.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://icons/light.svg"
-dest_files=["res://.godot/imported/light.svg-d4320863725391032be1651bfff96c3b.ctex"]
+source_file="res://icons/Light.svg"
+dest_files=["res://.godot/imported/Light.svg-79d0ac79af9973d9723cea7407303d37.ctex"]
 
 [params]
 
@@ -38,6 +38,6 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
+svg/scale=12.0
 editor/scale_with_editor_scale=false
 editor/convert_colors_with_editor_theme=false

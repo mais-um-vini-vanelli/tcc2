@@ -6,6 +6,7 @@ const CUBE_SIZE := 0.1
 const SNAP := 0.1
 
 var _grabbed := Basis.IDENTITY
+var _frame := Basis.IDENTITY
 var _reach := 0.0
 
 func _build() -> void:
@@ -18,8 +19,13 @@ func _build() -> void:
 	for axis in 3:
 		_handle(axis, cube, REACH)
 
+
+func _orientation() -> Basis:
+	return _frame if _axis >= 0 else target.global_basis.orthonormalized()
+
 func _on_begin(ray_origin: Vector3, ray_dir: Vector3) -> void:
-	_grabbed = target.global_basis
+	_grabbed = target.basis
+	_frame = target.global_basis.orthonormalized()
 	_reach = _along(ray_origin, ray_dir)
 
 func _on_drag(ray_origin: Vector3, ray_dir: Vector3) -> void:
@@ -30,12 +36,12 @@ func _on_drag(ray_origin: Vector3, ray_dir: Vector3) -> void:
 
 	var factor := snappedf(reach / _reach, SNAP)
 
-	# Zero would flatten the basis for good: scaled() multiplies, so there would be
-	# nothing left to grow back.
+	# Zero would flatten the basis for good: scaled_local() multiplies, so there
+	# would be nothing left to grow back.
 	if is_zero_approx(factor):
 		return
 
 	var stretch := Vector3.ONE
 	stretch[_axis] = factor
 
-	target.global_basis = _grabbed.scaled(stretch)
+	target.basis = _grabbed.scaled_local(stretch)

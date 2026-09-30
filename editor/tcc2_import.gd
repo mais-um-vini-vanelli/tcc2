@@ -10,7 +10,7 @@ var _materials := {}
 # Everything the file holds, under a single node named after it. Cameras come in
 # only if the scene has none, since the lib renders through one.
 static func glb(path: String, cameras: bool) -> Tcc2Node:
-	var parsed := Tcc2Glb.state(path)
+	var parsed := Tcc2Assets.state(path)
 
 	if parsed == null:
 		return null
@@ -73,49 +73,49 @@ func _mesh(mesh: int, node_name: String) -> Tcc2Node:
 
 	return group
 
-func _primitive(mesh: int, index: int) -> Tcc2Mesh:
-	var primitive := Tcc2Mesh.new()
-	primitive.source = _path
-	primitive.mesh = mesh
-	primitive.surface = index
+func _primitive(mesh: int, index: int) -> Tcc2Geometry:
+	var primitive := Tcc2Geometry.new()
+	primitive.kind = Tcc2Geometry.Kind.MESH
+	primitive.mesh.source = _path
+	primitive.mesh.mesh = mesh
+	primitive.mesh.surface = index
 	primitive.material = _material(mesh, index)
 	return primitive
 
 func _camera(gltf: GLTFCamera) -> Tcc2Camera:
-	var node: Tcc2Camera
+	var node := Tcc2Camera.new()
 
 	if gltf.perspective:
-		var perspective := Tcc2PerspectiveCamera.new()
-		perspective.fov = rad_to_deg(gltf.fov)
-		node = perspective
+		node.kind = Tcc2Camera.Kind.PERSPECTIVE
+		node.perspective.fov = rad_to_deg(gltf.fov)
 	else:
-		var orthographic := Tcc2OrthographicCamera.new()
-		orthographic.ortho_height = gltf.size_mag * 2.0
-		node = orthographic
-
-	node.near = gltf.depth_near
-	node.far = gltf.depth_far
+		node.kind = Tcc2Camera.Kind.ORTHOGRAPHIC
+		node.orthographic.height = gltf.size_mag * 2.0
+	
+	var mod = node.model()
+	mod.near = gltf.depth_near
+	mod.far = gltf.depth_far
 
 	return node
 
 func _light(gltf: GLTFLight) -> Tcc2Light:
-	var node: Tcc2Light
+	var node := Tcc2Light.new()
 
 	match gltf.light_type:
 		"directional":
-			node = Tcc2DirectionalLight.new()
+			node.kind = Tcc2Light.Kind.DIRECTIONAL
 
 		"spot":
-			var spot := Tcc2SpotLight.new()
-			spot.inner_angle = rad_to_deg(gltf.inner_cone_angle)
-			spot.outer_angle = rad_to_deg(gltf.outer_cone_angle)
-			node = spot
+			node.kind = Tcc2Light.Kind.SPOT
+			node.spot.inner_angle = rad_to_deg(gltf.inner_cone_angle)
+			node.spot.outer_angle = rad_to_deg(gltf.outer_cone_angle)
 
 		_:
-			node = Tcc2PointLight.new()
+			node.kind = Tcc2Light.Kind.POINT
 
-	node.color = gltf.color
-	node.intensity = gltf.intensity
+	var model = node.model()
+	model.color = gltf.color
+	model.intensity = gltf.intensity
 
 	return node
 
@@ -137,9 +137,9 @@ func _material(mesh: int, index: int) -> Tcc2Material:
 	var albedo := _texture(_mat.albedo_texture)
 
 	if albedo == null:
-		material.albedo.constant = tint
+		material.albedo.rgb.constant = tint
 	else:
-		material.albedo.kind = Tcc2Value.Kind.TEXTURE
+		material.albedo.kind = Tcc2MaterialValue.Kind.TEXTURE
 		material.albedo.texture = albedo
 
 		if tint != Color.WHITE:
@@ -148,11 +148,11 @@ func _material(mesh: int, index: int) -> Tcc2Material:
 	var metallic := _texture(_mat.metallic_texture)
 
 	if metallic == null:
-		material.metallic.constant = _mat.metallic
+		material.metallic.scalar.constant = _mat.metallic
 	else:
-		material.metallic.kind = Tcc2Value.Kind.TEXTURE
+		material.metallic.kind = Tcc2MaterialValue.Kind.TEXTURE
 		material.metallic.texture = metallic
-		material.metallic.channel = _mat.metallic_texture_channel
+		material.metallic.scalar.channel = _mat.metallic_texture_channel
 
 		if not is_equal_approx(_mat.metallic, 1.0):
 			push_warning("%s: metallic factor dropped beside its map" % _path)
@@ -160,11 +160,11 @@ func _material(mesh: int, index: int) -> Tcc2Material:
 	var roughness := _texture(_mat.roughness_texture)
 
 	if roughness == null:
-		material.roughness.constant = _mat.roughness
+		material.roughness.scalar.constant = _mat.roughness
 	else:
-		material.roughness.kind = Tcc2Value.Kind.TEXTURE
+		material.roughness.kind = Tcc2MaterialValue.Kind.TEXTURE
 		material.roughness.texture = roughness
-		material.roughness.channel = _mat.roughness_texture_channel
+		material.roughness.scalar.channel = _mat.roughness_texture_channel
 
 		if not is_equal_approx(_mat.roughness, 1.0):
 			push_warning("%s: roughness factor dropped beside its map" % _path)
@@ -174,9 +174,9 @@ func _material(mesh: int, index: int) -> Tcc2Material:
 		var emissive := _texture(_mat.emission_texture)
 
 		if emissive == null:
-			material.emissive.constant = _mat.emission * strength
+			material.emissive.rgb.constant = _mat.emission * strength
 		else:
-			material.emissive.kind = Tcc2Value.Kind.TEXTURE
+			material.emissive.kind = Tcc2MaterialValue.Kind.TEXTURE
 			material.emissive.texture = emissive
 
 			if _mat.emission != Color.WHITE or not is_equal_approx(strength, 1.0):
@@ -194,17 +194,17 @@ func _material(mesh: int, index: int) -> Tcc2Material:
 	_materials[id] = material
 	return material
 
-func _texture(tex: Texture2D) -> Tcc2Texture:
+func _texture(tex: Texture2D) -> Tcc2TextureLocation:
 	if tex == null:
 		return null
 
-	var image: int = Tcc2Glb.images(_path).find(tex)
+	var image: int = Tcc2Assets.images(_path).find(tex)
 
 	if image < 0:
 		push_warning("%s: a texture is not one of the file's images" % _path)
 		return null
 
-	var texture := Tcc2Texture.new()
+	var texture := Tcc2TextureLocation.new()
 	texture.source = _path
 	texture.image = image
 
