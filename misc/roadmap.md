@@ -366,30 +366,108 @@ Teoria em [teoria/transform.md](../teoria/transform.md), seção "A cadeia da
 
 ### M7.3 — Persistência da cena em `.tcc2.glb`
 
-- exportação com `GLTFDocument` e uma `GLTFDocumentExtension` que grava
-  `TCC2_extras` (o primitivo analítico e o `casts_shadows`), a intensidade crua
-  das luzes, `Ambient` e o preset de `Parameters`
-- a hierarquia do editor sai direto em `children`, já que M7.2 ensinou a árvore
-  para os dois lados do formato
-- o arquivo gerado passa pelo validador da Khronos com zero erros, como o
-  exemplo de M6
-- normalização do que vem de fora — é aqui que está o trabalho, porque o `.glb`
-  importado no editor é arbitrário e o decoder da lib é estrito:
-  - textura fora de `R8G8B8` (RGBA, cinza, 16 bits, JPEG): hoje o `pop_image` de
-    `decode.rs` devolve "imagem não está em RGB8"
-  - malha com mais de um `primitive`: o `decode_object` pega só o primeiro. Cada
-    `primitive` vira um `Object`, que é exatamente o contorno já previsto em M5
-    para "1 material per face"
-  - atributos que faltam ou sobram: sem `NORMAL`/`TEXCOORD_0`, com `TEXCOORD_1`,
-    com cor por vértice, com skin e animação. O que a lib não lê é descartado de
-    forma explícita, não silenciosa
-  - material fora do subconjunto: `alphaMode`, `doubleSided`, oclusão,
-    `KHR_texture_transform`, sampler com wrap diferente do padrão, extensões
-    desconhecidas
-  - ? onde a normalização roda: no editor, deixando o `decode.rs` estrito como
-    está — o Godot já importa e normaliza boa parte, e a regra de M6 ("o decoder
-    da lib lê o que a lib gravou") fica de pé —, ou na lib, num caminho de
-    importação de cena de terceiro ao lado do `decode` atual
+A gravação mora em `editor/tcc2_export.gd`, e a decisão que abre o marco é onde
+ela mora: no editor, e não numa GDExtension que chamasse o `encode.rs` daqui.
+Uma GDExtension **não** evitaria a duplicação, só a mudaria de lugar — a árvore
+do editor não é uma `Scene`, ela guarda *referências* (`{source, mesh, surface}`
+e `{source, image}`) para arquivos de terceiro, então o lado Rust teria que
+reabrir esses arquivos com um importador permissivo e ler imagem, que são as
+duas coisas que a lib não faz por regra. E é o Godot que já normaliza tudo isso
+na entrada.
+
+- ~~exportação com `GLTFDocument` e uma `GLTFDocumentExtension`~~ — **fora**: o
+  JSON é montado à mão. O que sobraria para o `GLTFDocument` fazer é o que ele
+  faz *do jeito dele*, e cada um desses seria desfeito depois — a conversão de
+  unidade da intensidade da luz, o empacotamento de metallic/roughness, o truque
+  do fator × textura, `transmission` e `ior`, que o `StandardMaterial3D` nem tem.
+  O que o `GLTFDocument` faz de verdade aqui é a **leitura**: toda malha e toda
+  imagem entra por ele, e é isso que normaliza o arquivo arbitrário. O que se
+  escreve à mão em troca é mecânico: accessor, bufferView, o contêiner GLB e o
+  PNG, que o Godot já resolve em uma chamada cada
+- [x] `TCC2_extras` com o primitivo analítico e o `casts_shadows`, a intensidade
+  crua das luzes, `Ambient` como nó e o preset de `Parameters` no documento
+- [x] a hierarquia do editor sai direto em `children`, já que M7.2 ensinou a
+  árvore para os dois lados do formato
+- [x] o arquivo gerado passa pelo validador da Khronos com **zero erros e zero
+  avisos**, como o exemplo de M6. Sobram notas de severidade *info*: a
+  `TCC2_extras` que o validador não conhece, e o `TANGENT`/`TEXCOORD_0` que a
+  esfera e o cubo do Godot trazem sem material que os use
+- [x] a conferência que prende os dois codificadores é o exemplo `editor`:
+  `editor/tests/export_test.gd` monta uma cena e grava, e
+  `cargo run --example editor --features glb` lê de volta pelo `decode` estrito,
+  confere campo a campo (preset, câmera, as quatro luzes, os primitivos exatos,
+  a cadeia de três elos, `casts_shadows`, transmissão/ior, o emissivo acima de
+  1) e depois reescreve com o `encode.rs` para ver se a forma muda. A câmera é
+  comparada pela **base**, não pelos números: só a orientação é gravada, então
+  `look_at`/`up` voltam como outro par — a mesma ressalva de M6
+- [x] o sentido dos triângulos: o importador de glTF do Godot troca os dois
+  últimos índices de cada triângulo para virar o *counter-clockwise* do glTF no
+  *clockwise* do Godot, e a gravação desfaz isso. Conferido na esfera exportada,
+  com as 4096 faces não degeneradas apontando para fora e concordando com o
+  `NORMAL`
+- a imagem sai sempre em PNG, que é o único formato que o `decode.rs` lê (a
+  feature `glb` só liga `image/png`). Um `.glb` de terceiro cheio de JPEG em 4K
+  incha bastante na ida — o `tome.glb`, 45 MiB, vira 76 MiB. Ligar `image/jpeg`
+  na lib e deixar o JPEG passar direto é a saída, e é mudança do lado Rust
+- normalização do que vem de fora — era aqui que estava o trabalho, porque o
+  `.glb` importado no editor é arbitrário e o decoder da lib é estrito:
+  - [x] **onde ela roda**: no editor, com o `decode.rs` ficando estrito como
+    está. A regra de M6 ("o decoder da lib lê o que a lib gravou") fica de pé, e
+    o caminho de importação de cena de terceiro ao lado do `decode` não precisou
+    existir
+  - [x] textura fora de `R8G8B8` (RGBA, cinza, 16 bits, JPEG), que fazia o
+    `pop_image` de `decode.rs` devolver "imagem não está em RGB8": resolvida por
+    um `Image.convert(FORMAT_RGB8)` antes do `save_png_to_buffer`. Os bytes vão
+    como vieram — um albedo de glTF já está codificado em sRGB, que é
+    exatamente o que o decoder desfaz, e normal e metallic/roughness já são
+    crus —, então não há conversão de cor na passagem
+  - [x] malha com mais de um `primitive`: cada um vira um `Object`, que é o
+    contorno previsto em M5 para "1 material per face". Já vinha do
+    `Tcc2Import._mesh()` de M7.1
+  - [x] atributos que faltam ou sobram: `NORMAL`/`TEXCOORD_0`/`TANGENT` só são
+    gravados quando existem, e `TEXCOORD_1`, cor por vértice e skin saem com um
+    aviso nomeando o nó — descartados de forma explícita, não silenciosa. Os
+    avisos voltam numa lista para quem chamou, em vez de morrerem no log
+  - [x] material fora do subconjunto: normalizado por construção, porque a
+    gravação monta o material do zero a partir do `Tcc2Material` — `alphaMode`
+    sempre opaco, `doubleSided` sempre ligado (o ray tracer acerta a face de
+    trás), sem oclusão, sem `KHR_texture_transform` e com o sampler padrão. O
+    que o Godot tinha a mais já havia sido avisado e largado na importação
+
+- [x] **a volta pelo editor**: o `tcc2_import.gd` lê o `TCC2_extras` junto com o
+  resto, então um `.tcc2.glb` reabre como a cena que era — esfera e cubo voltam
+  dos campos exatos, `Ambient` vira nó de luz de novo, `casts_shadows` volta, e
+  o preset de `Parameters` volta para a raiz. O Godot entrega o documento cru em
+  `GLTFState.json` e o import já andava por índice de nó, então tudo isso é
+  aditivo: um `.glb` de terceiro simplesmente não tem esses campos e o caminho
+  antigo continua valendo. Fica de fora, de propósito:
+  - o `center` de `Sphere`/`Cube`: a lib guarda no primitivo e o editor posiciona
+    pelo transform do nó. Somar na posição seria errado assim que o nó tivesse
+    rotação ou escala própria, então ele é **descartado com aviso**. Tudo que o
+    editor grava tem `center` zero, então só um arquivo escrito pela lib esbarra
+    nisso
+  - o `"triangle"`: o editor não tem esse *kind*, então continua malha — que é o
+    mesmo triângulo de qualquer jeito
+  - `transmission` e `ior`: o importador do Godot ignora as duas extensões, então
+    elas são lidas do json cru
+  - metallic/roughness constante ao lado de um mapa: num arquivo da lib o canal
+    mapeado sempre tem fator exatamente 1.0, então um fator diferente de 1.0 *é*
+    a constante. Num arquivo arbitrário o fator multiplica o mapa, e lá a leitura
+    antiga continua. Uma constante que é exatamente 1.0 volta como mapa sólido —
+    mesmo valor, mesmos bytes na regravação, só o widget do inspetor muda
+- [x] **espaço de cor dos valores constantes** — um `Color` do editor é sRGB (sai
+  de um color picker e alimenta um `StandardMaterial3D`), e o fator do glTF, a
+  cor de uma luz punctual e o `Rgb` da lib são lineares. A conversão faltava nos
+  dois sentidos, e sem ela toda cor constante mudava a cada ida e volta: o
+  importador do Godot já devolve `baseColorFactor`/`emissiveFactor` em sRGB, e a
+  gravação escrevia o `Color` cru como se fosse linear. Agora converte nos cinco
+  lugares em que uma cor cruza a fronteira (albedo, emissivo, luz punctual,
+  `Ambient` e o fundo do preset), com o emissivo dividindo a força **em espaço
+  linear**, que é onde o glTF multiplica. Conferido: gravar → importar → gravar
+  dá o mesmo arquivo em precisão de f32, que é a que o glTF carrega
+- [x] o exemplo `editor` roda nos dois arquivos — o que sai do editor e o que
+  volta por ele (`cargo run --example editor --features glb -- <arquivo>`), e os
+  dois passam pelo validador da Khronos com zero erros e zero avisos
 
 ## M8 — Documentação em VitePress
 
