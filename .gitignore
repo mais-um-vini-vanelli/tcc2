@@ -1,4 +1,9 @@
 /target
 /renders
 /examples/assets
+
 /editor/.godot
+
+/docs/node_modules
+/docs/.vitepress/dist
+/docs/.vitepress/cache
