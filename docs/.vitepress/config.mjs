@@ -8,9 +8,7 @@ export default defineConfig({
   markdown: { lineNumbers: true },
 
   ignoreDeadLinks: [
-    /^\/fundamentos\//,
-    /^\/rasterizacao\/(frustum|projecao|triangulo)/,
-    /^\/raytracing\/(geracao|intersecoes|whitted|reflexao|bvh)/,
+    /^\/fundamentos\/(transform|shading)/,
     /^\/apendice\//
   ],
 
@@ -50,7 +48,7 @@ export default defineConfig({
         text: 'Fundamentos',
         collapsed: false,
         items: [
-          { text: 'Câmera e projeção', link: '/fundamentos/camera' },
+          { text: 'Câmera', link: '/fundamentos/camera' },
           { text: 'Transformações', link: '/fundamentos/transform' },
           { text: 'Shading', link: '/fundamentos/shading' },
         ]

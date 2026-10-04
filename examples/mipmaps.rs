@@ -1,11 +1,13 @@
 //! O problema que o mipmap resolve, desenhado pelo `Rasterizer`.
 //!
-//! Um chão de xadrez visto rasante até o horizonte, em três filtros:
+//! Um chão de xadrez visto rasante até o horizonte, nos quatro filtros:
 //!
 //! - `nearest`: um texel do nível 0. Longe da câmera o pixel cobre dezenas de
 //!   texels e fica com um só, e o xadrez vira moiré.
-//! - `bilinear`: com mipmap, no nível mais próximo. O moiré some, e a troca de
-//!   nível aparece como faixas no chão.
+//! - `bilinear`: quatro texels do nível 0. Suaviza de perto, mas o moiré ao
+//!   longe continua: a leitura ainda é no nível errado.
+//! - `mipmap_bilinear`: no nível de mip que casa com o pixel. O moiré some, e
+//!   a troca de nível aparece como faixas no chão.
 //! - `trilinear`: interpola os dois níveis vizinhos, e as faixas somem.
 //!
 //! A cena só tem luz ambiente branca de intensidade 1, então o shading devolve
@@ -60,37 +62,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         output: OutputOptions {
             width: LARGURA,
             height: ALTURA,
-            background: Some(CEU),
+            background: CEU,
             ..OutputOptions::default()
         },
         ..Parameters::default()
     };
 
-    for (texturing, nome) in [
-        (
-            TextureOptions {
-                mipmaps: false,
-                filtering: Filtering::Nearest,
-            },
-            "nearest",
-        ),
-        (
-            TextureOptions {
-                mipmaps: true,
-                filtering: Filtering::Bilinear,
-            },
-            "bilinear",
-        ),
-        (
-            TextureOptions {
-                mipmaps: true,
-                filtering: Filtering::Trilinear,
-            },
-            "trilinear",
-        ),
+    for (filtering, nome) in [
+        (Filtering::Nearest, "nearest"),
+        (Filtering::Bilinear, "bilinear"),
+        (Filtering::MipmapBilinear, "mipmap_bilinear"),
+        (Filtering::Trilinear, "trilinear"),
     ] {
         let params = Parameters {
-            texturing,
+            shading: ShadingOptions {
+                filtering,
+                ..base.shading
+            },
             ..base.clone()
         };
 

@@ -25,17 +25,6 @@ pub(super) fn encode(p: &Parameters) -> Value {
             "perspective_correct": p.rasterization.perspective_correct,
             "depth_test": p.rasterization.depth_test,
         },
-        "clipping": {
-            "enabled": p.clipping.enabled,
-        },
-        "texturing": {
-            "mipmaps": p.texturing.mipmaps,
-            "filtering": match p.texturing.filtering {
-                Filtering::Nearest => "nearest",
-                Filtering::Bilinear => "bilinear",
-                Filtering::Trilinear => "trilinear",
-            },
-        },
         "shading": {
             "frequency": match p.shading.frequency {
                 ShadingFrequency::Flat => "flat",
@@ -44,6 +33,12 @@ pub(super) fn encode(p: &Parameters) -> Value {
             },
             "reflectance": match p.shading.reflectance {
                 ReflectanceModel::BlinnPhong => "blinn_phong",
+            },
+            "filtering": match p.shading.filtering {
+                Filtering::Nearest => "nearest",
+                Filtering::Bilinear => "bilinear",
+                Filtering::MipmapBilinear => "mipmap_bilinear",
+                Filtering::Trilinear => "trilinear",
             },
         },
         "ray_tracing": {
@@ -62,8 +57,11 @@ pub(super) fn encode(p: &Parameters) -> Value {
         "output": {
             "width": p.output.width,
             "height": p.output.height,
-            // `null` é o fundo transparente, que não é a mesma coisa que preto.
-            "background": p.output.background.map(|c| json!([c.r, c.g, c.b])),
+            "background": [
+                p.output.background.r,
+                p.output.background.g,
+                p.output.background.b,
+            ],
             "exposure": p.output.exposure,
             "tonemap": match p.output.tonemap {
                 Tonemap::None => "none",
@@ -78,15 +76,12 @@ pub(super) fn decode(v: &Value) -> Parameters {
 
     let transform = non_null_field(v, "transform").unwrap_or(&VAZIO);
     let rasterization = non_null_field(v, "rasterization").unwrap_or(&VAZIO);
-    let clipping = non_null_field(v, "clipping").unwrap_or(&VAZIO);
-    let texturing = non_null_field(v, "texturing").unwrap_or(&VAZIO);
     let shading = non_null_field(v, "shading").unwrap_or(&VAZIO);
     let ray_tracing = non_null_field(v, "ray_tracing").unwrap_or(&VAZIO);
     let aceleracao = non_null_field(ray_tracing, "acceleration").unwrap_or(&VAZIO);
     let output = non_null_field(v, "output").unwrap_or(&VAZIO);
 
     let raster = RasterizationOptions::default();
-    let textura = TextureOptions::default();
     let tracado = RayTracingOptions::default();
     let ac = AccelerationOptions::default();
     let saida = OutputOptions::default();
@@ -135,18 +130,6 @@ pub(super) fn decode(v: &Value) -> Parameters {
             ),
             depth_test: to_bool(rasterization, "depth_test", raster.depth_test),
         },
-        clipping: ClippingOptions {
-            enabled: to_bool(clipping, "enabled", ClippingOptions::default().enabled),
-        },
-        texturing: TextureOptions {
-            mipmaps: to_bool(texturing, "mipmaps", textura.mipmaps),
-            filtering: match to_str(texturing, "filtering") {
-                Some("nearest") => Filtering::Nearest,
-                Some("bilinear") => Filtering::Bilinear,
-                Some("trilinear") => Filtering::Trilinear,
-                _ => textura.filtering,
-            },
-        },
         shading: ShadingOptions {
             frequency: match to_str(shading, "frequency") {
                 Some("flat") => ShadingFrequency::Flat,
@@ -157,6 +140,13 @@ pub(super) fn decode(v: &Value) -> Parameters {
             reflectance: match to_str(shading, "reflectance") {
                 Some("blinn_phong") => ReflectanceModel::BlinnPhong,
                 _ => ReflectanceModel::default(),
+            },
+            filtering: match to_str(shading, "filtering") {
+                Some("nearest") => Filtering::Nearest,
+                Some("bilinear") => Filtering::Bilinear,
+                Some("mipmap_bilinear") => Filtering::MipmapBilinear,
+                Some("trilinear") => Filtering::Trilinear,
+                _ => Filtering::default(),
             },
         },
         ray_tracing: RayTracingOptions {
@@ -176,12 +166,9 @@ pub(super) fn decode(v: &Value) -> Parameters {
         output: OutputOptions {
             width: to_u32(output, "width", saida.width),
             height: to_u32(output, "height", saida.height),
-            // Ausente cai no padrão; `null` gravado é o fundo transparente.
-            background: match output.get("background") {
-                Some(Value::Null) => None,
-                Some(cor) => to_rgb(cor),
-                None => saida.background,
-            },
+            background: non_null_field(output, "background")
+                .and_then(to_rgb)
+                .unwrap_or(saida.background),
             exposure: non_null_field(output, "exposure")
                 .and_then(|e| e.as_f64().map(|e| e as f32))
                 .unwrap_or(saida.exposure),

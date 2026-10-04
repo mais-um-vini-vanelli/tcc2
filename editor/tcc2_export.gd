@@ -698,16 +698,11 @@ func _source_image(location: Tcc2TextureLocation) -> Image:
 	return copy
 
 func _parameters(scene: Tcc2Scene) -> Dictionary:
-	const FILTERING := ["nearest", "bilinear", "trilinear"]
+	const FILTERING := ["nearest", "bilinear", "mipmap_bilinear", "trilinear"]
 	const FREQUENCY := ["flat", "gouraud", "phong"]
 	const REFLECTANCE := ["blinn_phong"]
 	const SPLIT := ["median", "sah"]
 	const TONEMAP := ["none", "reinhard"]
-
-	var background = null
-
-	if scene.background_enabled:
-		background = _linear(scene.background)
 
 	return {
 		"transform": {"method": "stepwise"},
@@ -717,14 +712,10 @@ func _parameters(scene: Tcc2Scene) -> Dictionary:
 			"perspective_correct": scene.perspective_correct,
 			"depth_test": scene.depth_test,
 		},
-		"clipping": {"enabled": scene.clipping_enabled},
-		"texturing": {
-			"mipmaps": scene.mipmaps,
-			"filtering": FILTERING[scene.filtering],
-		},
 		"shading": {
 			"frequency": FREQUENCY[scene.shading_frequency],
 			"reflectance": REFLECTANCE[scene.reflectance_model],
+			"filtering": FILTERING[scene.filtering],
 		},
 		"ray_tracing": {
 			"max_depth": scene.max_depth,
@@ -739,7 +730,7 @@ func _parameters(scene: Tcc2Scene) -> Dictionary:
 		"output": {
 			"width": scene.width,
 			"height": scene.height,
-			"background": background,
+			"background": _linear(scene.background),
 			"exposure": scene.exposure,
 			"tonemap": TONEMAP[scene.tonemap],
 		},

@@ -272,19 +272,14 @@ static func parameters(path: String, scene: Tcc2Scene) -> bool:
 		scene.perspective_correct)
 	scene.depth_test = raster.get("depth_test", scene.depth_test)
 
-	scene.clipping_enabled = preset.get("clipping", {}) \
-		.get("enabled", scene.clipping_enabled)
-
-	var texturing: Dictionary = preset.get("texturing", {})
-	scene.mipmaps = texturing.get("mipmaps", scene.mipmaps)
-	scene.filtering = pick.call(["nearest", "bilinear", "trilinear"],
-		texturing.get("filtering"), scene.filtering)
-
 	var shading: Dictionary = preset.get("shading", {})
 	scene.shading_frequency = pick.call(["flat", "gouraud", "phong"],
 		shading.get("frequency"), scene.shading_frequency)
 	scene.reflectance_model = pick.call(["blinn_phong"],
 		shading.get("reflectance"), scene.reflectance_model)
+	scene.filtering = pick.call(
+		["nearest", "bilinear", "mipmap_bilinear", "trilinear"],
+		shading.get("filtering"), scene.filtering)
 
 	var tracing: Dictionary = preset.get("ray_tracing", {})
 	scene.max_depth = int(tracing.get("max_depth", scene.max_depth))
@@ -305,9 +300,8 @@ static func parameters(path: String, scene: Tcc2Scene) -> bool:
 		scene.tonemap)
 
 	var background = output.get("background")
-	scene.background_enabled = background != null
 
-	if background != null and background is Array and background.size() >= 3:
+	if background is Array and background.size() >= 3:
 		scene.background = Color(background[0], background[1], background[2]).linear_to_srgb()
 
 	return true

@@ -8,13 +8,9 @@ func _build() -> void:
 	bind(%perspective_correct, node, &"perspective_correct")
 	bind(%depth_test, node, &"depth_test")
 
-	bind(%clipping_enabled, node, &"clipping_enabled")
-
-	bind(%mipmaps, node, &"mipmaps")
-	bind(%filtering, node, &"filtering")
-
 	bind(%shading_frequency, node, &"shading_frequency")
 	bind(%reflectance_model, node, &"reflectance_model")
+	bind(%filtering, node, &"filtering")
 
 	bind(%max_depth, node, &"max_depth")
 	bind(%shadows, node, &"shadows")
@@ -26,7 +22,6 @@ func _build() -> void:
 
 	bind(%width, node, &"width")
 	bind(%height, node, &"height")
-	bind(%background_enabled, node, &"background_enabled")
 	bind(%background, node, &"background")
 	bind(%exposure, node, &"exposure")
 	bind(%tonemap, node, &"tonemap")

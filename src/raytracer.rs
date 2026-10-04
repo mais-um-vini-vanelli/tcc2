@@ -46,7 +46,7 @@ impl Renderer for RayTracer {
 
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
         let (largura, altura) = (params.output.width, params.output.height);
-        let fundo = params.output.background.unwrap_or(Rgb::BLACK);
+        let fundo = params.output.background;
         let mut cor = ColorBuffer::filled(largura, altura, fundo);
         let mut raios = ScalarBuffer::new(largura, altura);
 
@@ -197,7 +197,7 @@ impl<'a> Contexto<'a> {
         let opcoes = &self.params.ray_tracing;
 
         let Some(acerto) = self.mais_proximo(raio, t_min, t_max, Consulta::Visao) else {
-            return self.params.output.background.unwrap_or(Rgb::BLACK);
+            return self.params.output.background;
         };
 
         let superficie = acerto.surface;
@@ -205,7 +205,7 @@ impl<'a> Contexto<'a> {
         let material = acerto.material;
         // Um raio não sabe dos raios vizinhos, então não há footprint: a textura
         // fica no nível 0.
-        let amostra = material.sample(superficie.uv, None, self.params.texturing);
+        let amostra = material.sample(superficie.uv, None, self.params.shading.filtering);
 
         let n = superficie.normal;
         let direcao = raio.direction.normalized();
@@ -271,7 +271,7 @@ impl<'a> Contexto<'a> {
         if opcoes.refractions && amostra.transparency > 0.0 {
             // Reflexão interna total: não há caminho de saída, e a energia que
             // seria transmitida volta como reflexo.
-            let transmitida = refrata(direcao, n, material.refractive_index)
+            let transmitida = refrata(direcao, n, amostra.refractive_index)
                 .unwrap_or_else(|| reflete(direcao, n));
 
             self.contador.raio();
@@ -374,7 +374,7 @@ impl<'a> Contexto<'a> {
         let normal = instancia.material.shading_normal(
             hit.uv,
             None,
-            self.params.texturing,
+            self.params.shading.filtering,
             instancia.chain.apply_normal(hit.normal, method),
             instancia.chain.apply_tangent(hit.tangent, method),
         );

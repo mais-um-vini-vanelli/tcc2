@@ -10,8 +10,6 @@ use crate::color::Rgb;
 pub struct Parameters {
     pub transform: TransformOptions,
     pub rasterization: RasterizationOptions,
-    pub clipping: ClippingOptions,
-    pub texturing: TextureOptions,
     pub shading: ShadingOptions,
     pub ray_tracing: RayTracingOptions,
     pub output: OutputOptions,
@@ -72,46 +70,19 @@ impl Default for RasterizationOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ClippingOptions {
-    pub enabled: bool,
-}
-
-impl Default for ClippingOptions {
-    fn default() -> Self {
-        ClippingOptions { enabled: true }
-    }
-}
-
-/// Texturização e mipmapping (Williams, 1983).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TextureOptions {
-    /// Gera e usa a pirâmide de mipmaps. Desligar mostra o aliasing que ela
-    /// existe para resolver.
-    pub mipmaps: bool,
-    pub filtering: Filtering,
-}
-
-impl Default for TextureOptions {
-    fn default() -> Self {
-        TextureOptions {
-            mipmaps: true,
-            filtering: Filtering::Trilinear,
-        }
-    }
-}
-
 /// Filtro de texture sampling.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Filtering {
-    /// Texel mais próximo, no nível de mip mais próximo. Barato, visivelmente
-    /// serrilhado.
+    /// Texel mais próximo, no miplevel 0. Barato, visivelmente serrilhado.
     Nearest,
+    /// Interpolação entre os quatro texels vizinhos, no miplevel 0.
+    Bilinear,
     /// Interpolação entre os quatro texels vizinhos, no nível de mip mais
     /// próximo.
-    Bilinear,
-    /// Bilinear em dois níveis de mip, interpolados entre si. Evita mudanças bruscas de resolução
-    /// na fronteira entre mip levels.
+    MipmapBilinear,
+    /// Bilinear em dois níveis de mip, interpolados entre si. Evita mudanças
+    /// bruscas de resolução na fronteira entre mip levels.
+    #[default]
     Trilinear,
 }
 
@@ -121,6 +92,8 @@ pub struct ShadingOptions {
     pub frequency: ShadingFrequency,
     // Qual modelo de reflectância a avalia a cor
     pub reflectance: ReflectanceModel,
+    // Como as texturas do material são lidas
+    pub filtering: Filtering,
 }
 
 /// Onde a cor é avaliada — por face, por vértice ou por fragmento. Não diz nada
@@ -205,7 +178,7 @@ pub struct OutputOptions {
     pub width: u32,
     pub height: u32,
     /// Cor dos pixels que nenhum primitivo cobriu.
-    pub background: Option<Rgb>,
+    pub background: Rgb,
     /// Multiplica a radiância antes do tone mapping, como a exposição de uma
     /// câmera: clareia ou escurece a imagem sem mexer nas luzes.
     pub exposure: f32,
@@ -217,7 +190,7 @@ impl Default for OutputOptions {
         OutputOptions {
             width: 800,
             height: 600,
-            background: Some(Rgb::BLACK),
+            background: Rgb::BLACK,
             exposure: 1.0,
             tonemap: Tonemap::default(),
         }

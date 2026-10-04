@@ -6,7 +6,7 @@ Os processos que o ray tracer executa pra colorir cada pixel:
 
 - Gerar o raio primário ([Geração de raios](/raytracing/geracao-de-raios))
 - Levar o raio vai pro espaço local de cada objeto ([Transformações](/fundamentos/transform))
-- Testar se o raio intersepta algum objeto e escolher a interseção mais próxima ([Interseções](/raytracing/intersecoes))
+- Testar se o raio intersecta algum objeto e escolher a interseção mais próxima ([Interseções](/raytracing/intersecoes))
 - Calcular a cor direta do acerto usando as luzes que acertam o objeto sem bloqueio ([Whitted](/raytracing/whitted))
 - Calcular as cores que a superfície recebe por reflexão e por refração, quando o material é translúcido ou refletor ([Whitted](/raytracing/whitted), [reflexão e refração](/raytracing/reflexao-e-refracao))
 

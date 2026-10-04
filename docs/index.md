@@ -44,7 +44,7 @@ rasterizador precisa de técnicas próprias pra isso — mapa de sombra, mapa de
 
 ## Como ler essa documentação
 
-Começar por [Rasterização](/rasterizacao/) ou [Ray tracing](/raytracing/), consultando as seções relevantes de [Fundamentos](/fundamentos/) quando necessário.
+Começar por [Rasterização](/rasterizacao/) ou [Ray tracing](/raytracing/), consultando as seções relevantes de [Fundamentos](/fundamentos/camera) quando necessário.
 
 Os pontos do código que dependem de cada seção apontam pra cá com um comentário
 `// Teoria: <página>#<seção>`.

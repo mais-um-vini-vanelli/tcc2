@@ -121,102 +121,6 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
 
-[node name="Clipping" type="PanelContainer" parent="." unique_id=1770694223]
-layout_mode = 2
-theme_override_styles/panel = ExtResource("2_l766n")
-script = ExtResource("3_mnwxo")
-
-[node name="Stack" type="VBoxContainer" parent="Clipping" unique_id=860160816]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Header" type="Button" parent="Clipping/Stack" unique_id=692633822]
-layout_mode = 2
-focus_mode = 0
-theme_override_constants/h_separation = 6
-toggle_mode = true
-button_pressed = true
-text = "clipping"
-flat = true
-alignment = 0
-
-[node name="Body" type="VBoxContainer" parent="Clipping/Stack" unique_id=987272862]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Rows" type="GridContainer" parent="Clipping/Stack/Body" unique_id=1741509112]
-layout_mode = 2
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 4
-columns = 2
-
-[node name="ClippingEnabledLabel" type="Label" parent="Clipping/Stack/Body/Rows" unique_id=336728617]
-layout_mode = 2
-text = "enabled"
-horizontal_alignment = 2
-
-[node name="clipping_enabled" type="CheckBox" parent="Clipping/Stack/Body/Rows" unique_id=402968822]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 0
-
-[node name="Texturing" type="PanelContainer" parent="." unique_id=874125753]
-layout_mode = 2
-theme_override_styles/panel = ExtResource("2_l766n")
-script = ExtResource("3_mnwxo")
-
-[node name="Stack" type="VBoxContainer" parent="Texturing" unique_id=826656260]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Header" type="Button" parent="Texturing/Stack" unique_id=599121849]
-layout_mode = 2
-focus_mode = 0
-theme_override_constants/h_separation = 6
-toggle_mode = true
-button_pressed = true
-text = "texturing"
-flat = true
-alignment = 0
-
-[node name="Body" type="VBoxContainer" parent="Texturing/Stack" unique_id=150675984]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Rows" type="GridContainer" parent="Texturing/Stack/Body" unique_id=1275381526]
-layout_mode = 2
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 4
-columns = 2
-
-[node name="MipmapsLabel" type="Label" parent="Texturing/Stack/Body/Rows" unique_id=1679849871]
-layout_mode = 2
-text = "mipmaps"
-horizontal_alignment = 2
-
-[node name="mipmaps" type="CheckBox" parent="Texturing/Stack/Body/Rows" unique_id=1324664002]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 0
-
-[node name="FilteringLabel" type="Label" parent="Texturing/Stack/Body/Rows" unique_id=2051920277]
-layout_mode = 2
-text = "filtering"
-horizontal_alignment = 2
-
-[node name="filtering" type="OptionButton" parent="Texturing/Stack/Body/Rows" unique_id=809517507]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-selected = 0
-item_count = 3
-popup/item_0/text = "Nearest"
-popup/item_0/id = 0
-popup/item_1/text = "Bilinear"
-popup/item_1/id = 1
-popup/item_2/text = "Trilinear"
-popup/item_2/id = 2
-
 [node name="Shading" type="PanelContainer" parent="." unique_id=917561160]
 layout_mode = 2
 theme_override_styles/panel = ExtResource("2_l766n")
@@ -277,6 +181,26 @@ selected = 0
 item_count = 1
 popup/item_0/text = "BlinnPhong"
 popup/item_0/id = 0
+
+[node name="FilteringLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=2051920277]
+layout_mode = 2
+text = "filtering"
+horizontal_alignment = 2
+
+[node name="filtering" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=809517507]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+selected = 0
+item_count = 4
+popup/item_0/text = "Nearest"
+popup/item_0/id = 0
+popup/item_1/text = "Bilinear"
+popup/item_1/id = 1
+popup/item_2/text = "MipmapBilinear"
+popup/item_2/id = 2
+popup/item_3/text = "Trilinear"
+popup/item_3/id = 3
 
 [node name="RayTracing" type="PanelContainer" parent="." unique_id=214985006]
 layout_mode = 2
@@ -460,16 +384,6 @@ min_value = 1.0
 max_value = 4096.0
 value = 1.0
 rounded = true
-
-[node name="BackgroundEnabledLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=86972473]
-layout_mode = 2
-text = "background enabled"
-horizontal_alignment = 2
-
-[node name="background_enabled" type="CheckBox" parent="Output/Stack/Body/Rows" unique_id=1347980473]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 0
 
 [node name="BackgroundLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=655665969]
 layout_mode = 2

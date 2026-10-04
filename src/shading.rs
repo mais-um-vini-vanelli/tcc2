@@ -194,12 +194,20 @@ fn blinn_phong(m: &MaterialSample, n: Vec3, v: Vec3, l: Vec3) -> Rgb {
     let alpha = m.roughness * m.roughness;
     let shininess = (2.0 / (alpha * alpha) - 2.0).max(1.0);
 
-    // Teoria: shading.md#kd-e-ks-a-partir-de-metallic
-    let kd = (1.0 - m.metallic) * (1.0 - m.transparency) * (1.0 / std::f32::consts::PI);
-    // Teoria: shading.md#a-normalização-do-especular
-    let ks = f0(m) * ((shininess + 8.0) / (8.0 * std::f32::consts::PI));
+    // Teoria: raytracer.md#o-peso-do-raio-de-espelho
+    // Um Fresnel só divide o difuso e o especular, do mesmo jeito que ele
+    // divide os dois raios secundários no ray tracer: o que não volta como
+    // espelho é o que entrou na superfície e sai espalhado. O `abs` cobre o
+    // acerto pela face de dentro, igual ao de lá.
+    let f = fresnel_schlick(f0(m), n.dot(v).abs());
 
-    let difuso = m.albedo * (kd * cos_theta);
+    // Teoria: shading.md#kd-e-ks-a-partir-de-metallic
+    let kd =
+        (Rgb::WHITE - f) * ((1.0 - m.metallic) * (1.0 - m.transparency) / std::f32::consts::PI);
+    // Teoria: shading.md#a-normalização-do-especular
+    let ks = f * ((shininess + 8.0) / (8.0 * std::f32::consts::PI));
+
+    let difuso = m.albedo * kd * cos_theta;
 
     // h é o vetor do meio do caminho entre a luz e o olho: quando ele coincide com a normal, o reflexo especular aponta exatamente
     // para a câmera. É a troca do Blinn pelo `r` refletido do Phong de 1975.
@@ -214,13 +222,12 @@ fn blinn_phong(m: &MaterialSample, n: Vec3, v: Vec3, l: Vec3) -> Rgb {
 // Teoria: raytracer.md#o-peso-do-raio-de-espelho
 /// A refletância de frente (`f0`): quanto da luz um material devolve como
 /// espelho quando ela chega perpendicular à superfície.
-///
-/// 4% em qualquer dielétrico — vidro, plástico, água, tudo perto disso —, e o
-/// próprio albedo em metal, que é o motivo de ouro refletir amarelo. É a mesma
-/// regra usada pelo especular da BRDF e pelo peso do raio de reflexão do
-/// modelo de Whitted, e por isso mora aqui, e não nos dois.
 pub fn f0(material: &MaterialSample) -> Rgb {
-    Rgb::gray(0.04).lerp(material.albedo, material.metallic)
+    // f0 = ((n1 - n2) / (n1 + n2))², com n1 = 1 no ar.
+    let n = material.refractive_index;
+    let dieletrico = ((1.0 - n) / (1.0 + n)).powi(2);
+
+    Rgb::gray(dieletrico).lerp(material.albedo, material.metallic)
 }
 
 /// Schlick (1994): a refletância cresce de `f0` até 1 conforme a luz passa a

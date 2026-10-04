@@ -2,7 +2,7 @@
 
 use crate::color::Rgb;
 use crate::math::{Aabb, Baricentrics, Ray, Tangent, Vec2, Vec3, Vertex};
-use crate::parameters::{TextureOptions, TransformMethod};
+use crate::parameters::{Filtering, TransformMethod};
 use crate::texture::{Footprint, Texture};
 use crate::transform::{Chain, Transform};
 
@@ -390,10 +390,10 @@ pub enum Value<T> {
 }
 
 impl Value<Rgb> {
-    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, options: TextureOptions) -> Rgb {
+    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, filtering: Filtering) -> Rgb {
         match self {
             Value::Constant(c) => *c,
-            Value::Map(textura) => textura.sample(uv, footprint, options),
+            Value::Map(textura) => textura.sample(uv, footprint, filtering),
         }
     }
 }
@@ -401,10 +401,10 @@ impl Value<Rgb> {
 impl Value<f32> {
     /// Mapa de dado (roughness, metallic) é cinza: os três canais são iguais,
     /// então basta ler um.
-    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, options: TextureOptions) -> f32 {
+    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, filtering: Filtering) -> f32 {
         match self {
             Value::Constant(v) => *v,
-            Value::Map(textura) => textura.sample(uv, footprint, options).r,
+            Value::Map(textura) => textura.sample(uv, footprint, filtering).r,
         }
     }
 }
@@ -446,7 +446,7 @@ impl Default for Material {
             emissive: Value::Constant(Rgb::BLACK),
             normal: None,
             transparency: 0.0,
-            refractive_index: 1.0,
+            refractive_index: 1.5,
         }
     }
 }
@@ -499,19 +499,24 @@ impl Material {
         &self,
         uv: Vec2,
         footprint: Option<Footprint>,
-        options: TextureOptions,
+        filtering: Filtering,
     ) -> MaterialSample {
         MaterialSample {
-            albedo: self.albedo.sample(uv, footprint, options),
-            metallic: self.metallic.sample(uv, footprint, options).clamp(0.0, 1.0),
+            albedo: self.albedo.sample(uv, footprint, filtering),
+            metallic: self
+                .metallic
+                .sample(uv, footprint, filtering)
+                .clamp(0.0, 1.0),
             // Roughness zero concentra o especular num delta que nenhuma
             // amostragem de pixel pega, e o highlight some.
             roughness: self
                 .roughness
-                .sample(uv, footprint, options)
+                .sample(uv, footprint, filtering)
                 .clamp(Self::MIN_ROUGHNESS, 1.0),
-            emission: self.emissive.sample(uv, footprint, options),
+            emission: self.emissive.sample(uv, footprint, filtering),
             transparency: self.transparency.clamp(0.0, 1.0),
+            // Abaixo de 1 seria o material sendo o meio *menos* denso.
+            refractive_index: self.refractive_index.max(1.0),
         }
     }
 
@@ -525,7 +530,7 @@ impl Material {
         &self,
         uv: Vec2,
         footprint: Option<Footprint>,
-        options: TextureOptions,
+        filtering: Filtering,
         normal: Vec3,
         tangent: Tangent,
     ) -> Vec3 {
@@ -551,7 +556,11 @@ impl Material {
             }
         };
 
-        let texel = self.normal.as_ref().unwrap().sample(uv, footprint, options);
+        let texel = self
+            .normal
+            .as_ref()
+            .unwrap()
+            .sample(uv, footprint, filtering);
 
         // A textura guarda valores em [0,1], mas uma normal tem componentes em [-1,1]; precisamos converter.
         let n = Vec3::new(
@@ -578,6 +587,7 @@ pub struct MaterialSample {
     pub roughness: f32,
     pub emission: Rgb,
     pub transparency: f32,
+    pub refractive_index: f32,
 }
 
 /// Malha indexada de triângulos: é o formato que o rasterizador consome, e o

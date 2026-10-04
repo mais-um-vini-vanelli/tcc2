@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cena = cena()?;
     let params = Parameters {
         output: OutputOptions {
-            background: Some(Rgb::new(0.02, 0.03, 0.05)),
+            background: Rgb::new(0.02, 0.03, 0.05),
             exposure: 1.0,
             tonemap: Tonemap::Reinhard,
             ..Parameters::with_resolution(LARGURA, ALTURA).output

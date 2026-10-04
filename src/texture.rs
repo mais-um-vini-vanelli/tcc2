@@ -2,7 +2,7 @@
 
 use crate::color::Rgb;
 use crate::math::Vec2;
-use crate::parameters::{Filtering, TextureOptions};
+use crate::parameters::Filtering;
 
 /// Imagem de textura em memória.
 ///
@@ -105,29 +105,17 @@ impl Texture {
         self.clamp_miplevel(texels_em_dx.max(texels_em_dy).log2())
     }
 
-    /// Lê a textura com o filtro pedido e, se houver footprint e mipmap ligado,
-    /// no nível que casa com ela. Sem os dois, fica no nível 0.
-    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, options: TextureOptions) -> Rgb {
-        let lambda = footprint.map_or(0.0, |footprint| {
-            if options.mipmaps {
-                self.level_of_detail(footprint)
-            } else {
-                0.0
-            }
-        });
-
-        self.sample_level(uv, lambda, options.filtering)
-    }
-
-    /// Lê a textura no nível `lambda`.
-    pub fn sample_level(&self, uv: Vec2, lambda: f32, filtering: Filtering) -> Rgb {
-        let lambda = self.clamp_miplevel(lambda);
-        let mais_proximo = &self.levels[lambda.round() as usize];
+    /// Lê a textura com o filtro pedido. Os filtros com mipmap escolhem o nível
+    /// pela footprint do pixel; os outros dois, ficam no 0.
+    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, filtering: Filtering) -> Rgb {
+        let nivel = || footprint.map_or(0.0, |footprint| self.level_of_detail(footprint));
 
         match filtering {
-            Filtering::Nearest => mais_proximo.nearest(uv),
-            Filtering::Bilinear => mais_proximo.bilinear(uv),
+            Filtering::Nearest => self.levels[0].nearest(uv),
+            Filtering::Bilinear => self.levels[0].bilinear(uv),
+            Filtering::MipmapBilinear => self.levels[nivel().round() as usize].bilinear(uv),
             Filtering::Trilinear => {
+                let lambda = nivel();
                 let d = lambda.floor() as usize;
                 let frac = lambda - d as f32;
 

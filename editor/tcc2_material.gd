@@ -38,7 +38,7 @@ var transparency: float = 0.0:
 		transparency = value
 		changed.emit()
 
-var refractive_index: float = 1.0:
+var refractive_index: float = 1.5:
 	set(value):
 		refractive_index = value
 		changed.emit()

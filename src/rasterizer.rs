@@ -26,7 +26,7 @@ impl Renderer for Rasterizer {
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
         let (largura, altura) = (params.output.width, params.output.height);
 
-        let fundo = params.output.background.unwrap_or(Rgb::BLACK);
+        let fundo = params.output.background;
 
         let mut resultado = RenderResult {
             color: Some(ColorBuffer::filled(largura, altura, fundo)),
@@ -84,11 +84,7 @@ impl Renderer for Rasterizer {
                     uv: v.uv,
                 });
 
-                let poligono = if params.clipping.enabled {
-                    recorta(triangulo, &planos, &mut stats)
-                } else {
-                    triangulo.to_vec()
-                };
+                let poligono = recorta(triangulo, &planos, &mut stats);
 
                 // O recorte devolve um polígono convexo de N vértices; desenhar com triangle fan.
                 for i in 1..poligono.len().saturating_sub(1) {
@@ -96,8 +92,7 @@ impl Renderer for Rasterizer {
                     let tela = recortado.map(|v| para_tela(&camera, v, largura, altura));
 
                     let [Some(a), Some(b), Some(c)] = tela else {
-                        // Só entra aqui com clipping desligado. Daí o triângulo que cruza o near plane
-                        // é descartado.
+                        // O clipping já garante z >= near; não deve entrar aqui.
                         break;
                     };
 
@@ -181,12 +176,8 @@ impl Contexto<'_> {
                     uv,
                 };
 
-                let texturing = self.params.texturing;
-                let amostra = triangulo.material.sample(
-                    uv,
-                    texturing.mipmaps.then_some(footprint),
-                    texturing,
-                );
+                let filtering = self.params.shading.filtering;
+                let amostra = triangulo.material.sample(uv, Some(footprint), filtering);
 
                 shading::shade(
                     &superficie,
@@ -221,7 +212,7 @@ impl Contexto<'_> {
                         normal,
                         uv,
                     };
-                    let amostra = material.sample(uv, None, self.params.texturing);
+                    let amostra = material.sample(uv, None, self.params.shading.filtering);
                     shading::shade(
                         &superficie,
                         &amostra,
@@ -242,7 +233,7 @@ impl Contexto<'_> {
                     normal,
                     uv,
                 };
-                let amostra = material.sample(uv, None, self.params.texturing);
+                let amostra = material.sample(uv, None, self.params.shading.filtering);
                 shading::shade(
                     &superficie,
                     &amostra,
@@ -535,8 +526,8 @@ fn preenche(
             // Aplicar os desvios do normal_map se tiver.
             let normal = triangulo.material.shading_normal(
                 uv,
-                params.texturing.mipmaps.then_some(footprint),
-                params.texturing,
+                Some(footprint),
+                params.shading.filtering,
                 normal,
                 baricentricas.interpolate_tangent(tangentes),
             );
