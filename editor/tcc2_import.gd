@@ -292,6 +292,9 @@ static func parameters(path: String, scene: Tcc2Scene) -> bool:
 	scene.bvh_split = pick.call(["median", "sah"], acceleration.get("split"),
 		scene.bvh_split)
 
+	var wireframe: Variant = acceleration.get("wireframe")
+	scene.bvh_wireframe = int(wireframe) if wireframe != null else scene.bvh_wireframe
+
 	var output: Dictionary = preset.get("output", {})
 	scene.width = int(output.get("width", scene.width))
 	scene.height = int(output.get("height", scene.height))

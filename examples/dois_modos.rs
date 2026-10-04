@@ -238,6 +238,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
 
+    for (split, nome) in [(BvhSplit::Sah, "sah"), (BvhSplit::Median, "mediana")] {
+        let params = Parameters {
+            ray_tracing: RayTracingOptions {
+                acceleration: AccelerationOptions {
+                    split,
+                    wireframe: Some(6),
+                    ..AccelerationOptions::default()
+                },
+                ..params.ray_tracing
+            },
+            ..params.clone()
+        };
+
+        let resultado = RayTracer.render(&scene, &params);
+
+        if let Some(buffer) = resultado.color.as_ref() {
+            comum::grava_textura(
+                &format!("./renders/bvh_{nome}_wireframe.png"),
+                buffer,
+                Rgb::to_srgb,
+            )?;
+        }
+    }
+
     Ok(())
 }
 

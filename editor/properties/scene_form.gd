@@ -19,6 +19,7 @@ func _build() -> void:
 
 	bind(%bvh, node, &"bvh")
 	bind(%bvh_split, node, &"bvh_split")
+	bind(%bvh_wireframe, node, &"bvh_wireframe")
 
 	bind(%width, node, &"width")
 	bind(%height, node, &"height")

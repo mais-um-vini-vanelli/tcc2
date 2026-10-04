@@ -8,6 +8,8 @@
 //! de mundo. As duas são construídas no começo de cada `render()`, cortando
 //! cada nó pela mediana ou pelo SAH, conforme `AccelerationOptions.split`.
 
+use std::collections::VecDeque;
+
 use crate::math::{Aabb, Ray, Vec3};
 use crate::parameters::{BvhSplit, TransformMethod};
 use crate::raytracer::Contador;
@@ -97,6 +99,38 @@ impl Aceleracao {
 
         (self.tlas.depth(), blas)
     }
+
+    /// As AABBs dos nós da TLAS e da BLAS até `profundidade`.
+    pub fn aabbs(
+        &self,
+        instancias: &[Instance],
+        method: TransformMethod,
+        profundidade: u32,
+    ) -> Vec<(u32, [Vec3; 8])> {
+        let tlas = self
+            .tlas
+            .aabbs(profundidade)
+            .into_iter()
+            .map(|(nivel, caixa)| (nivel, caixa.corners()));
+
+        let blas = self
+            .blas
+            .iter()
+            .zip(instancias)
+            .filter_map(|(blas, instancia)| Some((blas.as_ref()?, instancia)))
+            .flat_map(|(blas, instancia)| {
+                blas.aabbs(profundidade).into_iter().map(|(nivel, caixa)| {
+                    (
+                        nivel,
+                        caixa
+                            .corners()
+                            .map(|canto| instancia.chain.apply_point(canto, method)),
+                    )
+                })
+            });
+
+        tlas.chain(blas).collect()
+    }
 }
 
 /// O que uma árvore organiza: um triângulo na BLAS, um objeto na TLAS.
@@ -155,6 +189,30 @@ impl Bvh {
             Some(raiz) => desce(self, raiz),
             None => 0,
         }
+    }
+
+    /// As AABBs dos nós até `profundidade`.
+    fn aabbs(&self, profundidade: u32) -> Vec<(u32, Aabb)> {
+        let Some(raiz) = self.raiz() else {
+            return Vec::new();
+        };
+
+        let mut aabbs = Vec::new();
+        let mut pendentes = VecDeque::from([(1, raiz)]);
+
+        while let Some((nivel, i)) = pendentes.pop_front() {
+            if nivel > profundidade {
+                break;
+            }
+
+            aabbs.push((nivel, self.nos[i].caixa()));
+
+            if let &No::Interno { filhos, .. } = &self.nos[i] {
+                pendentes.extend(filhos.map(|filho| (nivel + 1, filho)));
+            }
+        }
+
+        aabbs
     }
 
     // Teoria: bvh.md#o-custo-de-um-objeto

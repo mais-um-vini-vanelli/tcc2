@@ -124,6 +124,8 @@ pub struct AccelerationOptions {
     pub bvh: bool,
     /// Onde a construção corta cada nó da BVH.
     pub split: BvhSplit,
+    /// Desenhar as caixas dos nós da BVH até esta profundidade. `None` = não desenha nada.
+    pub wireframe: Option<u32>,
 }
 
 impl Default for AccelerationOptions {
@@ -131,6 +133,7 @@ impl Default for AccelerationOptions {
         AccelerationOptions {
             bvh: true,
             split: BvhSplit::default(),
+            wireframe: None,
         }
     }
 }

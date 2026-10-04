@@ -725,6 +725,7 @@ func _parameters(scene: Tcc2Scene) -> Dictionary:
 			"acceleration": {
 				"bvh": scene.bvh,
 				"split": SPLIT[scene.bvh_split],
+				"wireframe": scene.bvh_wireframe if scene.bvh_wireframe > 0 else null,
 			},
 		},
 		"output": {

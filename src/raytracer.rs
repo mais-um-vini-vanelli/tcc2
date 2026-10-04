@@ -25,6 +25,7 @@ use crate::scene::{self, Camera, Hit, Instance, Light, Material, Primitive, Scen
 use crate::shading::{self, Surface};
 
 use crate::bvh::Aceleracao;
+use crate::overlay;
 
 // Teoria: raytracer.md#o-acne-e-o-epsilon
 /// Deslocamento da origem de todo raio secundário, para que a superfície que o
@@ -117,6 +118,31 @@ impl Renderer for RayTracer {
         }
 
         cor.apply_output(&params.output);
+
+        if let Some(profundidade) = params.ray_tracing.acceleration.wireframe {
+            if let Some(aceleracao) = &contexto.aceleracao {
+                let aabbs =
+                    aceleracao.aabbs(&contexto.instancias, params.transform.method, profundidade);
+
+                const CORES: [Rgb; 6] = [
+                    Rgb::new(1.0, 1.00, 1.0),
+                    Rgb::new(1.0, 0.85, 0.2),
+                    Rgb::new(0.3, 1.00, 0.4),
+                    Rgb::new(0.3, 0.80, 1.0),
+                    Rgb::new(0.8, 0.40, 1.0),
+                    Rgb::new(1.0, 0.40, 0.4),
+                ];
+
+                for (nivel, cantos) in aabbs {
+                    overlay::caixa(
+                        &mut cor,
+                        &camera,
+                        cantos,
+                        CORES[(nivel.max(1) - 1) as usize % CORES.len()],
+                    );
+                }
+            }
+        }
 
         RenderResult {
             color: Some(cor),

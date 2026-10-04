@@ -52,6 +52,7 @@ pub(super) fn encode(p: &Parameters) -> Value {
                     BvhSplit::Median => "median",
                     BvhSplit::Sah => "sah",
                 },
+                "wireframe": p.ray_tracing.acceleration.wireframe,
             },
         },
         "output": {
@@ -161,6 +162,9 @@ pub(super) fn decode(v: &Value) -> Parameters {
                     Some("sah") => BvhSplit::Sah,
                     _ => ac.split,
                 },
+                wireframe: non_null_field(aceleracao, "wireframe")
+                    .and_then(Value::as_u64)
+                    .map(|n| n as u32),
             },
         },
         output: OutputOptions {

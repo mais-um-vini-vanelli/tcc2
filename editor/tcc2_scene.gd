@@ -30,6 +30,7 @@ var refractions := true
 # RayTracingOptions::acceleration
 var bvh := true
 var bvh_split := BvhSplit.SAH
+var bvh_wireframe := 0
 
 # OutputOptions
 var width := 800

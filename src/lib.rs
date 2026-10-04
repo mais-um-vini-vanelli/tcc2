@@ -4,6 +4,7 @@
 //! `render()` é função pura, sem estado escondido. A mesma cena vale pros dois modos.
 
 mod bvh;
+mod overlay;
 
 #[cfg(feature = "glb")]
 pub mod glb;

@@ -45,7 +45,6 @@ impl Renderer for Rasterizer {
             return resultado;
         };
 
-        let base = camera.basis();
         let planos = frustum(&camera);
         let perspectiva = matches!(camera, Camera::Perspective { .. });
 
@@ -68,9 +67,7 @@ impl Renderer for Rasterizer {
                 // *geometria*; o ray tracer resolve o mesmo problema no sentido
                 // contrário, transformando o raio.
                 let triangulo = face.map(|v| Vertex {
-                    position: para_camera(
-                        &camera,
-                        base,
+                    position: camera.to_camera_space(
                         instancia
                             .chain
                             .apply_point(v.position, params.transform.method),
@@ -89,7 +86,12 @@ impl Renderer for Rasterizer {
                 // O recorte devolve um polígono convexo de N vértices; desenhar com triangle fan.
                 for i in 1..poligono.len().saturating_sub(1) {
                     let recortado = [poligono[0], poligono[i], poligono[i + 1]];
-                    let tela = recortado.map(|v| para_tela(&camera, v, largura, altura));
+                    let tela = recortado.map(|v| {
+                        Some(Vertex {
+                            position: camera.to_screen_space(v.position, largura, altura)?,
+                            ..v
+                        })
+                    });
 
                     let [Some(a), Some(b), Some(c)] = tela else {
                         // O clipping já garante z >= near; não deve entrar aqui.
@@ -114,7 +116,7 @@ impl Renderer for Rasterizer {
                     }
 
                     // O shading acontece no espaço de mundo.
-                    let mundo = recortado.map(|v| de_camera(&camera, base, v.position));
+                    let mundo = recortado.map(|v| camera.from_camera_space(v.position));
 
                     let shading = contexto.shade_vertex(
                         instancia.material,
@@ -360,62 +362,6 @@ fn recorta_no_plano(poligono: &[Vertex], plano: Plane) -> Vec<Vertex> {
     }
 
     saida
-}
-
-// Teoria: rasterizer.md#mundo-para-camera-space
-/// Mundo -> espaço de câmera. É onde o recorte acontece: nesse espaço o frustum
-/// já está alinhado com a câmera, mas a divisão por z ainda não aconteceu.
-fn para_camera(camera: &Camera, base: (Vec3, Vec3, Vec3), ponto: Vec3) -> Vec3 {
-    let (direita, cima, frente) = base;
-
-    let d = ponto - camera.position();
-    Vec3::new(d.dot(direita), d.dot(cima), d.dot(frente))
-}
-
-/// Câmera -> mundo, a inversa de `para_camera`.
-fn de_camera(camera: &Camera, base: (Vec3, Vec3, Vec3), p: Vec3) -> Vec3 {
-    let (direita, cima, frente) = base;
-
-    camera.position() + direita * p.x + cima * p.y + frente * p.z
-}
-
-// Teoria: rasterizer.md#camera-space-para-ndc
-/// Espaço de câmera -> tela. A posição vira `(x_pixel, y_pixel, z_camera)`; normal
-/// e uv atravessam intactas.
-fn para_tela(camera: &Camera, vertice: Vertex, largura: u32, altura: u32) -> Option<Vertex> {
-    let (x, y, z) = (vertice.position.x, vertice.position.y, vertice.position.z);
-
-    let (near, _far) = camera.clip_planes();
-    if z < near {
-        return None;
-    }
-
-    // Converter o ponto de camera space pra ndc (retângulo de [-1,-1] -> [1,1])
-    let (ndc_x, ndc_y) = match *camera {
-        Camera::Perspective { fov, aspect, .. } => {
-            let meia_altura = (fov.to_radians() * 0.5).tan();
-
-            (x / (z * meia_altura * aspect), y / (z * meia_altura))
-        }
-        Camera::Orthographic { width, height, .. } => (x / (width * 0.5), y / (height * 0.5)),
-    };
-
-    let (pixel_x, pixel_y) = para_pixel(ndc_x, ndc_y, largura, altura);
-
-    Some(Vertex {
-        position: Vec3::new(
-            pixel_x, pixel_y, z, // a posição z do ponto fica salva sem projeção
-        ),
-        ..vertice
-    })
-}
-
-// Teoria: rasterizer.md#ndc-para-pixel
-fn para_pixel(ndc_x: f32, ndc_y: f32, largura: u32, altura: u32) -> (f32, f32) {
-    (
-        (ndc_x + 1.0) * 0.5 * largura as f32,
-        (1.0 - ndc_y) * 0.5 * altura as f32,
-    )
 }
 
 // Teoria: rasterizer.md#edge-functions

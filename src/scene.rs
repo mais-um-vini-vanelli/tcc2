@@ -235,6 +235,50 @@ impl Camera {
         (right, up, forward)
     }
 
+    // Teoria: rasterizer.md#mundo-para-camera-space
+    pub fn to_camera_space(&self, ponto: Vec3) -> Vec3 {
+        let (direita, cima, frente) = self.basis();
+
+        let d = ponto - self.position();
+        Vec3::new(d.dot(direita), d.dot(cima), d.dot(frente))
+    }
+
+    /// Câmera -> mundo, a inversa de `to_camera_space`.
+    pub fn from_camera_space(&self, p: Vec3) -> Vec3 {
+        let (direita, cima, frente) = self.basis();
+
+        self.position() + direita * p.x + cima * p.y + frente * p.z
+    }
+
+    // Teoria: rasterizer.md#camera-space-para-ndc
+    /// Espaço de câmera -> tela: `(x_pixel, y_pixel, z_camera)`, com o z
+    /// guardado sem projeção.
+    pub fn to_screen_space(&self, ponto: Vec3, largura: u32, altura: u32) -> Option<Vec3> {
+        let (x, y, z) = (ponto.x, ponto.y, ponto.z);
+
+        let (near, _far) = self.clip_planes();
+        if z < near {
+            return None;
+        }
+
+        // Converter o ponto de camera space pra ndc (retângulo de [-1,-1] -> [1,1])
+        let (ndc_x, ndc_y) = match *self {
+            Camera::Perspective { fov, aspect, .. } => {
+                let meia_altura = (fov.to_radians() * 0.5).tan();
+
+                (x / (z * meia_altura * aspect), y / (z * meia_altura))
+            }
+            Camera::Orthographic { width, height, .. } => (x / (width * 0.5), y / (height * 0.5)),
+        };
+
+        // Teoria: rasterizer.md#ndc-para-pixel
+        Some(Vec3::new(
+            (ndc_x + 1.0) * 0.5 * largura as f32,
+            (1.0 - ndc_y) * 0.5 * altura as f32,
+            z,
+        ))
+    }
+
     /// A câmera com `position`/`look_at`/`up` levados pro mundo pelos transforms.
     pub fn transformed(&self, chain: &Chain, method: TransformMethod) -> Camera {
         match *self {
