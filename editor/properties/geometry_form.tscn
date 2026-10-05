@@ -36,6 +36,7 @@ theme_override_constants/separation = 4
 
 [node name="Rows" type="GridContainer" parent="Geometry/Stack/Body" unique_id=1179673146]
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 4
 columns = 2
@@ -47,6 +48,7 @@ horizontal_alignment = 2
 
 [node name="radius" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1976309586]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -59,6 +61,7 @@ horizontal_alignment = 2
 
 [node name="half_edge" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1736652733]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -71,6 +74,7 @@ horizontal_alignment = 2
 
 [node name="source" type="Button" parent="Geometry/Stack/Body/Rows" unique_id=1412658647]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 clip_text = true
@@ -89,6 +93,7 @@ horizontal_alignment = 2
 
 [node name="mesh" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1732186898]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 rounded = true
@@ -101,6 +106,7 @@ horizontal_alignment = 2
 
 [node name="surface" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=317803915]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 rounded = true

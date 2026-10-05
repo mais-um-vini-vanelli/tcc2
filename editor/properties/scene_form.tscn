@@ -1,56 +1,13 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dqfq5k2ncfxic"]
 
-[ext_resource type="Script" path="res://properties/scene_form.gd" id="1_0k82w"]
-[ext_resource type="StyleBox" path="res://properties/section.tres" id="2_l766n"]
-[ext_resource type="Script" path="res://properties/section.gd" id="3_mnwxo"]
-[ext_resource type="StyleBox" path="res://properties/subsection.tres" id="4_s4tvf"]
+[ext_resource type="Script" uid="uid://d4kwrq4r2o5q5" path="res://properties/scene_form.gd" id="1_0k82w"]
+[ext_resource type="StyleBox" uid="uid://bup0ptwo6e042" path="res://properties/section.tres" id="2_l766n"]
+[ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_mnwxo"]
+[ext_resource type="StyleBox" uid="uid://bndtok1jvfvcf" path="res://properties/subsection.tres" id="4_s4tvf"]
 
 [node name="ScenePanel" type="VBoxContainer" unique_id=680120217]
 theme_override_constants/separation = 2
 script = ExtResource("1_0k82w")
-
-[node name="TransformOptions" type="PanelContainer" parent="." unique_id=1707858146]
-layout_mode = 2
-theme_override_styles/panel = ExtResource("2_l766n")
-script = ExtResource("3_mnwxo")
-
-[node name="Stack" type="VBoxContainer" parent="TransformOptions" unique_id=903861429]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Header" type="Button" parent="TransformOptions/Stack" unique_id=1759437686]
-layout_mode = 2
-focus_mode = 0
-theme_override_constants/h_separation = 6
-toggle_mode = true
-button_pressed = true
-text = "transform"
-flat = true
-alignment = 0
-
-[node name="Body" type="VBoxContainer" parent="TransformOptions/Stack" unique_id=1308540821]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Rows" type="GridContainer" parent="TransformOptions/Stack/Body" unique_id=83288115]
-layout_mode = 2
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 4
-columns = 2
-
-[node name="TransformMethodLabel" type="Label" parent="TransformOptions/Stack/Body/Rows" unique_id=496219902]
-layout_mode = 2
-text = "method"
-horizontal_alignment = 2
-
-[node name="transform_method" type="OptionButton" parent="TransformOptions/Stack/Body/Rows" unique_id=1358232795]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-selected = 0
-item_count = 1
-popup/item_0/text = "Stepwise"
-popup/item_0/id = 0
 
 [node name="Rasterization" type="PanelContainer" parent="." unique_id=876232926]
 layout_mode = 2
@@ -67,7 +24,7 @@ focus_mode = 0
 theme_override_constants/h_separation = 6
 toggle_mode = true
 button_pressed = true
-text = "rasterization"
+text = "Rasterization"
 flat = true
 alignment = 0
 
@@ -77,6 +34,7 @@ theme_override_constants/separation = 4
 
 [node name="Rows" type="GridContainer" parent="Rasterization/Stack/Body" unique_id=202490591]
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 4
 columns = 2
@@ -121,87 +79,6 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
 
-[node name="Shading" type="PanelContainer" parent="." unique_id=917561160]
-layout_mode = 2
-theme_override_styles/panel = ExtResource("2_l766n")
-script = ExtResource("3_mnwxo")
-
-[node name="Stack" type="VBoxContainer" parent="Shading" unique_id=1001133176]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Header" type="Button" parent="Shading/Stack" unique_id=575565975]
-layout_mode = 2
-focus_mode = 0
-theme_override_constants/h_separation = 6
-toggle_mode = true
-button_pressed = true
-text = "shading"
-flat = true
-alignment = 0
-
-[node name="Body" type="VBoxContainer" parent="Shading/Stack" unique_id=1382135917]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="Rows" type="GridContainer" parent="Shading/Stack/Body" unique_id=1255218003]
-layout_mode = 2
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 4
-columns = 2
-
-[node name="ShadingFrequencyLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=122512097]
-layout_mode = 2
-text = "frequency"
-horizontal_alignment = 2
-
-[node name="shading_frequency" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=1731146449]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-selected = 0
-item_count = 3
-popup/item_0/text = "Flat"
-popup/item_0/id = 0
-popup/item_1/text = "Gouraud"
-popup/item_1/id = 1
-popup/item_2/text = "Phong"
-popup/item_2/id = 2
-
-[node name="ReflectanceModelLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=1764027092]
-layout_mode = 2
-text = "reflectance"
-horizontal_alignment = 2
-
-[node name="reflectance_model" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=683391924]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-selected = 0
-item_count = 1
-popup/item_0/text = "BlinnPhong"
-popup/item_0/id = 0
-
-[node name="FilteringLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=2051920277]
-layout_mode = 2
-text = "filtering"
-horizontal_alignment = 2
-
-[node name="filtering" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=809517507]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-selected = 0
-item_count = 4
-popup/item_0/text = "Nearest"
-popup/item_0/id = 0
-popup/item_1/text = "Bilinear"
-popup/item_1/id = 1
-popup/item_2/text = "MipmapBilinear"
-popup/item_2/id = 2
-popup/item_3/text = "Trilinear"
-popup/item_3/id = 3
-
 [node name="RayTracing" type="PanelContainer" parent="." unique_id=214985006]
 layout_mode = 2
 theme_override_styles/panel = ExtResource("2_l766n")
@@ -217,7 +94,7 @@ focus_mode = 0
 theme_override_constants/h_separation = 6
 toggle_mode = true
 button_pressed = true
-text = "ray tracing"
+text = "Ray tracing"
 flat = true
 alignment = 0
 
@@ -227,6 +104,7 @@ theme_override_constants/separation = 4
 
 [node name="Rows" type="GridContainer" parent="RayTracing/Stack/Body" unique_id=1753057836]
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 4
 columns = 2
@@ -238,6 +116,7 @@ horizontal_alignment = 2
 
 [node name="max_depth" type="SpinBox" parent="RayTracing/Stack/Body/Rows" unique_id=1665367132]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 max_value = 16.0
@@ -298,6 +177,7 @@ theme_override_constants/separation = 4
 
 [node name="Rows" type="GridContainer" parent="RayTracing/Stack/Body/Acceleration/Stack/Body" unique_id=300747170]
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 4
 columns = 2
@@ -319,6 +199,7 @@ horizontal_alignment = 2
 
 [node name="bvh_split" type="OptionButton" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=861835382]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 selected = 0
@@ -335,10 +216,141 @@ horizontal_alignment = 2
 
 [node name="bvh_wireframe" type="SpinBox" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=1304958726]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 max_value = 32.0
 rounded = true
+
+[node name="TransformOptions" type="PanelContainer" parent="." unique_id=1707858146]
+layout_mode = 2
+theme_override_styles/panel = ExtResource("2_l766n")
+script = ExtResource("3_mnwxo")
+
+[node name="Stack" type="VBoxContainer" parent="TransformOptions" unique_id=903861429]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Button" parent="TransformOptions/Stack" unique_id=1759437686]
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/h_separation = 6
+toggle_mode = true
+button_pressed = true
+text = "Transform"
+flat = true
+alignment = 0
+
+[node name="Body" type="VBoxContainer" parent="TransformOptions/Stack" unique_id=1308540821]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Rows" type="GridContainer" parent="TransformOptions/Stack/Body" unique_id=83288115]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="TransformMethodLabel" type="Label" parent="TransformOptions/Stack/Body/Rows" unique_id=496219902]
+layout_mode = 2
+text = "method"
+horizontal_alignment = 2
+
+[node name="transform_method" type="OptionButton" parent="TransformOptions/Stack/Body/Rows" unique_id=1358232795]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+selected = 0
+item_count = 1
+popup/item_0/text = "Stepwise"
+popup/item_0/id = 0
+
+[node name="Shading" type="PanelContainer" parent="." unique_id=917561160]
+layout_mode = 2
+theme_override_styles/panel = ExtResource("2_l766n")
+script = ExtResource("3_mnwxo")
+
+[node name="Stack" type="VBoxContainer" parent="Shading" unique_id=1001133176]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Button" parent="Shading/Stack" unique_id=575565975]
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/h_separation = 6
+toggle_mode = true
+button_pressed = true
+text = "Shading"
+flat = true
+alignment = 0
+
+[node name="Body" type="VBoxContainer" parent="Shading/Stack" unique_id=1382135917]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Rows" type="GridContainer" parent="Shading/Stack/Body" unique_id=1255218003]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 4
+columns = 2
+
+[node name="ShadingFrequencyLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=122512097]
+layout_mode = 2
+text = "frequency"
+horizontal_alignment = 2
+
+[node name="shading_frequency" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=1731146449]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+selected = 0
+item_count = 3
+popup/item_0/text = "Flat"
+popup/item_0/id = 0
+popup/item_1/text = "Gouraud"
+popup/item_1/id = 1
+popup/item_2/text = "Phong"
+popup/item_2/id = 2
+
+[node name="ReflectanceModelLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=1764027092]
+layout_mode = 2
+text = "reflectance"
+horizontal_alignment = 2
+
+[node name="reflectance_model" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=683391924]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+selected = 0
+item_count = 1
+popup/item_0/text = "BlinnPhong"
+popup/item_0/id = 0
+
+[node name="FilteringLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=2051920277]
+layout_mode = 2
+text = "filtering"
+horizontal_alignment = 2
+
+[node name="filtering" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=809517507]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+selected = 0
+item_count = 4
+popup/item_0/text = "Nearest"
+popup/item_0/id = 0
+popup/item_1/text = "Bilinear"
+popup/item_1/id = 1
+popup/item_2/text = "MipmapBilinear"
+popup/item_2/id = 2
+popup/item_3/text = "Trilinear"
+popup/item_3/id = 3
 
 [node name="Output" type="PanelContainer" parent="." unique_id=1771626691]
 layout_mode = 2
@@ -354,17 +366,17 @@ layout_mode = 2
 focus_mode = 0
 theme_override_constants/h_separation = 6
 toggle_mode = true
-text = "output"
+text = "Output"
 flat = true
 alignment = 0
 
 [node name="Body" type="VBoxContainer" parent="Output/Stack" unique_id=220415410]
-visible = false
 layout_mode = 2
 theme_override_constants/separation = 4
 
 [node name="Rows" type="GridContainer" parent="Output/Stack/Body" unique_id=1447266303]
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 4
 columns = 2
@@ -376,6 +388,7 @@ horizontal_alignment = 2
 
 [node name="width" type="SpinBox" parent="Output/Stack/Body/Rows" unique_id=191838806]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 1.0
@@ -390,6 +403,7 @@ horizontal_alignment = 2
 
 [node name="height" type="SpinBox" parent="Output/Stack/Body/Rows" unique_id=570506534]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 1.0
@@ -404,6 +418,7 @@ horizontal_alignment = 2
 
 [node name="background" type="ColorPickerButton" parent="Output/Stack/Body/Rows" unique_id=1327726623]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 edit_alpha = false
@@ -415,6 +430,7 @@ horizontal_alignment = 2
 
 [node name="exposure" type="SpinBox" parent="Output/Stack/Body/Rows" unique_id=851464611]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -427,6 +443,7 @@ horizontal_alignment = 2
 
 [node name="tonemap" type="OptionButton" parent="Output/Stack/Body/Rows" unique_id=1118778475]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 selected = 0

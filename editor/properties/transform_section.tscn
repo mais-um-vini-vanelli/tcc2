@@ -27,6 +27,7 @@ theme_override_constants/separation = 4
 
 [node name="Rows" type="GridContainer" parent="Stack/Body" unique_id=1558303419]
 layout_mode = 2
+size_flags_horizontal = 4
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 4
 columns = 2
@@ -38,6 +39,7 @@ horizontal_alignment = 2
 
 [node name="position_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1154715268]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -51,6 +53,7 @@ horizontal_alignment = 2
 
 [node name="position_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=1932765200]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -64,6 +67,7 @@ horizontal_alignment = 2
 
 [node name="position_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=231153959]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -77,6 +81,7 @@ horizontal_alignment = 2
 
 [node name="rotation_degrees_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1071508911]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -90,6 +95,7 @@ horizontal_alignment = 2
 
 [node name="rotation_degrees_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=1678115118]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -103,6 +109,7 @@ horizontal_alignment = 2
 
 [node name="rotation_degrees_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=464856225]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -116,6 +123,7 @@ horizontal_alignment = 2
 
 [node name="scale_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1654072941]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -129,6 +137,7 @@ horizontal_alignment = 2
 
 [node name="scale_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=2065759633]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01
@@ -142,6 +151,7 @@ horizontal_alignment = 2
 
 [node name="scale_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=1060513026]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 step = 0.01

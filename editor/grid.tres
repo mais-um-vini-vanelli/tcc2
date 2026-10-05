@@ -5,11 +5,11 @@
 [resource]
 render_priority = -1
 shader = ExtResource("1_xb5ts")
-shader_parameter/grid_color = Color(0.3019608, 0.3019608, 0.3019608, 1)
-shader_parameter/x_color = Color(0.91764706, 0.2, 0.29803923, 1)
-shader_parameter/z_color = Color(0.1764706, 0.5137255, 0.9098039, 1)
+shader_parameter/grid_color = Color(0.2, 0.2, 0.2, 1)
+shader_parameter/x_color = Color(1, 0.23921569, 0.43137255, 1)
+shader_parameter/z_color = Color(0.22745098, 0.5882353, 1, 1)
 shader_parameter/cell = 1.0
 shader_parameter/min_cell = 16.0
 shader_parameter/axis_alpha = 0.7
 shader_parameter/horizon = 0.12
-shader_parameter/width = 1.5
+shader_parameter/width = 1.0

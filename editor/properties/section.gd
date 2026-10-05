@@ -21,8 +21,9 @@ func _ready() -> void:
 		var icon := &"arrow" if open else &"arrow_collapsed"
 		return get_theme_icon(icon, &"Tree")
 
-	header.button_pressed = body.visible
-	header.icon = arrow.call(body.visible)
+	body.visible = false
+	header.button_pressed = false
+	header.icon = arrow.call(false)
 
 	header.toggled.connect(func(on: bool):
 		body.visible = on

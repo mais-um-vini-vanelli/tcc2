@@ -1,19 +1,24 @@
 extends Control
 
 @onready var hierarchy: Tree = $Layout/Sidebar/Hierarchy/VBoxContainer/MarginContainer/Tree
+@onready var save_button: Button = $Layout/Viewport/Overlay/VBoxContainer/Save
+@onready var open_button: Button = $Layout/Viewport/Overlay/VBoxContainer/Open
 @onready var sub_viewport_container := $Layout/Viewport/ViewportClip/SubViewportContainer
 @onready var scene_view: SubViewport = $Layout/Viewport/ViewportClip/SubViewportContainer/SceneView
-@onready var properties := $Layout/Sidebar/Properties/VBoxContainer/MarginContainer/ScrollContainer/VBoxContainer
+@onready var properties := $Layout/Sidebar/Properties/VBoxContainer/MarginContainer/ScrollContainer/Padding/VBoxContainer
 @onready var popup_menu: PopupMenu = $PopupMenu
+@onready var camera_pov: Button = $Layout/Viewport/Overlay/VBoxContainer/CameraPOV
 
 static var ICONS: Array = [
-	[Tcc2Scene, preload("res://icons/Scene.svg"), Color.WHITE],
-	[Tcc2Light, preload("res://icons/Light.svg"), Color("#bc804e")],
-	[Tcc2Camera, preload("res://icons/Camera.svg"), Color("#a9575f")],
-	[Tcc2Geometry, preload("res://icons/Geometry.svg"), Color("#06af88")],
+	[Tcc2Scene, preload("res://icons/Scene.svg"), Color("#d5dee8")],
+	[Tcc2Light, preload("res://icons/Light.svg"), Color("#e6c94d")],
+	[Tcc2Camera, preload("res://icons/Camera.svg"), Color("#d86481")],
+	[Tcc2Geometry, preload("res://icons/Geometry.svg"), Color("#51cc8d")],
 ]
 
 var root: Tcc2Scene
+var save_dialog: FileDialog
+var open_dialog: FileDialog
 var _items := {}
 var _selected: Tcc2Node
 
@@ -56,6 +61,8 @@ func _ready() -> void:
 	hierarchy.allow_rmb_select = true
 	rebuild_hierarchy()
 	hierarchy.item_selected.connect(_on_selected)
+	_items[root].select(0)
+	_select(root)
 
 	sub_viewport_container.tcc2_node_selected.connect(_on_sub_viewport_container_tcc2_node_selected)
 	hierarchy.item_mouse_selected.connect(_on_mouse_select)
@@ -63,10 +70,48 @@ func _ready() -> void:
 	get_window().files_dropped.connect(_on_files_dropped)
 	sub_viewport_container.gizmo_moved.connect(properties.refresh_values)
 
+	camera_pov.toggled.connect(_on_camera_pov_toggled)
+	sub_viewport_container.overlay = camera_pov.get_parent()
+
+	save_dialog = FileDialog.new()
+	save_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	save_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	save_dialog.title = "Save scene"
+	save_dialog.use_native_dialog = true
+	save_dialog.add_filter("*.tcc2.glb", "glTF binary")
+	save_dialog.file_selected.connect(_save_scene)
+	add_child(save_dialog)
+
+	open_dialog = FileDialog.new()
+	open_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	open_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	open_dialog.title = "Open scene"
+	open_dialog.use_native_dialog = true
+	open_dialog.add_filter("*.tcc2.glb", "glTF binary")
+	open_dialog.file_selected.connect(_open_scene)
+	add_child(open_dialog)
+
+	var on_save_pressed := func() -> void:
+		save_dialog.current_file = root.name + ".tcc2.glb"
+		save_dialog.popup_centered_ratio(0.6)
+
+	save_button.pressed.connect(on_save_pressed)
+	open_button.pressed.connect(open_dialog.popup_centered_ratio.bind(0.6))
+
 func rebuild_hierarchy() -> void:
 	hierarchy.clear()
 	_items.clear()
 	add_item(root, null)
+
+	camera_pov.disabled = sub_viewport_container.render_camera() == null
+
+	if camera_pov.disabled:
+		camera_pov.button_pressed = false
+	elif camera_pov.button_pressed:
+		sub_viewport_container.set_pov(true)
+
+	for node in _items:
+		_items[node].set_selectable(0, not camera_pov.button_pressed)
 
 func add_item(node: Tcc2Node, parent_item: TreeItem) -> void:
 	var item := hierarchy.create_item(parent_item)
@@ -86,13 +131,12 @@ func add_item(node: Tcc2Node, parent_item: TreeItem) -> void:
 
 func _on_sub_viewport_container_tcc2_node_selected(node: Tcc2Node) -> void:
 	if node == null:
-		hierarchy.deselect_all()
-		_select(null)
-	else:
-		var item: TreeItem = _items[node]
-		item.select(0)
-		_select(node)
-		hierarchy.scroll_to_item(item)
+		node = root
+
+	var item: TreeItem = _items[node]
+	item.select(0)
+	_select(node)
+	hierarchy.scroll_to_item(item)
 
 func _select(node: Tcc2Node) -> void:
 	if _selected != null and is_instance_valid(_selected):
@@ -109,6 +153,16 @@ func _select(node: Tcc2Node) -> void:
 func _on_selected() -> void:
 	_select(hierarchy.get_selected().get_metadata(0))
 
+func _on_camera_pov_toggled(pressed: bool) -> void:
+	sub_viewport_container.set_pov(pressed)
+
+	if pressed:
+		_items[root].select(0)
+		_select(root)
+
+	for node in _items:
+		_items[node].set_selectable(0, not camera_pov.button_pressed)
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 
@@ -117,6 +171,64 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 	if key.keycode == KEY_DELETE and _selected != null and _selected != root:
 		_remove(_selected)
+
+func _save_scene(path: String) -> void:
+	if path.get_extension().to_lower() != "glb":
+		path += ".glb"
+
+	var warnings: Array[String] = []
+	var bytes := Tcc2Export.glb(root, warnings)
+
+	var file := FileAccess.open(path, FileAccess.WRITE)
+
+	if file == null:
+		push_error("could not write %s: %s"
+			% [path, error_string(FileAccess.get_open_error())])
+		return
+
+	file.store_buffer(bytes)
+	file.close()
+
+	for warning in warnings:
+		print("  ", warning)
+
+	root.name = path.get_file().get_basename().trim_suffix(".tcc2")
+
+	if _items.has(root):
+		_items[root].set_text(0, root.name)
+
+func _open_scene(path: String) -> void:
+	var opened := Tcc2Import.glb(path, true)
+
+	if opened == null:
+		return
+
+	_select(null)
+	scene_view.remove_child(root)
+	root.queue_free()
+
+	root = Tcc2Scene.new()
+	
+	root.name = path.get_file().get_basename().trim_suffix(".tcc2")
+
+	if _items.has(root):
+		_items[root].set_text(0, root.name)
+	
+	scene_view.add_child(root)
+
+	for child in opened.get_children():
+		opened.remove_child(child)
+		root.add_child(child)
+		_own(child)
+
+	opened.free()
+	Tcc2Import.parameters(path, root)
+
+	rebuild_hierarchy()
+	
+	_items[root].select(0)
+	_select(root)
+
 
 func _remove(node: Tcc2Node) -> void:
 	_select(null)
@@ -244,5 +356,8 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 
 		root.add_child(group)
 		_own(group)
+
+		if Tcc2Import.parameters(file, root):
+			properties.refresh_values()
 
 	rebuild_hierarchy()

@@ -1,7 +1,7 @@
 class_name TransformGizmo extends Node3D
 
 const AXES := [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
-const AXIS_COLORS := [Color("#ea334c"), Color("#70a726"), Color("#2d83e8")]
+const AXIS_COLORS := [Color("#ff3d6e"), Color("#2be882"), Color("#3a96ff")]
 
 const LENGTH := 1.0
 const SCREEN_SIZE := 0.26

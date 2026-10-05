@@ -25,7 +25,7 @@ static func glb(path: String, cameras: bool) -> Tcc2Node:
 	importer._ours = not importer._json.get("extensions", {}).get(Tcc2Export.EXTENSION, {})
 
 	var group := Tcc2Node.new()
-	group.name = path.get_file().get_basename()
+	group.name = path.get_file().get_basename().trim_suffix(".tcc2")
 
 	for index in parsed.root_nodes:
 		importer._build(index, group)

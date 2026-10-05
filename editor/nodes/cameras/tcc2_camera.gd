@@ -1,7 +1,7 @@
 class_name Tcc2Camera extends Tcc2Node
 
 const GIZMO_DEPTH := 0.8
-const GIZMO_COLOR := Color("#b4b4b4", 0.7)
+const GIZMO_COLOR := Color(ICON_COLOR, 0.7)
 
 enum Kind {PERSPECTIVE, ORTHOGRAPHIC}
 
@@ -61,7 +61,7 @@ func model():
 
 func set_selected(value: bool) -> void:
 	if _icon != null:
-		_set_icon_selected(_icon, value, Color.WHITE)
+		_set_icon_selected(_icon, value, ICON_COLOR)
 		_gizmo.material_override = _selected_gizmo_material() if value else null
 
 func aspect() -> float:

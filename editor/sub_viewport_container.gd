@@ -14,6 +14,10 @@ signal gizmo_moved
 
 var _gizmos: Array[TransformGizmo] = []
 var _dragging: TransformGizmo
+var _target: Tcc2Node
+var _pov_camera: Camera3D
+
+var overlay: Control
 
 var _flying := false
 var _panning := false
@@ -32,6 +36,9 @@ func _ready() -> void:
 		_gizmos.append(transform)
 
 func _input(event: InputEvent) -> void:
+	if _in_pov():
+		return
+
 	if event is InputEventMouseButton:
 		_on_input_event_mouse_button(event)
 	elif event is InputEventMouseMotion:
@@ -78,8 +85,51 @@ func _on_input_event_mouse_button(event: InputEventMouseButton) -> void:
 				_dragging = null
 
 func set_target(node: Tcc2Node) -> void:
+	if node is Tcc2Scene:
+		node = null
+
+	_target = node
+
 	for one in _gizmos:
-		one.target = node
+		one.target = _target
+
+func render_camera() -> Tcc2Camera:
+	var cameras := scene_view.find_children("*", "Tcc2Camera", true, false)
+	return null if cameras.is_empty() else cameras[0]
+
+func set_pov(enabled: bool) -> void:
+	var camera := render_camera() if enabled else null
+
+	if is_instance_valid(_pov_camera):
+		_pov_camera.get_parent().remove_child(_pov_camera)
+		_pov_camera.queue_free()
+
+	_pov_camera = null
+
+	if camera != null:
+		_pov_camera = Camera3D.new()
+		camera.add_child(_pov_camera, false, Node.INTERNAL_MODE_FRONT)
+
+		_process_pov()
+
+		_pov_camera.current = true
+	else:
+		camera_3d.current = true
+
+	set_target(_target)
+
+func _in_pov() -> bool:
+	return is_instance_valid(_pov_camera)
+
+func _process_pov() -> void:
+	var camera := _pov_camera.get_parent() as Tcc2Camera
+	var model = camera.model()
+	var near := maxf(model.near, 0.001)
+
+	if camera.kind == Tcc2Camera.Kind.ORTHOGRAPHIC:
+		_pov_camera.set_orthogonal(model.height, near, model.far)
+	else:
+		_pov_camera.set_perspective(model.fov, near, model.far)
 
 func select_tcc2_node(screen_position: Vector2) -> Tcc2Node:
 	var origin := camera_3d.project_ray_origin(screen_position)
@@ -156,9 +206,18 @@ func _over_viewport() -> bool:
 	if _flying or _panning:
 		return true
 
-	return get_global_rect().has_point(get_global_mouse_position())
+	var mouse := get_global_mouse_position()
+
+	if overlay != null and overlay.get_global_rect().has_point(mouse):
+		return false
+
+	return get_global_rect().has_point(mouse)
 		
 func _process(delta: float) -> void:
+	if _in_pov():
+		_process_pov()
+		return
+
 	if not _flying:
 		return
 		

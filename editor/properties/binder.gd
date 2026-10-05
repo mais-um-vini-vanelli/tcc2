@@ -9,6 +9,10 @@ func bind(control: Node, object: Object, property: StringName) -> void:
 
 	if control is SpinBox:
 		var field := control as SpinBox
+		
+		field.select_all_on_focus = true
+		field.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		
 		field.value = object.get(property)
 		field.value_changed.connect(func(v: float):
 			object.set(property, int(v) if field.rounded else v))
@@ -24,19 +28,25 @@ func bind(control: Node, object: Object, property: StringName) -> void:
 
 	elif control is OptionButton:
 		var menu := control as OptionButton
+		
 		menu.selected = object.get(property)
 		menu.item_selected.connect(func(i: int): object.set(property, i))
 		_sync.append(func(): menu.selected = object.get(property))
 
 	elif control is ColorPickerButton:
 		var picker := control as ColorPickerButton
+
+		var font_size := picker.get_theme_font_size(&"font_size")
+		picker.custom_minimum_size.y = picker.get_theme_font(&"font").get_height(font_size) + picker.get_theme_stylebox(&"normal").get_minimum_size().y
+
 		picker.color = object.get(property)
 		picker.color_changed.connect(func(c: Color): object.set(property, c))
 		_sync.append(func(): picker.color = object.get(property))
 
 	elif control is Button:
-		# A plain button picks a file, and shows the name of the one it holds..
+		# A plain button picks a file, and shows the name of the one it holds.
 		var button := control as Button
+		button.theme_type_variation = &"FieldButton"
 
 		var file_text = func(path: String) -> String:
 			return path.get_file() if not path.is_empty() else "(none)"
@@ -82,6 +92,10 @@ func bind_axis(control: Node, object: Object, property: StringName, axis: int) -
 		return
 
 	var field := control as SpinBox
+	
+	field.select_all_on_focus = true
+	field.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	
 	field.value = object.get(property)[axis]
 
 	field.value_changed.connect(func(v: float):

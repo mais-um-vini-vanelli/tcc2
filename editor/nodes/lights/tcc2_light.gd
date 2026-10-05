@@ -95,7 +95,7 @@ func model():
 
 func set_selected(value: bool) -> void:
 	if _icon != null:
-		_set_icon_selected(_icon, value, model().color)
+		_set_icon_selected(_icon, value, ICON_COLOR)
 		_gizmo.visible = value
 
 func _rebuild_preview() -> void:
@@ -104,7 +104,6 @@ func _rebuild_preview() -> void:
 
 	var mod = model()
 
-	_icon.modulate = mod.color
 	_gizmo.mesh = _gizmo_mesh()
 
 	if _preview != null:

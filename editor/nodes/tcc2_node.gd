@@ -1,6 +1,7 @@
 class_name Tcc2Node extends Node3D
 
-const SELECTION_COLOR := Color("#ff9f2c")
+const SELECTION_COLOR := Color("#ffd63d")
+const ICON_COLOR := Color("#e8eff7")
 const ICON_SCREEN_HEIGHT := 0.05
 
 func _ready() -> void:
@@ -17,6 +18,7 @@ func _add_icon(texture: Texture2D) -> Sprite3D:
 	icon.shaded = false
 	# fraction of screen height = pixel_size × texture_height / 2
 	icon.pixel_size = ICON_SCREEN_HEIGHT * 2.0 / texture.get_height()
+	icon.modulate = ICON_COLOR
 	add_child(icon, false, Node.INTERNAL_MODE_FRONT)
 	return icon
 
@@ -63,4 +65,3 @@ func find_scene() -> Tcc2Scene:
 			return n
 		n = n.get_parent()
 	return null
-	
