@@ -11,7 +11,7 @@ use crate::color::Rgb;
 use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
 use crate::parameters::{Parameters, ShadingFrequency};
 use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
-use crate::scene::{Camera, Light, Material, Scene};
+use crate::scene::{Camera, Light, Material, Primitive, Scene};
 use crate::shading::{self, Surface};
 use crate::texture::Footprint;
 
@@ -55,13 +55,19 @@ impl Renderer for Rasterizer {
             perspectiva,
         };
 
-        for instancia in &instances {
+        for (id, instancia) in instances.iter().enumerate() {
             let malha = instancia.geometry.tessellate();
 
             for indice in 0..malha.face_count() {
                 let Some(face) = malha.face(indice) else {
                     continue;
                 };
+
+                if let Some(on_triangle) = params.rasterization.on_triangle {
+                    if let Primitive::Mesh(_) = instancia.geometry {
+                        on_triangle(id, indice);
+                    }
+                }
 
                 // Local -> mundo -> câmera. Aqui o rasterizador transforma a
                 // *geometria*; o ray tracer resolve o mesmo problema no sentido
@@ -440,6 +446,10 @@ fn preenche(
 
             if !dentro {
                 continue;
+            }
+
+            if let Some(on_fragment) = params.rasterization.on_fragment {
+                on_fragment(x, y);
             }
 
             let baricentricas = baricentricas_de([w0, w1, w2]);

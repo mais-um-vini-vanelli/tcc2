@@ -1,13 +1,14 @@
 class_name Tcc2Node extends Node3D
 
 const SELECTION_COLOR := Color("#ffd63d")
+const ICONS_LAYER := 1 << 1
 const ICON_COLOR := Color("#e8eff7")
 const ICON_SCREEN_HEIGHT := 0.05
 
 func _ready() -> void:
 	rotation_order = EULER_ORDER_XYZ
 
-func set_selected(value: bool) -> void:
+func set_selected(_value: bool) -> void:
 	pass
 
 func _add_icon(texture: Texture2D) -> Sprite3D:
@@ -19,6 +20,7 @@ func _add_icon(texture: Texture2D) -> Sprite3D:
 	# fraction of screen height = pixel_size × texture_height / 2
 	icon.pixel_size = ICON_SCREEN_HEIGHT * 2.0 / texture.get_height()
 	icon.modulate = ICON_COLOR
+	icon.layers = ICONS_LAYER
 	add_child(icon, false, Node.INTERNAL_MODE_FRONT)
 	return icon
 

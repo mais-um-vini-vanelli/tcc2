@@ -109,6 +109,9 @@ func set_selected(value: bool) -> void:
 	if _selection != null:
 		_selection.visible = value
 
+func preview() -> MeshInstance3D:
+	return _preview
+
 func _rebuild_preview() -> void:
 	if _preview == null:
 		return

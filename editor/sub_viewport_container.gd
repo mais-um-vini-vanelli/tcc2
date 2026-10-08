@@ -6,26 +6,35 @@ const PAN_SPEED := 0.01 # units per pixel
 
 const HANDLE_HALF := 0.15
 
+const PAN_CURSOR := preload("res://icons/Pan.svg")
+
 signal tcc2_node_selected(node: Tcc2Node)
 signal gizmo_moved
+signal triangle_picked(node: Tcc2Geometry, instance: int, face: int)
+signal pixel_picked(x: int, y: int)
 
 @onready var camera_3d: Camera3D = $SceneView/Camera3D
 @onready var scene_view: SubViewport = $SceneView
 
 var _gizmos: Array[TransformGizmo] = []
+var _picker: TrianglePicker
 var _dragging: TransformGizmo
 var _target: Tcc2Node
-var _pov_camera: Camera3D
+var _pov: CameraPov
+var _pixels: PixelPicker
 
 var overlay: Control
 
 var _flying := false
 var _panning := false
+var _using_pan_cursor := false
 var _yaw := 0.0
 var _pitch := 0.0
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
+	Input.set_custom_mouse_cursor(PAN_CURSOR, Input.CURSOR_MOVE)
+
 	_yaw = camera_3d.rotation.y
 	_pitch = camera_3d.rotation.x
 
@@ -35,8 +44,26 @@ func _ready() -> void:
 		scene_view.add_child(transform)
 		_gizmos.append(transform)
 
+	_picker = TrianglePicker.new()
+	_picker.camera = camera_3d
+	_picker.scene_view = scene_view
+	_picker.picked.connect(triangle_picked.emit)
+	scene_view.add_child(_picker)
+
+	_pov = CameraPov.new()
+	_pov.scene_view = scene_view
+	_pov.container = self
+	_pov.editor_camera = camera_3d
+	add_child(_pov)
+
+	_pixels = PixelPicker.new()
+	_pixels.container = self
+	_pixels.scene_view = scene_view
+	_pixels.picked.connect(pixel_picked.emit)
+	add_child(_pixels)
+
 func _input(event: InputEvent) -> void:
-	if _in_pov():
+	if _pixel_input(event):
 		return
 
 	if event is InputEventMouseButton:
@@ -62,6 +89,10 @@ func _on_input_event_mouse_button(event: InputEventMouseButton) -> void:
 		if event.pressed and _over_viewport():
 			var mouse_position := get_local_mouse_position()
 
+			if _picker.click(mouse_position):
+				get_viewport().set_input_as_handled()
+				return
+
 			if Input.is_key_pressed(KEY_SPACE):
 				_panning = true
 			else:
@@ -84,6 +115,49 @@ func _on_input_event_mouse_button(event: InputEventMouseButton) -> void:
 				_dragging.end()
 				_dragging = null
 
+func _cancel_mouse() -> void:
+	if _flying:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	_flying = false
+	_panning = false
+
+	if _picker != null:
+		_picker.leave()
+
+	if _pixels != null:
+		_pixels.leave()
+
+	if _dragging != null:
+		_dragging.end()
+		_dragging = null
+
+func _pixel_input(event: InputEvent) -> bool:
+	if not _in_pov() and not _pixels.is_active():
+		return false
+
+	if event is InputEventMouseMotion:
+		if _over_viewport():
+			_pixels.hover(get_local_mouse_position())
+		else:
+			_pixels.leave()
+	elif event is InputEventMouseButton:
+		var button := event as InputEventMouseButton
+
+		if _over_viewport() and button.button_index == MOUSE_BUTTON_LEFT and button.pressed:
+			_pixels.click(get_local_mouse_position())
+			get_viewport().set_input_as_handled()
+	
+	return true
+
+func set_pick_triangle(enabled: bool) -> void:
+	_cancel_mouse()
+	_picker.set_active(enabled)
+
+func set_pick_pixel(enabled: bool) -> void:
+	_cancel_mouse()
+	_pixels.set_active(enabled)
+
 func set_target(node: Tcc2Node) -> void:
 	if node is Tcc2Scene:
 		node = null
@@ -94,42 +168,16 @@ func set_target(node: Tcc2Node) -> void:
 		one.target = _target
 
 func render_camera() -> Tcc2Camera:
-	var cameras := scene_view.find_children("*", "Tcc2Camera", true, false)
-	return null if cameras.is_empty() else cameras[0]
+	return _pov.render_camera()
 
 func set_pov(enabled: bool) -> void:
-	var camera := render_camera() if enabled else null
-
-	if is_instance_valid(_pov_camera):
-		_pov_camera.get_parent().remove_child(_pov_camera)
-		_pov_camera.queue_free()
-
-	_pov_camera = null
-
-	if camera != null:
-		_pov_camera = Camera3D.new()
-		camera.add_child(_pov_camera, false, Node.INTERNAL_MODE_FRONT)
-
-		_process_pov()
-
-		_pov_camera.current = true
-	else:
-		camera_3d.current = true
+	_cancel_mouse()
+	_pov.set_active(enabled)
 
 	set_target(_target)
 
 func _in_pov() -> bool:
-	return is_instance_valid(_pov_camera)
-
-func _process_pov() -> void:
-	var camera := _pov_camera.get_parent() as Tcc2Camera
-	var model = camera.model()
-	var near := maxf(model.near, 0.001)
-
-	if camera.kind == Tcc2Camera.Kind.ORTHOGRAPHIC:
-		_pov_camera.set_orthogonal(model.height, near, model.far)
-	else:
-		_pov_camera.set_perspective(model.fov, near, model.far)
+	return _pov.is_active()
 
 func select_tcc2_node(screen_position: Vector2) -> Tcc2Node:
 	var origin := camera_3d.project_ray_origin(screen_position)
@@ -191,9 +239,25 @@ func _on_input_event_mouse_motion(event: InputEventMouseMotion) -> void:
 		# Drag the world: the camera moves opposite to the mouse.
 		camera_3d.global_position -= camera_3d.global_basis.x * event.relative.x * PAN_SPEED
 		camera_3d.global_position += camera_3d.global_basis.y * event.relative.y * PAN_SPEED
+	elif _picker.is_active():
+		if _over_viewport():
+			_picker.hover(get_local_mouse_position())
+		else:
+			_picker.leave()
 	else:
 		_hover(get_local_mouse_position())
 		
+func _update_cursor() -> void:
+	var pan := _panning or (_over_viewport() and Input.is_key_pressed(KEY_SPACE)
+		and not _in_pov() and not _picker.is_active())
+
+	if pan == _using_pan_cursor:
+		return
+
+	_using_pan_cursor = pan
+	Input.set_default_cursor_shape(
+		Input.CURSOR_MOVE if pan else Input.CURSOR_ARROW)
+
 func _hover(mouse: Vector2) -> void:
 	var taken := false
 
@@ -214,8 +278,9 @@ func _over_viewport() -> bool:
 	return get_global_rect().has_point(mouse)
 		
 func _process(delta: float) -> void:
+	_update_cursor()
+
 	if _in_pov():
-		_process_pov()
 		return
 
 	if not _flying:
@@ -233,7 +298,7 @@ func _process(delta: float) -> void:
 		camera_3d.global_position += dir.normalized() * MOVE_SPEED * delta
 
 func _notification(what: int) -> void:
-	# Alt-tabbing out while captured would leave the cursor stuck hidden.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and _flying:
-		_flying = false
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Alt-tabbing out while captured would leave the cursor stuck hidden, and
+	# the release that ends a drag or a pan goes to whatever took the focus.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_cancel_mouse()

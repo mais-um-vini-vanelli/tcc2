@@ -130,6 +130,8 @@ pub(super) fn decode(v: &Value) -> Parameters {
                 raster.perspective_correct,
             ),
             depth_test: to_bool(rasterization, "depth_test", raster.depth_test),
+            on_fragment: raster.on_fragment,
+            on_triangle: raster.on_triangle,
         },
         shading: ShadingOptions {
             frequency: match to_str(shading, "frequency") {
@@ -166,6 +168,7 @@ pub(super) fn decode(v: &Value) -> Parameters {
                     .and_then(Value::as_u64)
                     .map(|n| n as u32),
             },
+            on_ray: tracado.on_ray,
         },
         output: OutputOptions {
             width: to_u32(output, "width", saida.width),

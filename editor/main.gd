@@ -8,6 +8,10 @@ extends Control
 @onready var properties := $Layout/Sidebar/Properties/VBoxContainer/MarginContainer/ScrollContainer/Padding/VBoxContainer
 @onready var popup_menu: PopupMenu = $PopupMenu
 @onready var camera_pov: Button = $Layout/Viewport/Overlay/VBoxContainer/CameraPOV
+@onready var pick_triangle: Button = $Layout/Viewport/Overlay/VBoxContainer/PickTriangle
+@onready var pick_pixel: Button = $Layout/Viewport/Overlay/VBoxContainer/PickPixel
+
+const CURSOR := preload("res://icons/Cursor.svg")
 
 static var ICONS: Array = [
 	[Tcc2Scene, preload("res://icons/Scene.svg"), Color("#d5dee8")],
@@ -31,6 +35,8 @@ func _ready() -> void:
 
 	thin_divider.call($Layout)
 	thin_divider.call($Layout/Sidebar)
+
+	Input.set_custom_mouse_cursor(CURSOR, Input.CURSOR_ARROW, Vector2(6, 4))
 	
 	root = Tcc2Scene.new()
 	root.name = "Scene"
@@ -73,6 +79,12 @@ func _ready() -> void:
 	camera_pov.toggled.connect(_on_camera_pov_toggled)
 	sub_viewport_container.overlay = camera_pov.get_parent()
 
+	pick_triangle.toggled.connect(_on_pick_triangle_toggled)
+	sub_viewport_container.triangle_picked.connect(_on_triangle_picked)
+
+	pick_pixel.toggled.connect(_on_pick_pixel_toggled)
+	sub_viewport_container.pixel_picked.connect(_on_pixel_picked)
+
 	save_dialog = FileDialog.new()
 	save_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
 	save_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -103,15 +115,12 @@ func rebuild_hierarchy() -> void:
 	_items.clear()
 	add_item(root, null)
 
-	camera_pov.disabled = sub_viewport_container.render_camera() == null
-
-	if camera_pov.disabled:
+	if sub_viewport_container.render_camera() == null:
 		camera_pov.button_pressed = false
 	elif camera_pov.button_pressed:
 		sub_viewport_container.set_pov(true)
 
-	for node in _items:
-		_items[node].set_selectable(0, not camera_pov.button_pressed)
+	_refresh_modes()
 
 func add_item(node: Tcc2Node, parent_item: TreeItem) -> void:
 	var item := hierarchy.create_item(parent_item)
@@ -154,14 +163,60 @@ func _on_selected() -> void:
 	_select(hierarchy.get_selected().get_metadata(0))
 
 func _on_camera_pov_toggled(pressed: bool) -> void:
-	sub_viewport_container.set_pov(pressed)
+	_set_pov(pressed)
+	_refresh_modes()
+
+func _set_pov(value: bool) -> void:
+	camera_pov.set_pressed_no_signal(value)
+	sub_viewport_container.set_pov(value)
+
+	if value:
+		_items[root].select(0)
+		_select(root)
+
+func _on_pick_triangle_toggled(pressed: bool) -> void:
+	sub_viewport_container.set_pick_triangle(pressed)
 
 	if pressed:
 		_items[root].select(0)
 		_select(root)
 
+	_refresh_modes()
+
+func _on_pick_pixel_toggled(pressed: bool) -> void:
+	if pressed:
+		_set_pov(true)
+		sub_viewport_container.set_pick_pixel(true)
+	else:
+		sub_viewport_container.set_pick_pixel(false)
+		_set_pov(false)
+
+	_refresh_modes()
+
+func _refresh_modes() -> void:
+	var in_pick_triangle := pick_triangle.button_pressed
+	var in_camera_pov := camera_pov.button_pressed and not pick_pixel.button_pressed
+	var in_pick_pixel := pick_pixel.button_pressed
+
+	if sub_viewport_container.render_camera() == null:
+		camera_pov.disabled = true
+		pick_triangle.disabled = true
+		pick_pixel.disabled = true
+	else:
+		camera_pov.disabled = in_pick_triangle or in_pick_pixel
+		pick_triangle.disabled = in_camera_pov or in_pick_pixel
+		pick_pixel.disabled = in_pick_triangle or in_camera_pov
+
 	for node in _items:
-		_items[node].set_selectable(0, not camera_pov.button_pressed)
+		_items[node].set_selectable(0, not (in_pick_triangle or in_camera_pov or in_pick_pixel))
+
+func _on_triangle_picked(node: Tcc2Geometry, instance: int, face: int) -> void:
+	pick_triangle.button_pressed = false
+	print("%s: instance %d, face %d" % [node.name, instance, face])
+
+func _on_pixel_picked(x: int, y: int) -> void:
+	pick_pixel.button_pressed = false
+	print("pixel %d, %d" % [x, y])
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey

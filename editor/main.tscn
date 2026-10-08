@@ -8,6 +8,8 @@
 [ext_resource type="Texture2D" uid="uid://bpnn8q52yipuq" path="res://icons/Open.svg" id="5_open"]
 [ext_resource type="Texture2D" uid="uid://ctshpsj27tbhc" path="res://icons/Save.svg" id="6_save"]
 [ext_resource type="Texture2D" uid="uid://ctgcnpmc77uxv" path="res://icons/Camera.svg" id="8_5vw27"]
+[ext_resource type="Texture2D" uid="uid://bqk3f7x2pickt" path="res://icons/PickTriangle.svg" id="9_pick"]
+[ext_resource type="Texture2D" uid="uid://cwm5r8t3pixel" path="res://icons/PickPixel.svg" id="10_pixel"]
 
 [sub_resource type="StyleBoxLine" id="StyleBoxLine_5vw27"]
 color = Color(0.1882353, 0.21176471, 0.23921569, 1)
@@ -236,6 +238,7 @@ current = true
 environment = SubResource("Environment_7dm0k")
 
 [node name="Grid" type="MeshInstance3D" parent="Layout/Viewport/ViewportClip/SubViewportContainer/SceneView" unique_id=1168395440]
+layers = 2
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_grid")
 
@@ -284,6 +287,30 @@ theme_override_styles/pressed = SubResource("StyleBoxFlat_kek77")
 theme_override_styles/hover = SubResource("StyleBoxFlat_kek77")
 toggle_mode = true
 icon = ExtResource("8_5vw27")
+
+[node name="PickTriangle" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=1337554902]
+layout_mode = 2
+tooltip_text = "Pick a mesh triangle"
+theme_override_colors/icon_normal_color = Color(0.74509805, 0.74509805, 0.74509805, 1)
+theme_override_colors/icon_hover_color = Color(0.972549, 0.972549, 0.9764706, 1)
+theme_override_constants/icon_max_width = 32
+theme_override_styles/normal = SubResource("StyleBoxFlat_4c57u")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_kek77")
+theme_override_styles/hover = SubResource("StyleBoxFlat_kek77")
+toggle_mode = true
+icon = ExtResource("9_pick")
+
+[node name="PickPixel" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=1337554903]
+layout_mode = 2
+tooltip_text = "Pick a pixel of the render"
+theme_override_colors/icon_normal_color = Color(0.74509805, 0.74509805, 0.74509805, 1)
+theme_override_colors/icon_hover_color = Color(0.972549, 0.972549, 0.9764706, 1)
+theme_override_constants/icon_max_width = 32
+theme_override_styles/normal = SubResource("StyleBoxFlat_4c57u")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_kek77")
+theme_override_styles/hover = SubResource("StyleBoxFlat_kek77")
+toggle_mode = true
+icon = ExtResource("10_pixel")
 
 [node name="PopupMenu" type="PopupMenu" parent="." unique_id=1658015771]
 oversampling_override = 1.0

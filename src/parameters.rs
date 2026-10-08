@@ -6,7 +6,7 @@
 
 use crate::color::Rgb;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Parameters {
     pub transform: TransformOptions,
     pub rasterization: RasterizationOptions,
@@ -42,7 +42,7 @@ pub enum TransformMethod {
     Stepwise,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct RasterizationOptions {
     /// Amostras por pixel do *multisampling*. `None` = uma amostra por pixel.
     pub msaa: Option<u8>,
@@ -56,6 +56,12 @@ pub struct RasterizationOptions {
     /// Teste de profundidade (z-buffer). Desligar mostra objetos distantes
     /// desenhados por cima dos próximos, conforme a ordem da cena.
     pub depth_test: bool,
+    /// Chamado pra cada fragmento, antes do depth test. Não faz nada no
+    /// render: existe só como lugar para pôr um breakpoint.
+    pub on_fragment: Option<fn(u32, u32)>,
+    /// Chamado pra cada triângulo das meshes, no começo da pipeline. A função
+    /// recebe (index da instância conforme `Scene::flatten`, index da face).
+    pub on_triangle: Option<fn(usize, usize)>,
 }
 
 impl Default for RasterizationOptions {
@@ -66,6 +72,8 @@ impl Default for RasterizationOptions {
             wireframe: false,
             perspective_correct: true,
             depth_test: true,
+            on_fragment: None,
+            on_triangle: None,
         }
     }
 }
@@ -149,7 +157,7 @@ pub enum BvhSplit {
     Sah,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct RayTracingOptions {
     /// Profundidade máxima da recursão de reflexão/refração.
     pub max_depth: u32,
@@ -160,6 +168,9 @@ pub struct RayTracingOptions {
     /// Raios secundários de refração.
     pub refractions: bool,
     pub acceleration: AccelerationOptions,
+    /// Chamado uma vez por pixel, antes do raio primário. Não faz nada no
+    /// render: existe só como lugar para pôr um breakpoint.
+    pub on_ray: Option<fn(u32, u32)>,
 }
 
 impl Default for RayTracingOptions {
@@ -170,6 +181,7 @@ impl Default for RayTracingOptions {
             reflections: true,
             refractions: true,
             acceleration: AccelerationOptions::default(),
+            on_ray: None,
         }
     }
 }

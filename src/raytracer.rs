@@ -97,6 +97,10 @@ impl Renderer for RayTracer {
 
         for y in 0..altura {
             for x in 0..largura {
+                if let Some(on_ray) = params.ray_tracing.on_ray {
+                    on_ray(x, y);
+                }
+
                 let antes = contexto.contador.stats();
 
                 let raio = raio_primario(&camera, base, x, y, largura, altura);
