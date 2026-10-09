@@ -6,7 +6,6 @@ const PAN_SPEED := 0.01 # units per pixel
 
 const HANDLE_HALF := 0.15
 
-const PAN_CURSOR := preload("res://icons/Pan.svg")
 
 signal tcc2_node_selected(node: Tcc2Node)
 signal gizmo_moved
@@ -33,8 +32,6 @@ var _pitch := 0.0
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
-	Input.set_custom_mouse_cursor(PAN_CURSOR, Input.CURSOR_MOVE)
-
 	_yaw = camera_3d.rotation.y
 	_pitch = camera_3d.rotation.x
 

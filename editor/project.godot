@@ -13,7 +13,7 @@ config_version=5
 config/name="Editor"
 run/main_scene="uid://cqi7qdnrdfwcf"
 config/features=PackedStringArray("4.6", "Forward Plus")
-boot_splash/bg_color=Color(0.050980393, 0.06666667, 0.09019608, 1)
+boot_splash/bg_color=Color(0.05882353, 0.07450981, 0.09019608, 1)
 boot_splash/stretch_mode=0
 boot_splash/use_filter=false
 boot_splash/image="uid://c0yinpvdeclde"
@@ -28,7 +28,7 @@ window/size/viewport_height=900
 [gui]
 
 theme/default_font_subpixel_positioning=3
-theme/custom_font="res://fonts/FiraSans-Regular.ttf"
+theme/custom_font="uid://bsqvou5jhjnlf"
 
 [physics]
 

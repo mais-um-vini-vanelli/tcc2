@@ -1,28 +1,24 @@
 [gd_scene format=3 uid="uid://bcux8w1f2j0xm"]
 
 [ext_resource type="Script" uid="uid://balhvebcvucl7" path="res://properties/camera_form.gd" id="1_gc3qp"]
-[ext_resource type="StyleBox" uid="uid://bup0ptwo6e042" path="res://properties/section.tres" id="2_rr6uw"]
 [ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_nm545"]
 [ext_resource type="PackedScene" uid="uid://ucbcfnd6wi6" path="res://properties/transform_section.tscn" id="4_qma02"]
+[ext_resource type="Script" path="res://properties/rows.gd" id="rows"]
 
 [node name="CameraPanel" type="VBoxContainer" unique_id=964333341]
-theme_override_constants/separation = 2
 script = ExtResource("1_gc3qp")
 
 [node name="Camera" type="PanelContainer" parent="." unique_id=496778990]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_styles/panel = ExtResource("2_rr6uw")
 script = ExtResource("3_nm545")
 
 [node name="Stack" type="VBoxContainer" parent="Camera" unique_id=441339857]
 layout_mode = 2
-theme_override_constants/separation = 4
 
 [node name="Header" type="Button" parent="Camera/Stack" unique_id=1007079577]
 layout_mode = 2
 focus_mode = 0
-theme_override_constants/h_separation = 6
 toggle_mode = true
 button_pressed = true
 text = "Camera"
@@ -31,25 +27,18 @@ alignment = 0
 
 [node name="Body" type="VBoxContainer" parent="Camera/Stack" unique_id=1105180371]
 layout_mode = 2
-theme_override_constants/separation = 4
 
-[node name="Rows" type="GridContainer" parent="Camera/Stack/Body" unique_id=502882821]
+[node name="Rows" type="Container" parent="Camera/Stack/Body" unique_id=502882821]
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 4
-columns = 2
+script = ExtResource("rows")
 
 [node name="FovLabel" type="Label" parent="Camera/Stack/Body/Rows" unique_id=1420338060]
 layout_mode = 2
 text = "fov"
-horizontal_alignment = 2
 
 [node name="fov" type="SpinBox" parent="Camera/Stack/Body/Rows" unique_id=386011974]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 min_value = 1.0
 max_value = 179.0
 step = 0.01
@@ -58,39 +47,30 @@ value = 1.0
 [node name="HeightLabel" type="Label" parent="Camera/Stack/Body/Rows" unique_id=731722609]
 layout_mode = 2
 text = "height"
-horizontal_alignment = 2
 
 [node name="height" type="SpinBox" parent="Camera/Stack/Body/Rows" unique_id=2134135620]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 
 [node name="NearLabel" type="Label" parent="Camera/Stack/Body/Rows" unique_id=1960117018]
 layout_mode = 2
 text = "near"
-horizontal_alignment = 2
 
 [node name="near" type="SpinBox" parent="Camera/Stack/Body/Rows" unique_id=287625521]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 
 [node name="FarLabel" type="Label" parent="Camera/Stack/Body/Rows" unique_id=472483110]
 layout_mode = 2
 text = "far"
-horizontal_alignment = 2
 
 [node name="far" type="SpinBox" parent="Camera/Stack/Body/Rows" unique_id=308316333]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 

@@ -10,14 +10,23 @@ extends Control
 @onready var camera_pov: Button = $Layout/Viewport/Overlay/VBoxContainer/CameraPOV
 @onready var pick_triangle: Button = $Layout/Viewport/Overlay/VBoxContainer/PickTriangle
 @onready var pick_pixel: Button = $Layout/Viewport/Overlay/VBoxContainer/PickPixel
+@onready var add_button: Button = $Layout/Sidebar/Hierarchy/VBoxContainer/Title/Add
 
-const CURSOR := preload("res://icons/Cursor.svg")
+const CURSORS: Array = [
+	[preload("res://icons/Arrow.svg"), Input.CURSOR_ARROW, Vector2(6, 4)],
+	[preload("res://icons/Hand.svg"), Input.CURSOR_POINTING_HAND, Vector2(8, 1)],
+	[preload("res://icons/IBeam.svg"), Input.CURSOR_IBEAM, Vector2(12, 12)],
+	[preload("res://icons/Forbidden.svg"), Input.CURSOR_FORBIDDEN, Vector2(12, 12)],
+	[preload("res://icons/Pan.svg"), Input.CURSOR_MOVE, Vector2(11, 11)],
+	[preload("res://icons/SplitH.svg"), Input.CURSOR_HSPLIT, Vector2(11, 5)],
+	[preload("res://icons/SplitV.svg"), Input.CURSOR_VSPLIT, Vector2(5, 11)],
+]
 
 static var ICONS: Array = [
-	[Tcc2Scene, preload("res://icons/Scene.svg"), Color("#d5dee8")],
-	[Tcc2Light, preload("res://icons/Light.svg"), Color("#e6c94d")],
-	[Tcc2Camera, preload("res://icons/Camera.svg"), Color("#d86481")],
-	[Tcc2Geometry, preload("res://icons/Geometry.svg"), Color("#51cc8d")],
+	[Tcc2Scene, preload("res://icons/KindScene.svg"), Color("#d5dee8")],
+	[Tcc2Light, preload("res://icons/KindLight.svg"), Color("#e6c94d")],
+	[Tcc2Camera, preload("res://icons/KindCamera.svg"), Color("#d86481")],
+	[Tcc2Geometry, preload("res://icons/KindGeometry.svg"), Color("#51cc8d")],
 ]
 
 var root: Tcc2Scene
@@ -25,18 +34,11 @@ var save_dialog: FileDialog
 var open_dialog: FileDialog
 var _items := {}
 var _selected: Tcc2Node
+var _hovered: Tcc2Node
 
 func _ready() -> void:
-	var thin_divider = func(split: SplitContainer) -> void:
-		# The default grabber prevents the divider from getting really thin.
-		var image := Image.create_empty(1, 1, false, Image.FORMAT_RGBA8)
-		split.add_theme_icon_override("grabber", ImageTexture.create_from_image(image))
-		split.add_theme_constant_override("minimum_grab_thickness", 8)
-
-	thin_divider.call($Layout)
-	thin_divider.call($Layout/Sidebar)
-
-	Input.set_custom_mouse_cursor(CURSOR, Input.CURSOR_ARROW, Vector2(6, 4))
+	for cursor in CURSORS:
+		Input.set_custom_mouse_cursor(_rimmed(cursor[0]), cursor[1], cursor[2])
 	
 	root = Tcc2Scene.new()
 	root.name = "Scene"
@@ -64,14 +66,19 @@ func _ready() -> void:
 	root.add_child(sphere)
 	sphere.owner = root
 
-	hierarchy.allow_rmb_select = true
+	hierarchy.hide_folding = true
+	hierarchy.gui_input.connect(_on_hierarchy_input)
+	hierarchy.mouse_exited.connect(func(): _hover(null))
+	hierarchy.item_collapsed.connect(func(item: TreeItem): _mark(item.get_metadata(0)))
+	
 	rebuild_hierarchy()
+	
 	hierarchy.item_selected.connect(_on_selected)
 	_items[root].select(0)
 	_select(root)
 
 	sub_viewport_container.tcc2_node_selected.connect(_on_sub_viewport_container_tcc2_node_selected)
-	hierarchy.item_mouse_selected.connect(_on_mouse_select)
+	add_button.pressed.connect(_on_add_pressed)
 	popup_menu.id_pressed.connect(_on_popup_menu_id_pressed)
 	get_window().files_dropped.connect(_on_files_dropped)
 	sub_viewport_container.gizmo_moved.connect(properties.refresh_values)
@@ -110,14 +117,44 @@ func _ready() -> void:
 	save_button.pressed.connect(on_save_pressed)
 	open_button.pressed.connect(open_dialog.popup_centered_ratio.bind(0.6))
 
+func _rimmed(texture: Texture2D) -> ImageTexture:
+	var shape := texture.get_image()
+	shape.convert(Image.FORMAT_RGBA8)
+
+	var touches := func(shape: Image, x: int, y: int) -> bool:
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				var at := Vector2i(x + dx, y + dy)
+
+				if at.x < 0 or at.y < 0 or at.x >= shape.get_width() or at.y >= shape.get_height():
+					continue
+
+				if shape.get_pixel(at.x, at.y).a > 0.0:
+					return true
+
+		return false
+
+	var size := shape.get_size()
+	var rim := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
+
+	for y in size.y:
+		for x in size.x:
+			if shape.get_pixel(x, y).a == 0.0 and touches.call(shape, x, y):
+				rim.set_pixel(x, y, Tcc2Theme.INK)
+
+	rim.blend_rect(shape, Rect2i(Vector2i.ZERO, size), Vector2i.ZERO)
+
+	return ImageTexture.create_from_image(rim)
+
 func rebuild_hierarchy() -> void:
 	hierarchy.clear()
 	_items.clear()
+	_hovered = null
 	add_item(root, null)
 
 	if sub_viewport_container.render_camera() == null:
 		camera_pov.button_pressed = false
-	elif camera_pov.button_pressed:
+	elif camera_pov.button_pressed or pick_pixel.button_pressed:
 		sub_viewport_container.set_pov(true)
 
 	_refresh_modes()
@@ -128,15 +165,59 @@ func add_item(node: Tcc2Node, parent_item: TreeItem) -> void:
 	item.set_metadata(0, node)
 	_items[node] = item
 
-	for entry in ICONS:
-		if is_instance_of(node, entry[0]):
-			item.set_icon(0, entry[1])
-			item.set_icon_modulate(0, entry[2])
-			break
-
 	for child in node.get_children():
 		if child is Tcc2Node:
 			add_item(child, item)
+
+	_mark(node)
+
+func _mark(node: Tcc2Node) -> void:
+	var item: TreeItem = _items.get(node)
+
+	if item == null:
+		return
+
+	var fold := Tcc2KindGlyph.Fold.LEAF
+
+	if item.get_child_count() > 0:
+		fold = Tcc2KindGlyph.Fold.SHUT if item.collapsed else Tcc2KindGlyph.Fold.OPEN
+
+	for entry in ICONS:
+		if is_instance_of(node, entry[0]):
+			item.set_icon(0, Tcc2KindGlyph.of(entry[1], entry[2], fold,
+				item.is_selected(0) or node == _hovered))
+			return
+
+func _hover(item: TreeItem) -> void:
+	hierarchy.mouse_default_cursor_shape = (Control.CURSOR_POINTING_HAND
+		if item != null and item.is_selectable(0) else Control.CURSOR_ARROW)
+
+	var node: Tcc2Node = item.get_metadata(0) if item != null else null
+
+	if node == _hovered:
+		return
+
+	var was := _hovered
+	_hovered = node
+
+	if was != null and is_instance_valid(was):
+		_mark(was)
+
+	if node != null:
+		_mark(node)
+
+func _on_hierarchy_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_hover(hierarchy.get_item_at_position((event as InputEventMouseMotion).position))
+	elif event is InputEventMouseButton:
+		var click := event as InputEventMouseButton
+
+		if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
+			var item := hierarchy.get_item_at_position(click.position)
+
+			if item != null and item.get_child_count() > 0:
+				item.collapsed = not item.collapsed
+				_mark(item.get_metadata(0))
 
 func _on_sub_viewport_container_tcc2_node_selected(node: Tcc2Node) -> void:
 	if node == null:
@@ -148,6 +229,8 @@ func _on_sub_viewport_container_tcc2_node_selected(node: Tcc2Node) -> void:
 	hierarchy.scroll_to_item(item)
 
 func _select(node: Tcc2Node) -> void:
+	var was := _selected
+
 	if _selected != null and is_instance_valid(_selected):
 		_selected.set_selected(false)
 
@@ -156,6 +239,12 @@ func _select(node: Tcc2Node) -> void:
 	if node != null:
 		node.set_selected(true)
 
+	if was != null and is_instance_valid(was):
+		_mark(was)
+
+	if node != null:
+		_mark(node)
+
 	sub_viewport_container.set_target(node)
 	properties.show_node(node)
 
@@ -163,52 +252,40 @@ func _on_selected() -> void:
 	_select(hierarchy.get_selected().get_metadata(0))
 
 func _on_camera_pov_toggled(pressed: bool) -> void:
-	_set_pov(pressed)
-	_refresh_modes()
-
-func _set_pov(value: bool) -> void:
-	camera_pov.set_pressed_no_signal(value)
-	sub_viewport_container.set_pov(value)
-
-	if value:
-		_items[root].select(0)
-		_select(root)
+	_mode(camera_pov, pressed)
+	sub_viewport_container.set_pov(pressed)
 
 func _on_pick_triangle_toggled(pressed: bool) -> void:
+	_mode(pick_triangle, pressed)
 	sub_viewport_container.set_pick_triangle(pressed)
 
+func _on_pick_pixel_toggled(pressed: bool) -> void:
+	_mode(pick_pixel, pressed)
+	sub_viewport_container.set_pov(pressed)
+	sub_viewport_container.set_pick_pixel(pressed)
+
+func _mode(entering: Button, pressed: bool) -> void:
 	if pressed:
+		for button in [camera_pov, pick_triangle, pick_pixel]:
+			if button != entering and button.button_pressed:
+				button.button_pressed = false
+
 		_items[root].select(0)
 		_select(root)
 
-	_refresh_modes()
-
-func _on_pick_pixel_toggled(pressed: bool) -> void:
-	if pressed:
-		_set_pov(true)
-		sub_viewport_container.set_pick_pixel(true)
-	else:
-		sub_viewport_container.set_pick_pixel(false)
-		_set_pov(false)
-
-	_refresh_modes()
+	_refresh_modes.call_deferred()
 
 func _refresh_modes() -> void:
-	var in_pick_triangle := pick_triangle.button_pressed
-	var in_camera_pov := camera_pov.button_pressed and not pick_pixel.button_pressed
-	var in_pick_pixel := pick_pixel.button_pressed
+	var disable_tree := (camera_pov.button_pressed or pick_triangle.button_pressed
+		or pick_pixel.button_pressed)
+	var blind := sub_viewport_container.render_camera() == null
 
-	if sub_viewport_container.render_camera() == null:
-		camera_pov.disabled = true
-		pick_triangle.disabled = true
-		pick_pixel.disabled = true
-	else:
-		camera_pov.disabled = in_pick_triangle or in_pick_pixel
-		pick_triangle.disabled = in_camera_pov or in_pick_pixel
-		pick_pixel.disabled = in_pick_triangle or in_camera_pov
+	camera_pov.disabled = blind
+	pick_triangle.disabled = blind
+	pick_pixel.disabled = blind
 
 	for node in _items:
-		_items[node].set_selectable(0, not (in_pick_triangle or in_camera_pov or in_pick_pixel))
+		_items[node].set_selectable(0, not disable_tree)
 
 func _on_triangle_picked(node: Tcc2Geometry, instance: int, face: int) -> void:
 	pick_triangle.button_pressed = false
@@ -306,33 +383,32 @@ enum {
 	ADD_GROUP,
 }
 
-func _on_mouse_select(_pos: Vector2, button: int) -> void:
-	if button == MOUSE_BUTTON_RIGHT:
-		popup_menu.clear()
-		
-		popup_menu.add_item("Add object")
-		popup_menu.set_item_disabled(0, true)
-		popup_menu.add_separator()
+func _on_add_pressed() -> void:
+	popup_menu.clear()
 
-		popup_menu.add_item("Sphere", ADD_SPHERE)
-		popup_menu.add_item("Cube", ADD_CUBE)
-		popup_menu.add_item("Mesh", ADD_MESH)
+	popup_menu.add_item("Sphere", ADD_SPHERE)
+	popup_menu.add_item("Cube", ADD_CUBE)
+	popup_menu.add_item("Mesh", ADD_MESH)
 
-		popup_menu.add_separator()
-		popup_menu.add_item("Point light", ADD_POINT_LIGHT)
-		popup_menu.add_item("Directional light", ADD_DIRECTIONAL_LIGHT)
-		popup_menu.add_item("Spot light", ADD_SPOT_LIGHT)
-		popup_menu.add_item("Ambient light", ADD_AMBIENT_LIGHT)
+	popup_menu.add_separator()
+	popup_menu.add_item("Point light", ADD_POINT_LIGHT)
+	popup_menu.add_item("Directional light", ADD_DIRECTIONAL_LIGHT)
+	popup_menu.add_item("Spot light", ADD_SPOT_LIGHT)
+	popup_menu.add_item("Ambient light", ADD_AMBIENT_LIGHT)
 
-		popup_menu.add_separator()
-		popup_menu.add_item("Perspective camera", ADD_PERSPECTIVE_CAMERA)
-		popup_menu.add_item("Orthographic camera", ADD_ORTHOGRAPHIC_CAMERA)
+	popup_menu.add_separator()
+	popup_menu.add_item("Perspective camera", ADD_PERSPECTIVE_CAMERA)
+	popup_menu.add_item("Orthographic camera", ADD_ORTHOGRAPHIC_CAMERA)
 
-		popup_menu.add_separator()
-		popup_menu.add_item("Group", ADD_GROUP)
+	popup_menu.add_separator()
+	popup_menu.add_item("Group", ADD_GROUP)
 
-		popup_menu.reset_size()
-		popup_menu.popup_on_parent(Rect2i(get_global_mouse_position(), Vector2i(1, 1)))
+	popup_menu.reset_size()
+
+	var corner := add_button.get_global_rect().end
+
+	popup_menu.popup_on_parent(Rect2i(Vector2i(corner)
+		- Vector2i(int(popup_menu.size.x), 0), Vector2i(1, 1)))
 
 func _on_popup_menu_id_pressed(id: int) -> void:
 	var target = hierarchy.get_selected().get_metadata(0)

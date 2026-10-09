@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bp8514mkdwk3q"
-path="res://.godot/imported/Geometry.svg-a932b6270c3fc513ab6940dd67cc64cc.ctex"
+uid="uid://dpt3b7ib8namg"
+path="res://.godot/imported/KindCamera.svg-58fc6c65d599fd069435728378c903d0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://icons/Geometry.svg"
-dest_files=["res://.godot/imported/Geometry.svg-a932b6270c3fc513ab6940dd67cc64cc.ctex"]
+source_file="res://icons/KindCamera.svg"
+dest_files=["res://.godot/imported/KindCamera.svg-58fc6c65d599fd069435728378c903d0.ctex"]
 
 [params]
 
@@ -38,6 +38,6 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=12.0
+svg/scale=1.0
 editor/scale_with_editor_scale=false
 editor/convert_colors_with_editor_theme=false

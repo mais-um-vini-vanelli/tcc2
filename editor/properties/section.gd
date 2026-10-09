@@ -8,7 +8,7 @@ var title: String:
 		var header := _header()
 
 		if header != null:
-			header.text = value
+			header.text = value.to_upper()
 
 func _ready() -> void:
 	var header := _header()
@@ -17,9 +17,14 @@ func _ready() -> void:
 	if header == null or body == null:
 		return
 
+	theme_type_variation = &"Subsection" if _nested() else &"Section"
+
+	header.theme_type_variation = &"SectionHeader"
+	header.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	header.text = header.text.to_upper()
+
 	var arrow := func(open: bool) -> Texture2D:
-		var icon := &"arrow" if open else &"arrow_collapsed"
-		return get_theme_icon(icon, &"Tree")
+		return get_theme_icon(&"fold" if open else &"unfold", &"SectionHeader")
 
 	body.visible = false
 	header.button_pressed = false
@@ -28,6 +33,17 @@ func _ready() -> void:
 	header.toggled.connect(func(on: bool):
 		body.visible = on
 		header.icon = arrow.call(on))
+
+func _nested() -> bool:
+	var parent := get_parent()
+
+	while parent != null:
+		if parent is Tcc2Section:
+			return true
+
+		parent = parent.get_parent()
+
+	return false
 
 func _header() -> Button:
 	return get_node_or_null("Stack/Header") as Button

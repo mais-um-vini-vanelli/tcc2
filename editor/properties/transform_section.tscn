@@ -1,20 +1,17 @@
 [gd_scene format=3 uid="uid://ucbcfnd6wi6"]
 
-[ext_resource type="StyleBox" uid="uid://bup0ptwo6e042" path="res://properties/section.tres" id="1_wrk0k"]
 [ext_resource type="Script" uid="uid://h3a1pocwk6a8" path="res://properties/transform_section.gd" id="2_3rsl6"]
+[ext_resource type="Script" uid="uid://b2ywqkn8rfd3m" path="res://properties/rows.gd" id="rows"]
 
 [node name="Transform" type="PanelContainer" unique_id=1739651481]
-theme_override_styles/panel = ExtResource("1_wrk0k")
 script = ExtResource("2_3rsl6")
 
 [node name="Stack" type="VBoxContainer" parent="." unique_id=1759616219]
 layout_mode = 2
-theme_override_constants/separation = 4
 
 [node name="Header" type="Button" parent="Stack" unique_id=872956810]
 layout_mode = 2
 focus_mode = 0
-theme_override_constants/h_separation = 6
 toggle_mode = true
 button_pressed = true
 text = "Transform"
@@ -23,25 +20,18 @@ alignment = 0
 
 [node name="Body" type="VBoxContainer" parent="Stack" unique_id=808486769]
 layout_mode = 2
-theme_override_constants/separation = 4
 
-[node name="Rows" type="GridContainer" parent="Stack/Body" unique_id=1558303419]
+[node name="Rows" type="Container" parent="Stack/Body" unique_id=1558303419]
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/h_separation = 8
-theme_override_constants/v_separation = 4
-columns = 2
+script = ExtResource("rows")
 
 [node name="PositionXLabel" type="Label" parent="Stack/Body/Rows" unique_id=381213555]
 layout_mode = 2
 text = "position x"
-horizontal_alignment = 2
 
 [node name="position_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1154715268]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true
@@ -49,13 +39,10 @@ allow_lesser = true
 [node name="PositionYLabel" type="Label" parent="Stack/Body/Rows" unique_id=196558375]
 layout_mode = 2
 text = "y"
-horizontal_alignment = 2
 
 [node name="position_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=1932765200]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true
@@ -63,13 +50,10 @@ allow_lesser = true
 [node name="PositionZLabel" type="Label" parent="Stack/Body/Rows" unique_id=95963643]
 layout_mode = 2
 text = "z"
-horizontal_alignment = 2
 
 [node name="position_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=231153959]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true
@@ -77,13 +61,10 @@ allow_lesser = true
 [node name="RotationDegreesXLabel" type="Label" parent="Stack/Body/Rows" unique_id=315995622]
 layout_mode = 2
 text = "rotation x"
-horizontal_alignment = 2
 
 [node name="rotation_degrees_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1071508911]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true
@@ -91,13 +72,10 @@ allow_lesser = true
 [node name="RotationDegreesYLabel" type="Label" parent="Stack/Body/Rows" unique_id=1576702194]
 layout_mode = 2
 text = "y"
-horizontal_alignment = 2
 
 [node name="rotation_degrees_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=1678115118]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true
@@ -105,13 +83,10 @@ allow_lesser = true
 [node name="RotationDegreesZLabel" type="Label" parent="Stack/Body/Rows" unique_id=961766141]
 layout_mode = 2
 text = "z"
-horizontal_alignment = 2
 
 [node name="rotation_degrees_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=464856225]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true
@@ -119,13 +94,10 @@ allow_lesser = true
 [node name="ScaleXLabel" type="Label" parent="Stack/Body/Rows" unique_id=1282056345]
 layout_mode = 2
 text = "scale x"
-horizontal_alignment = 2
 
 [node name="scale_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1654072941]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true
@@ -133,13 +105,10 @@ allow_lesser = true
 [node name="ScaleYLabel" type="Label" parent="Stack/Body/Rows" unique_id=639484831]
 layout_mode = 2
 text = "y"
-horizontal_alignment = 2
 
 [node name="scale_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=2065759633]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true
@@ -147,13 +116,10 @@ allow_lesser = true
 [node name="ScaleZLabel" type="Label" parent="Stack/Body/Rows" unique_id=898291836]
 layout_mode = 2
 text = "z"
-horizontal_alignment = 2
 
 [node name="scale_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=1060513026]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 step = 0.01
 allow_greater = true
 allow_lesser = true

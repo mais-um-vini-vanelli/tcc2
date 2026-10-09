@@ -115,7 +115,6 @@ func _build() -> void:
 	window.size = Vector2(SIDE, SIDE)
 	window.clip_contents = true
 	window.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	window.add_theme_stylebox_override("panel", _box(Color.BLACK))
 	_loupe.add_child(window)
 
 	_zoom = TextureRect.new()
@@ -131,8 +130,12 @@ func _build() -> void:
 	reticle.size = Vector2(ZOOM, ZOOM)
 	reticle.position = (Vector2(SIDE, SIDE) - reticle.size) * 0.5
 	reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	reticle.add_theme_stylebox_override("panel",
-		_box(Color.TRANSPARENT, Tcc2Node.SELECTION_COLOR))
+	var outline := StyleBoxFlat.new()
+	outline.bg_color = Color.TRANSPARENT
+	outline.border_color = Tcc2Node.SELECTION_COLOR
+	outline.set_border_width_all(1)
+
+	reticle.add_theme_stylebox_override("panel", outline)
 	window.add_child(reticle)
 
 	_label = Label.new()
@@ -141,15 +144,8 @@ func _build() -> void:
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_label.add_theme_font_size_override("font_size", 11)
-	_label.add_theme_stylebox_override("normal", _box(Color.BLACK))
+	_label.add_theme_stylebox_override(&"normal",
+		container.get_theme_stylebox(&"panel", &"Panel"))
 	_loupe.add_child(_label)
 
 	container.get_parent().add_child(_loupe)
-
-func _box(fill: Color, border := Color("#575757")) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = fill
-	box.border_color = border
-	box.set_border_width_all(1)
-	return box

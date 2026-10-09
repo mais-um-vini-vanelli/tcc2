@@ -16,7 +16,7 @@ func _build() -> void:
 	cone.top_radius = 0.0
 	cone.bottom_radius = HEAD_RADIUS
 	cone.height = HEAD_LENGTH
-	cone.radial_segments = 12
+	cone.radial_segments = 6
 	cone.rings = 1
 
 	for axis in 3:

@@ -1,6 +1,6 @@
 class_name RotateGizmo extends TransformGizmo
 
-const SEGMENTS := 24
+const SEGMENTS := 10
 const ARC := PI
 const HALF_WIDTH := 0.016
 
