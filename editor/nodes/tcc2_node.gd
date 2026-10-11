@@ -2,6 +2,7 @@ class_name Tcc2Node extends Node3D
 
 const SELECTION_COLOR := Color("#ffd63d")
 const ICONS_LAYER := 1 << 1
+const SELECTION_LAYER := 1 << 2
 const ICON_COLOR := Color("#e8eff7")
 const ICON_SCREEN_HEIGHT := 0.05
 

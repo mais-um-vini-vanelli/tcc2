@@ -2,6 +2,8 @@
 //!
 //! Internamente a cor é `f32` e **linear**. Converte pra `u8` só na saída, e
 //! é nessa conversão que a codificação sRGB entra.
+//!
+//! Teoria: cor-e-saida.md
 
 use std::ops::{Add, Div, Mul, Sub};
 

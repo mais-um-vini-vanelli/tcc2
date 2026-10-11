@@ -30,7 +30,7 @@ para cada raio:
   -> se intercepta uma folha, faz o teste de interseção com a geometria
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto, estático
 Desenho de uma BVH.
 :::
 
@@ -99,7 +99,7 @@ Em 2D, com o raio subindo para a direita:
                 ╱│             │            entra na fatia x
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto
 Trocar por chart, mostrar caso em que não cruza.
 :::
 
@@ -126,12 +126,8 @@ Três detalhes que o código herda de graça:
   fora(+), O.x = 2   : (-∞, -∞)
   ```
 
-::: warning 🚧 TODO
-Trocar por chart.
-:::
-
-  Note que só o caso em que o raio está dentro dos planos devolve `(-∞, ∞)`, que
-  são valores neutros de `t`; não deixam o intervalo mais restritivo.
+Note que só o caso em que o raio está dentro dos planos devolve `(-∞, ∞)`, que
+são valores neutros de `t`; não deixam o intervalo mais restritivo.
 
 ## Construção pela mediana
 
@@ -153,7 +149,7 @@ divide(itens):
 O eixo é escolhido a partir dos centros e o corte é na mediana. Esse método 
 balanceia a **contagem** de itens, não o espaço. 
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto, estático
 Imagem de caso ruim.
 :::
 

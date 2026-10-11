@@ -7,12 +7,6 @@ export default defineConfig({
 
   markdown: { lineNumbers: true },
 
-  ignoreDeadLinks: [
-    /^\/fundamentos\/(transform|shading)/,
-    /^\/apendice\//
-  ],
-
-
   themeConfig: {
     nav: [
       { text: 'Rasterização', link: '/rasterizacao/' },
@@ -27,6 +21,7 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: 'A pipeline', link: '/rasterizacao/' },
+          { text: 'Tesselação', link: '/rasterizacao/tesselacao' },
           { text: 'Frustum e recorte', link: '/rasterizacao/frustum-e-recorte' },
           { text: 'Projeção', link: '/rasterizacao/projecao' },
           { text: 'O triângulo', link: '/rasterizacao/triangulo' }
@@ -50,7 +45,10 @@ export default defineConfig({
         items: [
           { text: 'Câmera', link: '/fundamentos/camera' },
           { text: 'Transformações', link: '/fundamentos/transform' },
+          { text: 'Texturas e mipmaps', link: '/fundamentos/texturas' },
+          { text: 'Tangentes e normal mapping', link: '/fundamentos/tangentes' },
           { text: 'Shading', link: '/fundamentos/shading' },
+          { text: 'Cor e saída', link: '/fundamentos/cor-e-saida' },
         ]
       },
       {
@@ -58,7 +56,7 @@ export default defineConfig({
         collapsed: true,
         items: [
           { text: 'Regra de Cramer', link: '/apendice/cramer' },
-          { text: 'Produto escalar', link: '/apendice/vetores' }
+          { text: 'Produto escalar e vetorial', link: '/apendice/vetores' }
         ]
       }
     ],

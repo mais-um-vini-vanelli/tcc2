@@ -14,6 +14,7 @@ signal pixel_picked(x: int, y: int)
 
 @onready var camera_3d: Camera3D = $SceneView/Camera3D
 @onready var scene_view: SubViewport = $SceneView
+@onready var outline: SelectionOutline = $"../SelectionOutline"
 
 var _gizmos: Array[TransformGizmo] = []
 var _picker: TrianglePicker
@@ -34,6 +35,8 @@ var _pitch := 0.0
 func _ready() -> void:
 	_yaw = camera_3d.rotation.y
 	_pitch = camera_3d.rotation.x
+
+	camera_3d.cull_mask &= ~Tcc2Node.SELECTION_LAYER
 
 	for transform in [TranslateGizmo.new(), ScaleGizmo.new(), RotateGizmo.new()]:
 		transform.camera = camera_3d
@@ -170,6 +173,7 @@ func render_camera() -> Tcc2Camera:
 func set_pov(enabled: bool) -> void:
 	_cancel_mouse()
 	_pov.set_active(enabled)
+	outline.set_enabled(not enabled)
 
 	set_target(_target)
 

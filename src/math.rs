@@ -18,25 +18,17 @@ impl Vec2 {
         Vec2 { x, y }
     }
 
-    // Produto escalar.
-    //
-    // Significado:
-    // - Mede o quanto dois vetores estão alinhados. Ele retorna:
-    //   - valores positivos se o ângulo entre eles é < 90º
-    //   - valor = 0 se o ângulo entre eles é = 90º
-    //   - valores negativos se o ângulo entre eles é > 90º (quando eles apontam em direções opostas)
-    // - Se um dos vetores é unitário, o resultado é a projeção de um dos vetores no outro.
+    // Teoria: vetores.md#produto-escalar
+    // Produto escalar: mede o quanto dois vetores estão alinhados, e é a projeção
+    // de um no outro quando um deles é unitário.
     pub fn dot(self, other: Vec2) -> f32 {
         self.x * other.x + self.y * other.y
     }
 
-    // Produto vetorial ou cruzado.
-    //
-    // Essa operação não existe propriamente em 2D, mas pode ser simulada extendendo os dois vetores pra 3D com z = 0; ou seja tratando eles como vetores 3D 'deitados' no plano XY.
-    //
-    // Significado:
-    // - O resultado dessa operação é a área do paralelogramo formado entre os dois vetores no plano.
-    // - Se o resultado é positivo, o vetor 3D resultante apontaria pra 'fora da tela'; ou seja os vetores self x other estão em sentido anti-horário.
+    // Teoria: vetores.md#produto-vetorial-ou-cruzado
+    // Produto vetorial em 2D: simulado estendendo os dois vetores pra 3D com
+    // z = 0. O resultado é a área com sinal do paralelogramo, positiva quando
+    // self -> other gira em anti-horário.
     pub fn cross(self, other: Vec2) -> f32 {
         Vec3::new(self.x, self.y, 0.0)
             .cross(Vec3::new(other.x, other.y, 0.0))
@@ -100,24 +92,16 @@ impl Vec3 {
         Vec3 { x, y, z }
     }
 
-    // Produto escalar.
-    //
-    // Significado:
-    // - Mede o quanto dois vetores estão alinhados. Ele retorna:
-    //   - valores positivos se o ângulo entre eles é < 90º
-    //   - valor = 0 se o ângulo entre eles é = 90º
-    //   - valores negativos se o ângulo entre eles é > 90º (quando eles apontam em direções opostas)
-    // - Se um dos vetores é unitário, o resultado é a projeção de um dos vetores no outro.
+    // Teoria: vetores.md#produto-escalar
+    // Produto escalar: mede o quanto dois vetores estão alinhados, e é a projeção
+    // de um no outro quando um deles é unitário.
     pub fn dot(self, other: Vec3) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
-    // Produto vetorial ou cruzado.
-    //
-    // Significado:
-    // - O resultado dessa operação é um vetor perpendicular a self e other.
-    // - O comprimento do vetor resultante é igual à área do paralelogramo formado entre os dois vetores no plano.
-    // - O sentido do vetor resultante depende da ordem de self e other. Se você posicionar os dedos da mão direita no sentido de self e fechá-los em direção a other, o seu polegar apontará o sentido do resultado.
+    // Teoria: vetores.md#produto-vetorial-ou-cruzado
+    // Produto vetorial: um vetor perpendicular aos dois, de comprimento igual à
+    // área do paralelogramo. O sentido sai da ordem, pela regra da mão direita.
     pub fn cross(self, other: Vec3) -> Vec3 {
         Vec3::new(
             self.y * other.z - self.z * other.y,
@@ -330,12 +314,12 @@ impl Plane {
     }
 }
 
+// Teoria: tangentes.md#a-base-tbn
 /// A tangente por vértice: pra onde a superfície anda quando o `u` da uv
 /// cresce.
 ///
-/// Junto com a normal ela monta a base em que um normal map guarda os seus
-/// vetores: `T` no eixo do `u`, `B` no eixo do `v`, `N` pra fora da superfície.
-/// `B` não é guardado porque sai de `N × T`, com handedness definindo a direção.
+/// `B` não é guardado porque sai de `N × T`, com o handedness definindo a
+/// direção.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tangent {
     /// Unitário e perpendicular à normal do vértice.
@@ -362,12 +346,9 @@ impl Tangent {
         }
     }
 
+    // Teoria: tangentes.md#a-tangente-por-vértice
     /// A tangente de uma superfície de parametrização conhecida: `du` e `dv`
     /// são as direções em que a uv cresce ali.
-    ///
-    /// A tangente é o `du` projetado no plano da superfície (Gram-Schmidt), e o
-    /// sinal sai de comparar o `N × T` que a base vai usar com o `dv` que a uv
-    /// realmente tem.
     pub fn from_uv_axes(normal: Vec3, du: Vec3, dv: Vec3) -> Self {
         let vector = (du - normal * normal.dot(du)).normalized();
 
@@ -378,6 +359,7 @@ impl Tangent {
         Tangent::new(vector, normal.cross(vector).dot(dv))
     }
 
+    // Teoria: tangentes.md#quando-não-há-uv
     /// Uma tangente qualquer perpendicular à normal, pra quando não há uv de
     /// onde tirar a de verdade. O relevo sai girado, mas a base fecha.
     pub fn any_perpendicular(normal: Vec3) -> Self {

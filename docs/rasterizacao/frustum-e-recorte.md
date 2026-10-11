@@ -39,7 +39,7 @@ p no plano                   n · v = 0   (v e n perpendiculares)
 p abaixo (lado oposto)       n · v < 0
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 Desenho de um plano com a normal, dois vetores inclinados, um acima e o outro
 abaixo do plano.
 :::
@@ -83,7 +83,7 @@ Olhando só pro plano de cima da pirâmide:
 tan(fov/2) = oposto / adjacente, com adjacente = z
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto
 Desenho lateral do eixo z com a linha do topo do frustum, slider regulando o
 fov/2, 2 pontos em z = 2 e z = 4.
 :::

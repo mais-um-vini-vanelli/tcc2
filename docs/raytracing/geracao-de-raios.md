@@ -58,7 +58,7 @@ câmera  ) - - - - - - - +  centro da tela
       |<---- 1.0 ------>|
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 Desenho 3D da tela virtual, mostrando o ângulo, z= 1 e com slider de altura.
 :::
 
@@ -81,7 +81,7 @@ tan(fov_h / 2) = width / z
 
 Então o deslocamento horizontal é `direita * (u * meia_altura * aspect)`.
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 Desenho 2D da tela virtual com (u, v) à esquerda, desenho 3D com a tela no espaço à direita.
 :::
 

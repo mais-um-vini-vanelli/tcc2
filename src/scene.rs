@@ -564,12 +564,11 @@ impl Material {
         }
     }
 
+    // Teoria: tangentes.md#do-mapa-para-o-mundo
     /// A normal que o shading usa no ponto: a da geometria, torcida pelo mapa
     /// de normais quando existe um.
     ///
-    /// `normal` e `tangent` chegam em espaço de mundo e já interpolados. A base
-    /// TBN é montada aqui — `T` no eixo do u, `B` no eixo do v, `N` pra fora —
-    /// e é ela que leva o vetor do mapa do espaço tangente de volta pro mundo:
+    /// `normal` e `tangent` chegam em espaço de mundo e já interpolados.
     pub fn shading_normal(
         &self,
         uv: Vec2,
@@ -614,8 +613,7 @@ impl Material {
         )
         .normalized();
 
-        // Agora convertemos a normal do normal_map de espaço tangente (TBN) para espaço de mundo, multiplicando os componentes da normal
-        // pela base: (T * n.x + B * n.y + N * n.z).normalized()
+        // Do espaço tangente (TBN) pro mundo.
         let bitangente = normal.cross(tangent.vector) * tangent.handedness;
         (tangent.vector * n.x + bitangente * n.y + normal * n.z).normalized()
     }
@@ -755,6 +753,7 @@ impl Primitive {
         Primitive::Cube { center, half_edge }
     }
 
+    // Teoria: tesselacao.md
     /// Converte o primitivo em malha de triângulos.
     pub fn tessellate(&self) -> Mesh {
         match self {
@@ -841,6 +840,7 @@ impl Primitive {
         }
     }
 
+    // Teoria: tesselacao.md#o-cubo
     /// Quatro vértices por face, em vez dos oito cantos compartilhados: cada face
     /// precisa da própria normal e da própria uv no mesmo canto.
     fn cubo(center: Vec3, half_edge: f32) -> Mesh {
@@ -908,6 +908,7 @@ impl Primitive {
         }
     }
 
+    // Teoria: tesselacao.md#a-esfera-uv
     /// Tesselation em grade de paralelos e meridianos ("uv sphere").
     fn esfera_uv(center: Vec3, radius: f32) -> Mesh {
         /// Paralelos da esfera tesselada, com o dobro disso em meridianos.
@@ -936,7 +937,6 @@ impl Primitive {
 
                 // Na esfera unitária centrada na origem, a posição do ponto e a
                 // normal ali são o mesmo vetor.
-                // A visualização disso está em teoria/figuras/esfera_uv.html
                 let r = sin_theta;
                 let normal = Vec3::new(r * cos_phi, cos_theta, r * sin_phi);
 
@@ -946,9 +946,8 @@ impl Primitive {
                 tangents.push(tangente_da_esfera(normal));
                 uvs.push(Vec2::new(v, u));
 
-                // Note que nos polos (theta = 0, theta = PI) e na emenda dos meridianos (phi = TAU) a gente tem vários vértices na
-                // mesma posição. Isso é preciso pra permitir uvs diferentes pra esses vértices e não ter problema na hora de aplicar
-                // texturas.
+                // Nos polos e na emenda dos meridianos há vértices repetidos na mesma
+                // posição, pra permitir uvs diferentes pra eles.
             }
         }
 
@@ -962,15 +961,8 @@ impl Primitive {
                 let c = a + por_linha;
                 let d = c + 1;
 
-                // Anti-horário visto de fora, como o cubo.
-                //
-                // Na fileira i = 0, a e b estão os dois na linha 0, que é θ = 0: o polo norte. Todos os vértices dessa linha ocupam
-                // a mesma posição no espaço. Então:
-                //    a = b   ← o mesmo ponto
-                //     /\
-                //    /  \
-                //   c————d
-                // Mesma coisa pra i = paralelos - 1, mas com c = d
+                // Anti-horário visto de fora, como o cubo. Nas fileiras dos polos um dos
+                // dois triângulos é degenerado (a = b, ou c = d) e é descartado.
                 if i != 0 {
                     indices.extend_from_slice(&[a, b, c]);
                 }
@@ -990,6 +982,7 @@ impl Primitive {
     }
 }
 
+// Teoria: intersecoes.md#o-acerto-só-vale-dentro-do-quadrado
 /// A uv do ponto de coordenadas `(a, b)` sobre uma face do cubo, em meias
 /// arestas: [-1, 1] vira [0, 1].
 ///
@@ -1074,14 +1067,9 @@ pub fn eixos_da_uv(pontos: [Vec3; 3], uvs: [Vec2; 3]) -> Option<(Vec3, Vec3)> {
     Some(((e1 * d2.y - e2 * d1.y) / det, (e2 * d1.x - e1 * d2.x) / det))
 }
 
+// Teoria: tangentes.md#a-tangente-da-esfera
 fn tangente_da_esfera(normal: Vec3) -> Tangent {
-    // A fórmula da normal é N(θ,ϕ) = (sinθcosϕ, cosθ, sinθsinϕ).
-    //
-    // A tangente é a direção em que u cresce, ou seja cresce junto com ϕ, ou seja é a derivada de N com
-    // relação a ϕ: dN/dϕ = (−sinθsinϕ, 0, sinθcosϕ)
-    //
-    // Comparando a fórmula da normal com a fórmula da derivada, dá de conseguir a derivada com:
-    // (-normal.z, 0, normal.x)
+    // du é a derivada da normal com relação a ϕ, e sai de (-normal.z, 0, normal.x).
     let du = Vec3::new(-normal.z, 0.0, normal.x);
 
     // Nos polos o paralelo tem raio zero e a direção do u não existe.
@@ -1185,6 +1173,7 @@ fn intersecao_esfera(r: Ray, centro: Vec3, raio: f32) -> Option<f32> {
     [t0, t1].into_iter().find(|&t| t > 0.0)
 }
 
+// Teoria: intersecoes.md#o-raio-e-o-cubo
 /// Diferente da esfera, a normal e a uv dependem de qual face o raio acertou, então
 /// o acerto já sai inteiro daqui.
 fn intersecao_cubo(r: Ray, centro: Vec3, meia_aresta: f32) -> Option<Hit> {
@@ -1213,22 +1202,15 @@ fn intersecao_cubo(r: Ray, centro: Vec3, meia_aresta: f32) -> Option<Hit> {
         (Vec3::new( 0.0,  0.0, -1.0), Vec3::new(-1.0, 0.0,  0.0), Vec3::new(0.0, -1.0,  0.0)),
     ];
 
-    // O plano da face é n·x = h, cruzado quando n·o + t·(n·d) = h, ou seja
-    // t = (h − n·o) / (n·d). Como a normal é um eixo, o produto escalar só
-    // escolhe a componente e o sinal.
-    //
-    // Raio paralelo ao plano dá n·d = 0, e a divisão dá ±∞ (ou NaN, com a
-    // origem em cima do plano). Como em `Aabb::hit`, isso é proposital: um t
-    // infinito leva o ponto pro infinito e ele cai fora do quadrado, e NaN
-    // falha o t > 0.
+    // t = (h − n·o) / (n·d). O ±∞/NaN do raio paralelo ao plano é proposital,
+    // como em `Aabb::hit`: o acerto cai fora do quadrado ou falha o t > 0.
 
     for (normal, direita, baixo) in faces {
         let t = (h - o.dot(normal)) / d.dot(normal);
         let p = o + d * t;
 
-        // `(a, b)` são as coordenadas, em meias arestas, do ponto em que o raio
-        // cruza o plano da face. O plano é infinito: o acerto só vale dentro do
-        // quadrado a, b ∈ [-1, 1].
+        // `(a, b)` em meias arestas: o plano é infinito, então o acerto só vale
+        // dentro do quadrado a, b ∈ [-1, 1].
         let (a, b) = (p.dot(direita) / h, p.dot(baixo) / h);
 
         if t > 0.0 && a.abs() <= 1.0 && b.abs() <= 1.0 {

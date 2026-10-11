@@ -160,8 +160,12 @@ func _active() -> bool:
 	return camera != null and is_instance_valid(target)
 
 func _screen_scale() -> float:
-	var distance := camera.global_position.distance_to(target.global_position)
-	return distance * tan(deg_to_rad(camera.fov) * 0.5) * SCREEN_SIZE
+	var offset := target.global_position - camera.global_position
+
+	# A perspective projection divides by the depth along the camera's forward axis,
+	# not by the distance to the camera.
+	var depth := maxf(-camera.global_basis.z.dot(offset), 0.001)
+	return depth * tan(deg_to_rad(camera.fov) * 0.5) * SCREEN_SIZE
 
 # Lights one of the three handles, or clears them all with -1.
 func highlight(axis: int) -> void:

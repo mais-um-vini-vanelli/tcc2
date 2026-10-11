@@ -18,7 +18,7 @@ tela *para* a cena.
 ## As seções
 
 - [Geração de raios](/raytracing/geracao-de-raios) — do pixel ao raio primário, nos dois modos de câmera
-- [Interseções](/raytracing/intersecoes) — o raio e a esfera, o raio e o triângulo, o uv do acerto
+- [Interseções](/raytracing/intersecoes) — o raio e a esfera, o raio e o triângulo, o raio e o cubo, o uv do acerto
 - [Whitted](/raytracing/whitted) — termo direto, recursão, raio de sombra, acne e epsilon
 - [Reflexão e refração](/raytracing/reflexao-e-refracao) — os raios secundários e seus pesos
 - [BVH](/raytracing/bvh) — mediana, SAH, travessia, dois níveis

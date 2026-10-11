@@ -21,7 +21,7 @@ Pra calcular a direção do raio de reflexão, precisamos:
   ----X--------
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 Trocar por plot, mostrando d · n também; mostrar -(d · n) * n somando duas vezes.
 :::
 
@@ -55,7 +55,7 @@ Com a luz de frente (`cos = 1`) sobra `f0`; raspando a superfície (`cos → 0`)
 termo vai a 1, e **todo** material vira espelho. É o efeito que se vê na água de um 
 lago: o mesmo material que reflete 4% de frente reflete quase tudo de lado.
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto, estático
 Imagem de lago.
 :::
 
@@ -100,7 +100,7 @@ n1 * sen θ1 = n2 * sen θ2   n1, n2 = índices dos dois meios
               |    t
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 Trocar por chart.
 :::
 

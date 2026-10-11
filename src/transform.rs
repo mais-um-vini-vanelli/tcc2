@@ -43,7 +43,7 @@ impl Transform {
         Self::gira(Self::escala(d, self.scale), self.rotation, method)
     }
 
-    // Teoria: transform.md#a-normal-usa-a-escala-reciproca
+    // Teoria: transform.md#a-normal-usa-o-transform-inverso
     /// A normal não acompanha a escala: ela usa o recíproco dela. É a forma
     /// legível do que a inversa transposta faz.
     pub fn apply_normal(&self, n: Vec3, method: TransformMethod) -> Vec3 {
@@ -56,6 +56,7 @@ impl Transform {
     }
 
     pub fn apply_tangent(&self, t: Tangent, method: TransformMethod) -> Tangent {
+        // Teoria: tangentes.md#a-bitangente-sob-espelhamento
         // A transformação pode mexer no *lado* da bitangente: uma escala
         // com um número ímpar de eixos negativos espelha o espaço.
         let espelha = self.scale.x * self.scale.y * self.scale.z < 0.0;

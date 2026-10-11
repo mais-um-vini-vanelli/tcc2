@@ -37,8 +37,10 @@ func set_active(enabled: bool) -> void:
 	_save()
 
 	_camera = Camera3D.new()
-	# Icons and the grid sit on their own layer, which the preview skips.
-	_camera.cull_mask = ALL_LAYERS & ~Tcc2Node.ICONS_LAYER
+	# Icons, the grid and the selection silhouettes sit on their own layers,
+	# which the preview skips.
+	_camera.cull_mask = (ALL_LAYERS
+		& ~Tcc2Node.ICONS_LAYER & ~Tcc2Node.SELECTION_LAYER)
 	_camera.environment = _build_environment()
 	_environment = _camera.environment
 

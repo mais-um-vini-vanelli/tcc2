@@ -147,11 +147,11 @@ func _gizmo_mesh() -> Mesh:
 	return null
 
 func _arrow_mesh() -> Mesh:
-	const ARROW_LENGTH := 0.8
-	const ARROW_HEAD_LENGTH := 0.3
-	const ARROW_HEAD_RADIUS := 0.16
-	const ARROW_SHAFT_RADIUS := 0.06
-	const ARROW_SEGMENTS := 12
+	const ARROW_LENGTH := 1.2
+	const ARROW_HEAD_LENGTH := 0.45
+	const ARROW_HEAD_RADIUS := 0.28
+	const ARROW_SHAFT_RADIUS := 0.10
+	const ARROW_SEGMENTS := 4
 	const ARROW_RAYS := 4
 
 	var tip := Vector3.FORWARD * ARROW_LENGTH
@@ -185,9 +185,9 @@ func _arrow_mesh() -> Mesh:
 	return mesh
 
 func _cone_mesh() -> Mesh:
-	const CONE_LENGTH := 0.8
-	const CONE_SEGMENTS := 24
-	const CONE_RAYS := 4
+	const CONE_LENGTH := 1.2
+	const CONE_SEGMENTS := 8
+	const CONE_RAYS := 8
 
 	var radius := CONE_LENGTH * tan(deg_to_rad(minf(spot.outer_angle, 89.0)))
 	var rim := _ring(radius, -CONE_LENGTH, CONE_SEGMENTS)

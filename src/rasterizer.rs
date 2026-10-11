@@ -463,17 +463,15 @@ fn preenche(
                 }
             }
 
-            // A normal interpolada entre três normais unitárias não sai unitária, então precisa normalizar aqui.
-            // Considere n1 = (1,0), n2 = (0,1) e t = 0.5:
-            // n' = n1 * (1 - t) + n2 * t = (0,5, 0,5)
-            // |n'| = √(0,5² + 0,5²) = √(0,25 + 0,25) = √0,5 ≈ 0,7071
+            // Teoria: triangulo.md#a-normal-interpolada-não-é-unitária
+            // A normal interpolada entre três normais unitárias não sai unitária.
             let normal = baricentricas.interpolate_vec3(normais).normalized();
 
             let uv = baricentricas.interpolate_vec2(uvs);
 
-            // O pixel vizinho é a próxima iteração do laço, então a derivada da uv
-            // sai por diferença finita. Ele pode cair fora do triângulo, e tudo bem:
-            // interessa a taxa de variação, não uma uv válida.
+            // Teoria: texturas.md#a-footprint-do-pixel
+            // O pixel vizinho é a próxima iteração do laço, então a derivada da uv sai
+            // por diferença finita.
             let footprint = Footprint {
                 dx: uv_em(Vec2::new(p.x + 1.0, p.y)) - uv,
                 dy: uv_em(Vec2::new(p.x, p.y + 1.0)) - uv,

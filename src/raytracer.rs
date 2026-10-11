@@ -233,6 +233,7 @@ impl<'a> Contexto<'a> {
         let superficie = acerto.surface;
         let geometrica = acerto.normal_geometrica;
         let material = acerto.material;
+        // Teoria: texturas.md#a-footprint-do-pixel
         // Um raio não sabe dos raios vizinhos, então não há footprint: a textura
         // fica no nível 0.
         let amostra = material.sample(superficie.uv, None, self.params.shading.filtering);

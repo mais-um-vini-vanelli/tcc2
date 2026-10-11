@@ -1,4 +1,6 @@
 //! Textura, a pirâmide de mipmaps (Williams, 1983) e os filtros.
+//!
+//! Teoria: texturas.md
 
 use crate::color::Rgb;
 use crate::math::Vec2;
@@ -20,6 +22,7 @@ struct Nivel {
     texels: Vec<Rgb>,
 }
 
+// Teoria: texturas.md#a-footprint-do-pixel
 /// Quanto a uv anda quando o pixel anda um passo em x (`dx`) e um em y (`dy`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Footprint {
@@ -73,10 +76,11 @@ impl Texture {
         self.levels.len()
     }
 
+    // Teoria: texturas.md#do-footprint-para-o-nível
     /// O nível `λ` em que um texel cobre o que o pixel cobre.
     pub fn level_of_detail(&self, footprint: Footprint) -> f32 {
-        // footprint.dx diz o deslocamento no plano UV que acontece quando x anda 1 unidade pra + ou pra -; as coordenadas uv vão
-        // de [0, 1], então multiplicamos u * width e v * height pra ter o deslocamento em texels
+        // A uv vai de [0, 1], então multiplicar por width/height dá o deslocamento
+        // em texels.
         let texels_em_dx = Vec2::new(
             footprint.dx.x * self.levels[0].width as f32,
             footprint.dx.y * self.levels[0].height as f32,
@@ -89,25 +93,14 @@ impl Texture {
         )
         .length();
 
-        // com os dois deslocamentos, temos o quadrado de texels da textura original (miplevel 0) que estão dentro do pixel; agora
-        // é descobrir o miplevel em que um texel tem o tamanho desse quadrado.
-        //
-        // cada miplevel tem metade da altura e largura do anterior:
-        // > width_k = width_0 / 2^k
-        // queremos o miplevel com width_k = 1:
-        // > 1 = width_0 / 2^k
-        // > width_0 = 2^k
-        // > 2^k = width_0
-        // aplicando log2 dos dois lados:
-        // > k = log2(width_0)
-        //
-        // mas os dois vetores não precisam ter o mesmo tamanho, então usamos o k olhando apenas para o maior entre width e height
+        // O nível que a gente quer é o log2 do maior dos dois deslocamentos.
         self.clamp_miplevel(texels_em_dx.max(texels_em_dy).log2())
     }
 
     /// Lê a textura com o filtro pedido. Os filtros com mipmap escolhem o nível
     /// pela footprint do pixel; os outros dois, ficam no 0.
     pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, filtering: Filtering) -> Rgb {
+        // Teoria: texturas.md#os-filtros
         let nivel = || footprint.map_or(0.0, |footprint| self.level_of_detail(footprint));
 
         match filtering {
@@ -143,6 +136,7 @@ impl Nivel {
         Some(self.texels[(y * self.width + x) as usize])
     }
 
+    // Teoria: texturas.md#nearest-o-texel-que-contém-a-uv
     /// O texel que contém `uv`. uv fora de [0,1] faz wrap, e `v` cresce para
     /// baixo, como nas imagens.
     fn nearest(&self, uv: Vec2) -> Rgb {
@@ -157,6 +151,7 @@ impl Nivel {
         .unwrap_or(Rgb::BLACK)
     }
 
+    // Teoria: texturas.md#bilinear-os-quatro-vizinhos
     /// Os quatro texels em volta de `uv`, pesados pela distância até o centro
     /// de cada um.
     fn bilinear(&self, uv: Vec2) -> Rgb {
@@ -185,6 +180,7 @@ impl Nivel {
         de_cima.lerp(de_baixo, fy)
     }
 
+    // Teoria: texturas.md#a-pirâmide
     /// O nível seguinte: cada texel é a média de um bloco 2x2 deste.
     fn reduz(&self) -> Nivel {
         let largura = (self.width / 2).max(1);

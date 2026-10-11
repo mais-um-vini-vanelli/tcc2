@@ -1,7 +1,5 @@
 class_name Tcc2Geometry extends Tcc2Node
 
-const OUTLINE_WIDTH := 0.04
-
 enum Kind {SPHERE, CUBE, MESH}
 
 class Sphere:
@@ -63,9 +61,9 @@ var material: Tcc2Material = Tcc2Material.new():
 
 var _preview: MeshInstance3D
 var _preview_material := StandardMaterial3D.new()
-var _selection: MeshInstance3D
-# Kept here too: set_selected can land before _ready has built the outline, and
-# the flag would be lost if it only ever lived on the node.
+var _mask: MeshInstance3D
+# Kept here too: set_selected can land before _ready has built the silhouette,
+# and the flag would be lost if it only ever lived on that instance.
 var _is_selected := false
 
 func _init() -> void:
@@ -80,11 +78,12 @@ func _ready() -> void:
 	_preview.material_override = _preview_material
 	add_child(_preview, false, Node.INTERNAL_MODE_FRONT)
 
-	_selection = MeshInstance3D.new()
-	_selection.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_selection.material_override = _selection_material()
-	_selection.visible = _is_selected
-	add_child(_selection, false, Node.INTERNAL_MODE_FRONT)
+	_mask = MeshInstance3D.new()
+	_mask.layers = SELECTION_LAYER
+	_mask.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_mask.material_override = _mask_material()
+	_mask.visible = _is_selected
+	add_child(_mask, false, Node.INTERNAL_MODE_FRONT)
 
 	if not material.changed.is_connected(_apply_material):
 		material.changed.connect(_apply_material)
@@ -106,8 +105,8 @@ func model():
 func set_selected(value: bool) -> void:
 	_is_selected = value
 
-	if _selection != null:
-		_selection.visible = value
+	if _mask != null:
+		_mask.visible = value
 
 func preview() -> MeshInstance3D:
 	return _preview
@@ -138,38 +137,14 @@ func _preview_mesh() -> Mesh:
 
 func _set_preview_mesh(mesh: Mesh) -> void:
 	_preview.mesh = mesh
-	_selection.mesh = mesh
+	_mask.mesh = mesh
 
 func _apply_material() -> void:
 	if _preview_material != null:
 		material.apply_to(_preview_material)
 
-func _selection_material() -> StandardMaterial3D:
-	# First pass: write to the stencil buffer.
+func _mask_material() -> StandardMaterial3D:
 	var mask := StandardMaterial3D.new()
 	mask.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mask.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mask.albedo_color = Color(0, 0, 0, 0)
-	mask.no_depth_test = true
-	mask.stencil_mode = BaseMaterial3D.STENCIL_MODE_CUSTOM
-	mask.stencil_flags = BaseMaterial3D.STENCIL_FLAG_WRITE
-	mask.stencil_reference = 1
-	mask.render_priority = 1
-
-	# Second pass: write outline only to the fragments the first pass didn't touch.
-	var outline := StandardMaterial3D.new()
-	outline.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	outline.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	outline.albedo_color = SELECTION_COLOR
-	outline.cull_mode = BaseMaterial3D.CULL_FRONT
-	outline.grow = true
-	outline.grow_amount = OUTLINE_WIDTH
-	outline.no_depth_test = true
-	outline.stencil_mode = BaseMaterial3D.STENCIL_MODE_CUSTOM
-	outline.stencil_flags = BaseMaterial3D.STENCIL_FLAG_READ
-	outline.stencil_compare = BaseMaterial3D.STENCIL_COMPARE_NOT_EQUAL
-	outline.stencil_reference = 1
-	outline.render_priority = 2
-
-	mask.next_pass = outline
+	mask.albedo_color = Color.WHITE
 	return mask

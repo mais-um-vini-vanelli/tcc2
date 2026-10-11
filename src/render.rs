@@ -94,19 +94,9 @@ impl ColorBuffer {
         }
     }
 
+    // Teoria: cor-e-saida.md
     /// O último estágio dos dois pipelines: exposição e tone mapping em todos
     /// os pixels.
-    ///
-    /// É parecido com a conversão de linear -> sRGB, mas resolve outro problema:
-    /// - O tonemap pega valores de radiância da cena (cores f32 no intervalo [0, ∞]) e converte pra cores f32 no intervalo [0, 1].
-    /// - A conversão pra sRGB pega as cores f32 no intervalo [0, 1] e converte pra u8 [0, 255], com a maior parte dos inteiros alocados pras cores escuras
-    /// (valores menores).
-    ///
-    /// Reinhard é uma opção simples de tonemap que cumpre o que a gente espera de uma curva de tons:
-    /// - Preto continua preto: f(0) = 0.
-    /// - Nunca passa de 1, por maior que seja a entrada.
-    /// - É sempre crescente: o mais claro na cena continua mais claro na imagem (o clamp ingênuo falha aqui, porque 2 e 40 viram o mesmo valor).
-    /// - Os escuros ficam como estão, já que eles não eram o problema. Com c pequeno, 1 + c ≈ 1, então f(c) ≈ c.
     pub(crate) fn apply_output(&mut self, output: &OutputOptions) {
         for pixel in &mut self.pixels {
             *pixel = {

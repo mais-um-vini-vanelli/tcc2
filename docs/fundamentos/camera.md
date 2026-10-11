@@ -39,7 +39,7 @@ serve aqui: `d · eixo = |d| * |eixo| * cos(θ)`, e como o eixo é normalizado
 formado por `d` e pela sua projeção naquele eixo. Ou seja, exatamente o quanto o
 ponto anda naquela direção.
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 World space à esquerda, camera space à direita, 1 ponto e 1 câmera nas cenas, um
 vetor apontando da câmera pro ponto, posições do ponto e da câmera editáveis.
 :::

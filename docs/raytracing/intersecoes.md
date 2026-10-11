@@ -14,7 +14,7 @@ A esfera é o conjunto de pontos P com `|P - centro| = raio`, ou
 `|P - centro|² = raio²`: distância até o centro igual ao raio. O ponto a uma
 distância `t` ao longo do raio é `P' = origem + direção * t` (`Ray::at()`).
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 Desenho 3D da esfera, com P, centro, vetor P - centro, raio.
 :::
 
@@ -129,7 +129,7 @@ Para φ, olhando a esfera de cima (plano xz):
                │
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 Trocar por um chart.
 :::
 
@@ -192,7 +192,7 @@ Podemos visualizar os pontos do triângulo no plano UV:
  0       1
 ```
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto
 Desenho 2D disso, com u e v extendendo até -0,5.
 :::
 
@@ -289,7 +289,7 @@ v:   det(-D, E1, T)
 
 `det(M)` tem um significado geométrico: é o volume com sinal de `E1 x D x E2`.
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Médio
 Desenho 3D do volume E1 x D x E2.
 :::
 
@@ -344,3 +344,48 @@ seguiria para sempre dentro dele.
 com eles que a normal e o uv do acerto são interpolados — e, diferente do
 rasterizador, **sem correção de perspectiva nenhuma**: aqui os pesos foram
 medidos na geometria em 3D, então não houve distorção de perspectiva.
+
+## O raio e o cubo
+
+O cubo também tem equação própria. Levando o raio pro cubo com o centro na
+origem, as seis faces viram os planos `x = ±h`, `y = ±h` e `z = ±h`.
+
+Cada face tem a normal, e pra onde apontam a direita e o "pra baixo" de quem olha
+a face de fora:
+
+```text
+normal         direita        baixo
+( 1,  0,  0)   ( 0, 0, -1)    (0, -1,  0)
+( 0,  1,  0)   ( 1, 0,  0)    (0,  0,  1)
+( 0,  0,  1)   ( 1, 0,  0)    (0, -1,  0)
+(-1,  0,  0)   ( 0, 0,  1)    (0, -1,  0)
+( 0, -1,  0)   ( 1, 0,  0)    (0,  0, -1)
+( 0,  0, -1)   (-1, 0,  0)    (0, -1,  0)
+```
+
+### O t de cada face
+
+O plano da face é `n · ponto = h`. O raio é `p(t) = o + t·d`. O raio cruza a face
+quando `n · (o + t·d) = h -> n · o + t·(n · d) = h`, então dá de descobrir `t` com: `t = (h − n · o) / (n · d)`.
+
+### O acerto só vale dentro do quadrado
+
+O plano é infinito, mas a face não. `(a, b)` são as coordenadas, em meias
+arestas, do ponto em que o raio cruza o plano da face, e o acerto só vale dentro
+do quadrado `a, b ∈ [-1, 1]`:
+
+```text
+p = o + t·d
+
+a = (p · direita) / h
+b = (p · baixo)   / h
+```
+
+Das faces que passam os dois testes, vale a mais próxima.
+
+### O infinito e o NaN são de propósito
+
+Raio paralelo ao plano dá `n · d = 0`, e a divisão dá ±∞ (ou NaN, com a origem em
+cima do plano). Como no [teste dos slabs](/raytracing/bvh#o-teste-dos-slabs),
+isso é proposital: um `t` infinito leva o ponto pro infinito e ele cai fora do
+quadrado, e NaN falha o `t > 0`.

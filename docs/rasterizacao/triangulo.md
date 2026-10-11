@@ -32,7 +32,7 @@ A edge function `(A, B, P)` usa dois vetores: `u = B - A` (a base) e
 a reta que passa por A e B — em outras palavras, a projeção de `v` no eixo
 perpendicular a `u`.
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto
 Imagem de `u`, `v` e `u'`.
 :::
 
@@ -86,14 +86,14 @@ ficou a fórmula da edge function. Considerando que a área de um triângulo é
 Se P está dentro do triângulo, a soma das áreas dos subtriângulos BCP, CAP e ABP
 precisa ser igual à área do triângulo ABC.
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto
 Desenho de um triângulo com P dentro e os 3 subtriângulos.
 :::
 
 E quanto maior o subtriângulo formado entre uma aresta de ABC e P, mais perto P
 está do vértice oposto à aresta, e mais longe ele está dos outros 2 vértices.
 
-::: warning 🚧 TODO
+::: warning 🚧 TODO Alto
 Imagem mostrando P em cima de um vértice, no meio de uma aresta, no meio do
 triângulo.
 :::
@@ -185,9 +185,33 @@ profundidade dele. E o peso corrigido de cada vértice é a fatia dele nesse
 `1/z`, renormalizada pra somar 1 de novo. Interpolar qualquer atributo com esses
 pesos é andar em passo constante pelo triângulo **no mundo**, não pela tela.
 
-::: warning 🚧 TODO (Math)
-Demonstrar por que `1/z` é linear na tela.
-:::
+### Por que `1/z` é linear na tela
+
+## Onde a cor é avaliada
+
+Com os pesos na mão, falta decidir em que ponto do triângulo a cor é calculada —
+por face, por vértice ou por fragmento. Isso não diz nada sobre *como* ela é
+calculada; isso é o modelo de reflectância ([Shading](/fundamentos/shading)).
+
+| frequência | o que faz                                                                                                  |
+|------------|------------------------------------------------------------------------------------------------------------|
+| `Flat`     | Uma cor por triângulo, da normal geométrica da face. As faces da malha ficam visíveis. |
+| `Gouraud`  | Uma cor por vértice, interpolada no interior. Barato, mas o brilho especular só existe se cair em cima de um vértice. |
+| `Phong`    | A normal é interpolada e a cor calculada por pixel. É o padrão.                                            |
+
+A escolha só existe no rasterizador: o ray tracer calcula a cor no ponto do
+acerto.
+
+### A normal interpolada não é unitária
+
+A normal interpolada entre três normais unitárias não sai unitária, então precisa
+normalizar depois de interpolar. Considere `n1 = (1,0)`, `n2 = (0,1)` e `t = 0.5`:
+
+```text
+n' = n1 * (1 − t) + n2 * t = (0,5, 0,5)
+
+|n'| = √(0,5² + 0,5²) = √(0,25 + 0,25) = √0,5 ≈ 0,7071
+```
 
 ## Backface culling
 

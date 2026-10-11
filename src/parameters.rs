@@ -78,6 +78,7 @@ impl Default for RasterizationOptions {
     }
 }
 
+// Teoria: texturas.md#os-filtros
 /// Filtro de texture sampling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Filtering {
@@ -104,6 +105,7 @@ pub struct ShadingOptions {
     pub filtering: Filtering,
 }
 
+// Teoria: triangulo.md#onde-a-cor-é-avaliada
 /// Onde a cor é avaliada — por face, por vértice ou por fragmento. Não diz nada
 /// sobre *como* ela é calculada; isso é o `ReflectanceModel`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
