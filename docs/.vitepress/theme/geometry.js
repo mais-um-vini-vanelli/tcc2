@@ -60,18 +60,17 @@ export function xy(pontos) {
 }
 
 const CORES = [
-    ['#2a78d6', '#3987e5'],
-    ['#eb6834', '#d95926'],
-    ['#1baf7a', '#199e70'],
+    ['#fc436f', '#f83f6c'],
+    ['#009850', '#00944e'],
+    ['#0e89ff', '#2b90ff'],
 ]
 
 export function palette(escuro) {
     return {
         serie: CORES.map((s) => s[escuro ? 1 : 0]),
-        tinta: escuro ? '#dfdfd6' : '#3c3c43',
-        fraca: escuro ? 'rgba(223,223,214,0.45)' : 'rgba(60,60,67,0.45)',
-        preenche: escuro ? 'rgba(223,223,214,0.06)' : 'rgba(60,60,67,0.06)',
-        fundo: escuro ? '#1b1b1f' : '#ffffff',
+        tinta: escuro ? '#d5dee8' : '#0b0e11',
+        fraca: escuro ? 'rgba(213,222,232,0.45)' : 'rgba(11,14,17,0.45)',
+        preenche: escuro ? 'rgba(213,222,232,0.06)' : 'rgba(11,14,17,0.06)',
     }
 }
 

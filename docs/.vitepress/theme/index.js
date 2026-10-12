@@ -16,6 +16,8 @@ import EsferaPhi from './EsferaPhi.vue'
 import LeiCossenoFeixe from './LeiCossenoFeixe.vue'
 import EscalaRotacaoShear from './EscalaRotacaoShear.vue'
 
+import './style.css'
+
 export default {
     extends: DefaultTheme,
     enhanceApp({ app }) {

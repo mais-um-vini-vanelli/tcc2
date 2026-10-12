@@ -1,7 +1,7 @@
 ---
 layout: home
 hero:
-  name: tcc2
+  name: 'tcc<span class="caret">2</span>'
   text: Rasterização e ray tracing sobre a mesma cena
   tagline: Um renderizador didático em Rust, e a teoria por trás de cada estágio.
   actions:

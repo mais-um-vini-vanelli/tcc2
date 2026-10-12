@@ -18,17 +18,18 @@ function cores() {
   const css = getComputedStyle(document.documentElement)
   return {
     text: css.getPropertyValue('--vp-c-text-1').trim(),
-    line: css.getPropertyValue('--vp-c-divider').trim()
+    line: css.getPropertyValue('--vp-c-divider').trim(),
+    fonte: css.getPropertyValue('--vp-font-family-mono').trim()
   }
 }
 
 function theme() {
-  const { text, line } = cores()
+  const { text, line, fonte } = cores()
 
   return {
     paper_bgcolor: 'rgba(0,0,0,0)',
     plot_bgcolor: 'rgba(0,0,0,0)',
-    font: { color: text, size: 13 },
+    font: { color: text, family: fonte, size: 13 },
     xaxis: { gridcolor: line, zerolinecolor: line },
     yaxis: { gridcolor: line, zerolinecolor: line },
     margin: { t: 24, r: 24, b: 48, l: 56 }
