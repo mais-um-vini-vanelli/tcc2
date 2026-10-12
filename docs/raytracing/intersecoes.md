@@ -115,23 +115,9 @@ uv     = (θ/π, φ/τ)
 
 O y da normal é `cos θ`, então `θ = acos(y)` e `u = θ/π`.
 
-Para φ, olhando a esfera de cima (plano xz):
+Olhando a esfera de lado, onde θ é medido, e de cima, onde φ é:
 
-```text
-              +z
-               │
-               │     ● (x, z)
-               │    ╱
-               │   ╱  r = sen θ
-               │  ╱
-               │ ╱ φ
-    ───────────┼───────────── +x
-               │
-```
-
-::: warning 🚧 TODO Médio
-Trocar por um chart.
-:::
+<EsferaPhi />
 
 ```text
 x = sen θ · cos φ = r · cos φ
@@ -179,22 +165,7 @@ exatamente um par `(u, v)`. É um sistema de coordenadas com origem em `p0`.
 
 Podemos visualizar os pontos do triângulo no plano UV:
 
-```text
- v
- │
-1┤● p2
- │  ╲
- │   ╲
- │    ╲
- │     ╲
-0┤●──────●────
- p0      p1   u
- 0       1
-```
-
-::: warning 🚧 TODO Alto
-Desenho 2D disso, com u e v extendendo até -0,5.
-:::
+<IntersecoesFig4 />
 
 Um ponto está dentro do triângulo se:
 

@@ -30,10 +30,7 @@ a origem, mesmo valor). E depois pega a tangente desse ângulo, que diz *quanto 
 altura aumenta a cada unidade que a gente avança em `z`*, já que
 `tan() = oposto / adjacente`.
 
-::: warning 🚧 TODO Alto
-Desenho lateral do eixo z com a linha do topo do frustum, slider regulando o
-fov/2, 2 pontos em z = 2 e z = 4.
-:::
+<FovMeiaAltura />
 
 Agora a conversão dos pontos em camera space pra NDC. Para o eixo `y`:
 
@@ -74,9 +71,7 @@ tan(fov_h / 2) = width / z
                = tan(fov_v / 2) * aspect  # porque height / z = tan(fov_v / 2)
 ```
 
-::: warning 🚧 TODO Médio
-Câmera apontando pra alguns pontos à esquerda, posições projetadas à direita.
-:::
+<ProjecaoNdc modo="perspectiva" />
 
 ### Ortográfica
 
@@ -104,9 +99,7 @@ A mesma ideia vale pro eixo `y`.
 Na projeção ortográfica o tamanho dos objetos não muda com a distância da
 câmera, então `z` não é usado na projeção.
 
-::: warning 🚧 TODO Alto
-Câmera apontando pra alguns pontos à esquerda, posições projetadas à direita.
-:::
+<ProjecaoNdc modo="ortografica" />
 
 ## NDC para pixel
 

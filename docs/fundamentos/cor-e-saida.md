@@ -53,9 +53,7 @@ linear -> sRGB:  (c ^ (1/γ)) * 255
 sRGB -> linear:  (c / 255) ^ γ
 ```
 
-::: warning 🚧 TODO Médio
-Colocar plot.
-:::
+<GamaCurva />
 
 Com a cor já em [0, 1], a gravação aplica a gama e escala pra byte. O caminho de
 volta — uma textura lida de um arquivo — desfaz a gama para voltar ao linear:

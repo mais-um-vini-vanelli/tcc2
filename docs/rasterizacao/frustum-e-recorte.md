@@ -39,10 +39,7 @@ p no plano                   n · v = 0   (v e n perpendiculares)
 p abaixo (lado oposto)       n · v < 0
 ```
 
-::: warning 🚧 TODO Médio
-Desenho de um plano com a normal, dois vetores inclinados, um acima e o outro
-abaixo do plano.
-:::
+<PlanoDistancia />
 
 ## O frustum
 
@@ -83,10 +80,7 @@ Olhando só pro plano de cima da pirâmide:
 tan(fov/2) = oposto / adjacente, com adjacente = z
 ```
 
-::: warning 🚧 TODO Alto
-Desenho lateral do eixo z com a linha do topo do frustum, slider regulando o
-fov/2, 2 pontos em z = 2 e z = 4.
-:::
+<FovMeiaAltura />
 
 A cada unidade de `z` que avança, o plano superior da pirâmide (o maior `y`
 visível) aumenta em `tan(fov/2)` — a quantidade que o código guarda como

@@ -9,21 +9,7 @@ Pra calcular a direção do raio de reflexão, precisamos:
 - Somar o dobro desse vetor normal ao `d` original: somar `-(d · n) * n` uma vez zera a componente perpendicular; 
   somar duas vezes a inverte. A componente paralela não é alterada.
 
-```text
-      n
-      ^       
-      |      
-      |             
-  d   |   r         
-   \  |  /
-    \ | /           r = d - 2(d · n) * n
-     \|/
-  ----X--------
-```
-
-::: warning 🚧 TODO Médio
-Trocar por plot, mostrando d · n também; mostrar -(d · n) * n somando duas vezes.
-:::
+<ReflexaoVetor />
 
 ## O peso do raio de espelho
 
@@ -86,23 +72,7 @@ n1 * sen θ1 = n2 * sen θ2   n1, n2 = índices dos dois meios
                             cos θ1 = -d · n
 ```
 
-```text
-            n ^
-              |
-        -d    |
-          \   |
-           \θ₁|
-            \ |
-    ----------+----------> û    (a superfície)
-              | \
-              |θ₂\
-              |   \
-              |    t
-```
-
-::: warning 🚧 TODO Médio
-Trocar por chart.
-:::
+<RefracaoSnell />
 
 Isolando `sen θ₂` e trocando `η = n1/n2`:
 

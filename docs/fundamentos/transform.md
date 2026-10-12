@@ -30,28 +30,13 @@ O transform acontece nessa ordem: escala -> rotação -> translação. E a ordem
 **Transladar antes de rotacionar.** A rotação gira em torno da origem; se o objeto já foi movido 
 pra longe dela, a rotação faz o objeto orbitar ao invés de girar.
 
-```text
-   ordem certa (rotaciona, depois translada)   ordem trocada (translada, depois rotaciona)
-
-        y                                            y
-        |     ___                                    |            ___
-        |    /   \  <- objeto girado no lugar        |           /   \
-        |    \___/                                   |    o      \___/  <- objeto foi parar
-   -----+---------- x                           -----+---------------- x   do outro lado
-        |                                            |
-```
-
-::: warning 🚧 TODO Alto
-Trocar por plot.
-:::
+<TransformFig1 />
 
 **Escalar depois de rotacionar.** A escala age nos eixos X, Y, Z, então esticar em `x` rotacionado estica 
 em uma direção que não é a "largura" do objeto. O objeto fica distorcido (`shear`): um cubo vira um paralelepípedo 
 por exemplo.
 
-::: warning 🚧 Médio,; estático
-Colocar plot.
-:::
+<EscalaRotacaoShear />
 
 ## Girar em torno de um eixo
 

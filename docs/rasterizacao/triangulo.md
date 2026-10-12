@@ -32,9 +32,7 @@ A edge function `(A, B, P)` usa dois vetores: `u = B - A` (a base) e
 a reta que passa por A e B — em outras palavras, a projeção de `v` no eixo
 perpendicular a `u`.
 
-::: warning 🚧 TODO Alto
-Imagem de `u`, `v` e `u'`.
-:::
+<TrianguloFig1 />
 
 Então, pra descobrir a altura:
 
@@ -86,17 +84,12 @@ ficou a fórmula da edge function. Considerando que a área de um triângulo é
 Se P está dentro do triângulo, a soma das áreas dos subtriângulos BCP, CAP e ABP
 precisa ser igual à área do triângulo ABC.
 
-::: warning 🚧 TODO Alto
-Desenho de um triângulo com P dentro e os 3 subtriângulos.
-:::
+<TrianguloFig2 />
 
 E quanto maior o subtriângulo formado entre uma aresta de ABC e P, mais perto P
 está do vértice oposto à aresta, e mais longe ele está dos outros 2 vértices.
 
-::: warning 🚧 TODO Alto
-Imagem mostrando P em cima de um vértice, no meio de uma aresta, no meio do
-triângulo.
-:::
+<TrianguloFig3 />
 
 Outra forma de ver isso é comparando o subtriângulo com o triângulo completo:
 

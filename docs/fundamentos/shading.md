@@ -19,20 +19,7 @@ proporcional à inclinação.
 
 Olhando mais a fundo:
 
-```text
-        \       \
-      l  \       \
-          \       C <- ângulo = 90°
-           \   w / \  n
-            \   /   \ |
-             \ /     \|
-───────────────A───────B──────
-              └── s ──┘
-```
-
-::: warning 🚧 TODO
-Trocar por plot, mostrar l.
-:::
+<LeiCossenoFeixe />
 
 - `w = |AC|` é a distância entre as duas bordas do feixe, medida perpendicularmente a elas
 - `s = |AB|` é o comprimento do feixe na superfície

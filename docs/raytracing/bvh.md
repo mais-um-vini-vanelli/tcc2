@@ -82,26 +82,7 @@ acertou a caixa se T_entrada ≤ t_saida
 
 Em 2D, com o raio subindo para a direita:
 
-```text
-               min.x         max.x
-                 │             │
-                 │             │      ╱
-     max.y ──────┼─────────────┼────╳────   sai da fatia y
-                 │             │  ╱
-                 │             │╱
-                 │            ╱│            sai da fatia x
-                 │          ╱  │
-     min.y ──────┼────────╳────┼─────────   entra na fatia y
-                 │      ╱      │
-                 │    ╱        │
-                 │  ╱          │
-                 │╱            │
-                ╱│             │            entra na fatia x
-```
-
-::: warning 🚧 TODO Alto
-Trocar por chart, mostrar caso em que não cruza.
-:::
+<BvhFig2 />
 
 A entrada na caixa é a **última** entrada (na fatia `y`), e a saída é a
 **primeira** saída (da fatia `x`).

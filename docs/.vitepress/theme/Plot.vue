@@ -4,13 +4,15 @@ import { useData } from 'vitepress'
 
 const props = defineProps({
   data: { type: Array, required: true },
-  layout: { type: Object, default: () => ({}) }
+  layout: { type: Object, default: () => ({}) },
+  height: { type: Number, default: 360 }
 })
 
 const el = shallowRef(null)
 const { isDark } = useData()
 
 let Plotly = null
+let grafico = null
 
 function cores() {
   const css = getComputedStyle(document.documentElement)
@@ -43,38 +45,46 @@ function merge(base, extra) {
 }
 
 onMounted(async () => {
+  const alvo = el.value
+
   Plotly = (await import('plotly.js-dist-min')).default
-  Plotly.newPlot(el.value, props.data, merge(theme(), props.layout), {
+
+  if (el.value !== alvo) return
+
+  grafico = alvo
+
+  Plotly.newPlot(grafico, props.data, merge(theme(), props.layout), {
     displayModeBar: false,
     responsive: true
   })
 })
 
-onUnmounted(() => Plotly?.purge(el.value))
+onUnmounted(() => {
+  if (grafico) Plotly.purge(grafico)
+
+  grafico = null
+})
 
 watch(
   () => [props.data, props.layout],
-  () => Plotly?.react(el.value, props.data, merge(theme(), props.layout)),
+  () => {
+    if (grafico) Plotly.react(grafico, props.data, merge(theme(), props.layout))
+  },
   { deep: true }
 )
 
 watch(isDark, () => {
-  if (!Plotly) return
-
-  const { text, line } = cores()
-
-  Plotly.relayout(el.value, merge(theme(), props.layout))
+  if (grafico) Plotly.relayout(grafico, merge(theme(), props.layout))
 })
 </script>
 
 <template>
-  <div ref="el" class="plot" />
+  <div ref="el" class="plot" :style="{ height: height + 'px' }" />
 </template>
 
 <style scoped>
 .plot {
   width: 100%;
-  height: 360px;
   margin: 1.5rem 0;
 }
 </style>
