@@ -23,20 +23,7 @@ Propriedades do determinante:
 Para uma matriz 3×3 onde as colunas são os vetores a, b, c, o determinante `det(a, b, c)` é o volume com sinal do 
 paralelepípedo gerado por a, b e c:
 
-```text
-       ┌────────────┐
-      ╱           ╱│
-     ╱           ╱ │
-    └────────────┘  ╱      volume = det(a, b, c)
-    │   c       │╱
-────●─────────────      
-    ╱ a
-    b
-```
-
-::: warning 🚧 TODO
-Trocar por plot.
-:::
+<ParalelepipedoDet />
 
 1) É linear em cada coluna. Se a dobra de tamanho, o volume dobra de tamanho; se
    a = a + a', volume é a soma dos dois volumes:

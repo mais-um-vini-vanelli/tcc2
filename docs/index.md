@@ -1,16 +1,8 @@
 ---
 layout: home
 hero:
-  name: 'tcc<span class="caret">2</span>'
-  text: Rasterização e ray tracing sobre a mesma cena
-  tagline: Um renderizador didático em Rust, e a teoria por trás de cada estágio.
-  actions:
-    - theme: brand
-      text: Rasterização
-      link: /rasterizacao/
-    - theme: brand
-      text: Ray tracing
-      link: /raytracing/
+  name: 'TCC<span class="caret">2</span>'
+  tagline: Rasterização e ray tracing em Rust, com a teoria de cada estágio.
       
 features:
   - title: Rasterização
@@ -19,9 +11,6 @@ features:
   - title: Ray tracing
     details: Partir da tela para a cena, e seguir o raio até onde ele levar.
     link: /raytracing/
-  - title: Fundamentos
-    details: Câmera, transformações e sombreamento — o que vale nos dois modos.
-    link: /fundamentos/camera
 ---
 
 ## Os dois modos, e o contraste entre eles

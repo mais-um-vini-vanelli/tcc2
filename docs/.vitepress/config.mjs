@@ -2,8 +2,8 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   lang: 'pt-BR',
-  title: 'tcc2',
-  description: 'Renderizador didático com rasterização e ray tracing',
+  title: 'TCC2',
+  description: 'Rasterização e ray tracing em Rust, com a teoria de cada estágio',
 
   markdown: { lineNumbers: true },
 
@@ -11,7 +11,6 @@ export default defineConfig({
     nav: [
       { text: 'Rasterização', link: '/rasterizacao/' },
       { text: 'Ray tracing', link: '/raytracing/' },
-      { text: 'Fundamentos', link: '/fundamentos/camera' },
       { text: 'Código', link: 'https://github.com/mais-um-vini-vanelli/tcc2' }
     ],
 

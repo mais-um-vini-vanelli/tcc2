@@ -25,27 +25,34 @@
 }
 
 :root {
-  --vp-c-bg: #eef2f6;
-  --vp-c-bg-alt: #e2e8ee;
-  --vp-c-bg-elv: #eef2f6;
-  --vp-c-bg-soft: #e2e8ee;
+  --tcc-claro-bg: #ccd0d4;
+  --tcc-claro-alt: #c0c5ca;
+  --tcc-claro-ink: #26292c;
+  --tcc-claro-meio: #41474c;
+  --tcc-claro-fraco: #5f666c;
+  --tcc-claro-linha: #828a90;
 
-  --vp-c-text-1: var(--tcc-ink);
-  --vp-c-text-2: #3c4851;
-  --vp-c-text-3: #6d7c88;
+  --vp-c-bg: var(--tcc-claro-bg);
+  --vp-c-bg-alt: var(--tcc-claro-alt);
+  --vp-c-bg-elv: var(--tcc-claro-bg);
+  --vp-c-bg-soft: var(--tcc-claro-alt);
 
-  --vp-c-divider: var(--tcc-mid);
-  --vp-c-border: var(--tcc-mid);
-  --vp-c-gutter: var(--tcc-mid);
+  --vp-c-text-1: var(--tcc-claro-ink);
+  --vp-c-text-2: var(--tcc-claro-meio);
+  --vp-c-text-3: var(--tcc-claro-fraco);
 
-  --vp-c-brand-1: var(--tcc-ink);
+  --vp-c-divider: var(--tcc-claro-linha);
+  --vp-c-border: var(--tcc-claro-linha);
+  --vp-c-gutter: var(--tcc-claro-linha);
+
+  --vp-c-brand-1: var(--tcc-claro-ink);
   --vp-c-brand-2: var(--tcc-bg);
   --vp-c-brand-3: var(--tcc-bg);
-  --vp-c-brand-soft: rgba(11, 14, 17, 0.1);
+  --vp-c-brand-soft: rgba(38, 41, 44, 0.1);
 
-  --vp-button-brand-bg: var(--tcc-ink);
+  --vp-button-brand-bg: var(--tcc-claro-ink);
   --vp-button-brand-text: var(--tcc-fg);
-  --vp-button-brand-border: var(--tcc-ink);
+  --vp-button-brand-border: var(--tcc-claro-ink);
   --vp-button-brand-hover-bg: var(--tcc-bg);
   --vp-button-brand-hover-text: var(--tcc-lit);
   --vp-button-brand-hover-border: var(--tcc-bg);
@@ -274,8 +281,8 @@ body {
 
 /* o plano xz do editor atrás da página */
 :root {
-  --tcc-grid-fine: rgba(74, 87, 97, 0.16);
-  --tcc-grid-coarse: rgba(74, 87, 97, 0.34);
+  --tcc-grid-fine: rgba(95, 102, 108, 0.2);
+  --tcc-grid-coarse: rgba(95, 102, 108, 0.4);
   --tcc-axis-x: rgba(255, 61, 110, 0.45);
   --tcc-axis-z: rgba(58, 150, 255, 0.45);
 }

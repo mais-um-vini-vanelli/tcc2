@@ -45,22 +45,7 @@ topo e o eixo de visão (ou entre a base e o eixo, mesmo valor); a tangente dess
 `tan() = oposto/adjacente`. Como a tela está a 1 unidade, a meia-altura dela é a
 própria tangente.
 
-```text
-                        ^  topo da tela
-                      / |
-                    /   |
-      fov/2       /     |  meia_altura = tan(fov/2) * 1
-câmera  ) - - - - - - - +  centro da tela
-          \       \     |
-            \       \   |
-              \       \ |
-                        v  base da tela
-      |<---- 1.0 ------>|
-```
-
-::: warning 🚧 TODO Médio
-Desenho 3D da tela virtual, mostrando o ângulo, z= 1 e com slider de altura.
-:::
+<TelaVirtual />
 
 Pensando em 2D, as coordenadas (`u`, `v`) do plano variam entre -1 e 1 conforme a função é chamada pra
 cada pixel da imagem. Multiplicando por `meia_altura`, o pixel com `v = 1` cai

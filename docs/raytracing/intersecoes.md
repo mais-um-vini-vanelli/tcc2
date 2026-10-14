@@ -14,9 +14,7 @@ A esfera é o conjunto de pontos P com `|P - centro| = raio`, ou
 `|P - centro|² = raio²`: distância até o centro igual ao raio. O ponto a uma
 distância `t` ao longo do raio é `P' = origem + direção * t` (`Ray::at()`).
 
-::: warning 🚧 TODO Médio
-Desenho 3D da esfera, com P, centro, vetor P - centro, raio.
-:::
+<EsferaRaio />
 
 Substituindo P por P' na equação da esfera:
 
@@ -145,19 +143,7 @@ as coordenadas baricêntricas do acerto.
 Ancore-se em `p0` e olhe para as duas arestas que saem dele como se fossem
 eixos:
 
-```text
-        p2
-        ●
-       ╱ ╲
- E2   ╱   ╲
-     ╱     ╲
-    ●───────●
-   p0   E1   p1
-```
-
-::: warning 🚧 TODO
-Desenho 3D disso.
-:::
+<TrianguloE1E2 />
 
 `E1` e `E2` não são perpendiculares nem unitários, mas isso não importa:
 qualquer ponto do plano do triângulo pode ser escrito como `p0 + u * E1 + v * E2` para 
@@ -260,9 +246,7 @@ v:   det(-D, E1, T)
 
 `det(M)` tem um significado geométrico: é o volume com sinal de `E1 x D x E2`.
 
-::: warning 🚧 TODO Médio
-Desenho 3D do volume E1 x D x E2.
-:::
+<VolumeDeterminante />
 
 Volume 0 significa que os 3 estão no mesmo plano. Como `E1` e `E2` são as duas
 direções que geram o plano do triângulo, `D` ser coplanar com eles quer dizer

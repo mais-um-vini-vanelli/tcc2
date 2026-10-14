@@ -69,9 +69,7 @@ watts por feixe = watts / 4π·d² = intensity / d²
 Um spot é uma luz pontual com um cone por cima: tem a mesma atenuação por `1/d²`, 
 e um fator a mais que mede o quão alinhada a superfície está com o eixo frontal do spot.
 
-::: warning 🚧 TODO Médio
-Visualização disso.
-:::
+<ConeDoSpot />
 
 Para descobrir se um ponto está dentro do cone do spot, usamos o ângulo entre o raio 
 que sai da luz até o ponto e o eixo do spot.

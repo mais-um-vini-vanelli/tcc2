@@ -21,9 +21,7 @@ na origem e os eixos são os eixos dela: direita, cima e frente. Aí o frustum
 vira sempre o mesmo volume, e a profundidade de um ponto vira simplesmente o seu
 `z`.
 
-::: warning 🚧 TODO
-Câmera inclinada, olhando pra um ponto.
-:::
+<CameraInclinada />
 
 A conversão de um ponto do mundo tem dois passos:
 
