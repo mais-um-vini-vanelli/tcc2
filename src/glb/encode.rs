@@ -8,10 +8,10 @@ use serde_json::{Map, Value, json};
 
 use crate::color::Rgb;
 use crate::math::{Aabb, Vec3};
-use crate::parameters::{Parameters, TransformMethod};
-use crate::scene::{self, Camera, Content, Light, Material, Mesh, Object, Primitive, Scene};
+use crate::parameters::Parameters;
+use crate::scene::{self, Camera, Content, Geometry, Light, Material, Mesh, Object, Scene};
 use crate::texture::Texture;
-use crate::transform::{Chain, Transform};
+use crate::transform::Transform;
 
 use super::{EXTENSION, Error, VERSION};
 
@@ -98,7 +98,6 @@ fn encode_camera(camera: Camera, json_gltf: &mut json::Root) -> json::Node {
             aspect,
             near,
             far,
-            ..
         } => json::Camera {
             type_: Valid(json::camera::Type::Perspective),
             perspective: Some(json::camera::Perspective {
@@ -120,7 +119,6 @@ fn encode_camera(camera: Camera, json_gltf: &mut json::Root) -> json::Node {
             height,
             near,
             far,
-            ..
         } => json::Camera {
             type_: Valid(json::camera::Type::Orthographic),
             orthographic: Some(json::camera::Orthographic {
@@ -140,12 +138,8 @@ fn encode_camera(camera: Camera, json_gltf: &mut json::Root) -> json::Node {
 
     let camera_gltf = json_gltf.push(camera_gltf);
 
-    let (direita, cima, frente) = camera.basis();
-
     json::Node {
         camera: Some(camera_gltf),
-        // A câmera do glTF olha para o −z local, com +y para cima.
-        matrix: Some(matrix(direita, cima, -frente, camera.position())),
         ..Default::default()
     }
 }
@@ -178,35 +172,21 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
         name: None,
     };
 
-    let (light, posicao, direcao) = match luz {
-        Light::Point { position, .. } => (
-            punctual(khr::Type::Point, None),
-            position,
-            Vec3::new(0.0, 0.0, -1.0),
-        ),
+    let light = match luz {
+        Light::Point { .. } => punctual(khr::Type::Point, None),
 
-        Light::Directional { direction, .. } => (
-            punctual(khr::Type::Directional, None),
-            Vec3::ZERO,
-            direction,
-        ),
+        Light::Directional { .. } => punctual(khr::Type::Directional, None),
 
         Light::Spot {
-            position,
-            direction,
             inner_angle,
             outer_angle,
             ..
-        } => (
-            punctual(
-                khr::Type::Spot,
-                Some(khr::Spot {
-                    inner_cone_angle: inner_angle.to_radians(),
-                    outer_cone_angle: outer_angle.to_radians(),
-                }),
-            ),
-            position,
-            direction,
+        } => punctual(
+            khr::Type::Spot,
+            Some(khr::Spot {
+                inner_cone_angle: inner_angle.to_radians(),
+                outer_cone_angle: outer_angle.to_radians(),
+            }),
         ),
 
         Light::Ambient { .. } => unreachable!(),
@@ -214,22 +194,7 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
 
     let light_gltf = json_gltf.push(light);
 
-    let (direita, cima, frente) = {
-        // Direcional e spot apontam para o −z local.
-        let z = -direcao.normalized();
-
-        let referencia = if z.y.abs() < 0.99 {
-            Vec3::new(0.0, 1.0, 0.0)
-        } else {
-            Vec3::new(1.0, 0.0, 0.0)
-        };
-
-        let x = referencia.cross(z).normalized();
-        (x, z.cross(x), z)
-    };
-
     json::Node {
-        matrix: Some(matrix(direita, cima, frente, posicao)),
         extensions: Some(json::extensions::scene::Node {
             khr_lights_punctual: Some(khr::KhrLightsPunctual { light: light_gltf }),
             ..Default::default()
@@ -252,22 +217,12 @@ fn encode_object(
 
     let filhos = (!filhos.is_empty()).then_some(filhos);
 
-    let transform = Chain::from_root_first(&[objeto.transform]);
-
     let mut no = match &objeto.content {
         None => json::Node::default(),
 
-        Some(Content::Camera(camera)) => encode_camera(
-            camera.transformed(&transform, TransformMethod::Stepwise),
-            json_gltf,
-        ),
+        Some(Content::Camera(camera)) => encode_camera(*camera, json_gltf),
 
-        Some(Content::Light(luz @ Light::Ambient { .. })) => encode_light(*luz, json_gltf),
-
-        Some(Content::Light(luz)) => encode_light(
-            luz.transformed(&transform, TransformMethod::Stepwise),
-            json_gltf,
-        ),
+        Some(Content::Light(luz)) => encode_light(*luz, json_gltf),
 
         Some(Content::Geometry {
             geometry,
@@ -287,20 +242,20 @@ fn encode_object(
             // Esfera e cubo vão com a malha tesselada **e** com os campos exatos: o
             // decoder daqui lê os campos e ignora a malha, e quem não conhece a
             // extensão fica com a malha.
-            let primitivo = match geometry {
-                Primitive::Mesh(_) => None,
-                Primitive::Triangle { .. } => Some(json!("triangle")),
-                Primitive::Sphere { center, radius } => Some(json!({
-                    "sphere": { "center": json!([center.x, center.y, center.z]), "radius": radius }
+            let geometria = match geometry {
+                Geometry::Mesh(_) => None,
+                Geometry::Triangle { .. } => Some(json!("triangle")),
+                Geometry::Sphere { radius } => Some(json!({
+                    "sphere": { "radius": radius }
                 })),
-                Primitive::Cube { center, half_edge } => Some(json!({
-                    "cube": { "center": json!([center.x, center.y, center.z]), "half_edge": half_edge }
+                Geometry::Cube { half_edge } => Some(json!({
+                    "cube": { "half_edge": half_edge }
                 })),
             };
 
             json_gltf.meshes[malha_gltf.value()].extensions =
-                primitivo.map(|primitivo| json::extensions::mesh::Mesh {
-                    others: Map::from_iter([(EXTENSION.into(), json!({ "primitive": primitivo }))]),
+                geometria.map(|geometria| json::extensions::mesh::Mesh {
+                    others: Map::from_iter([(EXTENSION.into(), json!({ "geometry": geometria }))]),
                 });
 
             json::Node {
@@ -314,17 +269,15 @@ fn encode_object(
         }
     };
 
-    if no.matrix.is_none() {
-        let Transform {
-            translation,
-            rotation,
-            scale,
-        } = objeto.transform;
+    let Transform {
+        translation,
+        rotation,
+        scale,
+    } = objeto.transform;
 
-        no.translation = Some([translation.x, translation.y, translation.z]);
-        no.rotation = Some(json::scene::UnitQuaternion(quaternion(rotation)));
-        no.scale = Some([scale.x, scale.y, scale.z]);
-    }
+    no.translation = Some([translation.x, translation.y, translation.z]);
+    no.rotation = Some(json::scene::UnitQuaternion(quaternion(rotation)));
+    no.scale = Some([scale.x, scale.y, scale.z]);
 
     no.children = filhos;
 
@@ -758,15 +711,6 @@ fn flatten<const N: usize>(dados: &[[f32; N]]) -> Vec<u8> {
 }
 
 #[rustfmt::skip]
-fn matrix(x: Vec3, y: Vec3, z: Vec3, posicao: Vec3) -> [f32; 16] {
-    [
-        x.x      , x.y      , x.z      , 0.0,
-        y.x      , y.y      , y.z      , 0.0,
-        z.x      , z.y      , z.z      , 0.0,
-        posicao.x, posicao.y, posicao.z, 1.0,
-    ]
-}
-
 fn quaternion(euler: Vec3) -> [f32; 4] {
     let (sx, cx) = (euler.x.to_radians() * 0.5).sin_cos();
     let (sy, cy) = (euler.y.to_radians() * 0.5).sin_cos();

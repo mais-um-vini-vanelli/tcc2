@@ -3,7 +3,7 @@
 //! Teoria: raytracer.md#a-pipeline
 //!
 //! Lança um raio primário por pixel, leva o raio pro espaço local de cada
-//! objeto, chama `Primitive::intersect` e resolve o acerto mais próximo com o
+//! objeto, chama `Geometry::intersect` e resolve o acerto mais próximo com o
 //! mesmo `shade()` do rasterizador.
 //!
 //! O que este arquivo tem e o rasterizador não é a **recursão**: o modelo de
@@ -15,13 +15,16 @@
 //! raio testa é a BVH de `bvh.rs`; desligado, todo raio testa a cena inteira.
 
 use std::cell::Cell;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::color::Rgb;
 use crate::math::{Ray, Vec3};
 use crate::parameters::Parameters;
-use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
-use crate::scene::{self, Camera, Hit, Instance, Light, Material, Primitive, Scene};
+use crate::render::{RenderResult, Renderer};
+use crate::scene::{
+    self, Camera, CameraInstance, Geometry, GeometryInstance, Hit, Light, LightInstance, Material,
+    Scene,
+};
 use crate::shading::{self, Surface};
 
 use crate::bvh::Aceleracao;
@@ -41,27 +44,19 @@ const ESPELHO_MAX_ROUGHNESS: f32 = 0.1;
 pub struct RayTracer;
 
 impl Renderer for RayTracer {
-    fn name(&self) -> &'static str {
-        "ray tracer"
-    }
-
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
         let (largura, altura) = (params.output.width, params.output.height);
         let fundo = params.output.background;
-        let mut cor = ColorBuffer::filled(largura, altura, fundo);
-        let mut raios = ScalarBuffer::new(largura, altura);
+
+        let mut resultado = RenderResult::new(largura, altura, fundo);
 
         let contador = Contador::default();
 
-        let (camera, lights, instancias) = scene.flatten(params.transform.method);
+        let (camera_instance, light_instances, instancias) = scene.flatten(params.transform.method);
 
-        let Some(camera) = camera else {
+        let Some(camera_instance) = camera_instance else {
             // Sem câmera não há de onde partir raio: sobra o fundo.
-            return RenderResult {
-                color: Some(cor),
-                ray_count: Some(raios),
-                ..RenderResult::new()
-            };
+            return resultado;
         };
 
         let aceleracao = params.ray_tracing.acceleration.bvh.then(|| {
@@ -80,20 +75,15 @@ impl Renderer for RayTracer {
             aceleracao
         });
 
-        let mut calor = aceleracao
-            .is_some()
-            .then(|| ScalarBuffer::new(largura, altura));
-
         let contexto = Contexto {
-            lights,
+            lights: light_instances,
             instancias,
             params,
             aceleracao,
             contador,
         };
 
-        let base = camera.basis();
-        let (near, far) = camera.clip_planes();
+        let (near, far) = camera_instance.camera.clip_planes();
 
         for y in 0..altura {
             for x in 0..largura {
@@ -103,25 +93,28 @@ impl Renderer for RayTracer {
 
                 let antes = contexto.contador.stats();
 
-                let raio = raio_primario(&camera, base, x, y, largura, altura);
+                let raio = raio_primario(&camera_instance, x, y, largura, altura);
                 contexto.contador.raio();
 
-                cor.set(x, y, contexto.trace(raio, near, far, 0));
+                resultado
+                    .color
+                    .set(x, y, contexto.trace(raio, near, far, 0));
 
                 // Os passes de custo são o quanto os contadores andaram durante
                 // o pixel: com sombra e recursão, não só o raio primário.
                 let depois = contexto.contador.stats();
 
-                raios.set(x, y, (depois.rays - antes.rays) as f32);
+                resultado
+                    .ray_tracing
+                    .ray_count
+                    .set(x, y, (depois.rays - antes.rays) as f32);
 
-                if let Some(calor) = &mut calor {
-                    let nos = depois.bvh_nodes_visited - antes.bvh_nodes_visited;
-                    calor.set(x, y, nos as f32);
-                }
+                let nos = depois.bvh_nodes_visited - antes.bvh_nodes_visited;
+                resultado.ray_tracing.bvh_heatmap.set(x, y, nos as f32);
             }
         }
 
-        cor.apply_output(&params.output);
+        resultado.apply_output(&params.output);
 
         if let Some(profundidade) = params.ray_tracing.acceleration.wireframe {
             if let Some(aceleracao) = &contexto.aceleracao {
@@ -139,8 +132,8 @@ impl Renderer for RayTracer {
 
                 for (nivel, cantos) in aabbs {
                     overlay::caixa(
-                        &mut cor,
-                        &camera,
+                        &mut resultado.color,
+                        &camera_instance,
                         cantos,
                         CORES[(nivel.max(1) - 1) as usize % CORES.len()],
                     );
@@ -148,24 +141,37 @@ impl Renderer for RayTracer {
             }
         }
 
-        RenderResult {
-            color: Some(cor),
-            ray_count: Some(raios),
-            bvh_heatmap: calor,
-            stats: contexto.contador.stats(),
-            // depth/normal/uv chegam em M5.
-            ..RenderResult::new()
-        }
+        let contagem = contexto.contador.stats();
+        let ray_tracing = &mut resultado.ray_tracing;
+
+        ray_tracing.primitive_tests = contagem.primitive_tests;
+        ray_tracing.rays = contagem.rays;
+        ray_tracing.bvh_nodes_visited = contagem.bvh_nodes_visited;
+        ray_tracing.tlas_depth = contagem.tlas_depth;
+        ray_tracing.blas_depth = contagem.blas_depth;
+        ray_tracing.bvh_build_time = contagem.bvh_build_time;
+
+        resultado
     }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct Contagem {
+    primitive_tests: u64,
+    rays: u64,
+    bvh_nodes_visited: u64,
+    tlas_depth: u32,
+    blas_depth: u32,
+    bvh_build_time: Duration,
 }
 
 /// Contadores do render.
 ///
 /// `Cell` porque o callback de visibilidade que `shade` recebe é `Fn`, não
 /// `FnMut`, e mesmo assim precisa contabilizar o raio de sombra que dispara.
-/// `RenderStats` é `Copy`, então a célula sai barata.
+/// `Contagem` é `Copy`, então a célula sai barata.
 #[derive(Debug, Default)]
-pub(crate) struct Contador(Cell<RenderStats>);
+pub(crate) struct Contador(Cell<Contagem>);
 
 impl Contador {
     pub(crate) fn raio(&self) {
@@ -184,11 +190,11 @@ impl Contador {
         self.atualiza(|s| s.bvh_nodes_visited += 1);
     }
 
-    fn stats(&self) -> RenderStats {
+    fn stats(&self) -> Contagem {
         self.0.get()
     }
 
-    fn atualiza(&self, f: impl FnOnce(&mut RenderStats)) {
+    fn atualiza(&self, f: impl FnOnce(&mut Contagem)) {
         let mut stats = self.0.get();
         f(&mut stats);
         self.0.set(stats);
@@ -197,8 +203,8 @@ impl Contador {
 
 /// O que todo raio do render consulta.
 struct Contexto<'a> {
-    lights: Vec<Light>,
-    instancias: Vec<Instance<'a>>,
+    lights: Vec<LightInstance>,
+    instancias: Vec<GeometryInstance<'a>>,
     params: &'a Parameters,
     /// `None` com a BVH desligada: aí todo raio testa todo objeto.
     aceleracao: Option<Aceleracao>,
@@ -246,7 +252,7 @@ impl<'a> Contexto<'a> {
         let v = -direcao;
 
         let direto = {
-            let visibilidade = |s: &Surface, luz: &Light| {
+            let visibilidade = |s: &Surface, luz: &LightInstance| {
                 if !opcoes.shadows {
                     return 1.0;
                 }
@@ -356,7 +362,7 @@ impl<'a> Contexto<'a> {
 
             let hit = match self.aceleracao.as_ref().and_then(|a| a.blas[i].as_ref()) {
                 Some(blas) => {
-                    let Primitive::Mesh(malha) = instancia.geometry else {
+                    let Geometry::Mesh(malha) = instancia.geometry else {
                         unreachable!();
                     };
 
@@ -374,7 +380,7 @@ impl<'a> Contexto<'a> {
                 None => {
                     // Sem BLAS a malha testa face por face, e a conta tem que mostrar.
                     self.contador.testes(match instancia.geometry {
-                        Primitive::Mesh(malha) => malha.face_count() as u64,
+                        Geometry::Mesh(malha) => malha.face_count() as u64,
                         _ => 1,
                     });
 
@@ -423,15 +429,15 @@ impl<'a> Contexto<'a> {
 
     // Teoria: raytracer.md#o-raio-de-sombra
     /// Existe alguma coisa entre o ponto e a luz?
-    fn ocluido(&self, ponto: Vec3, geometrica: Vec3, luz: &Light) -> bool {
-        let (direcao, distancia) = match *luz {
-            Light::Point { position, .. } | Light::Spot { position, .. } => {
-                let ate_a_luz = position - ponto;
+    fn ocluido(&self, ponto: Vec3, geometrica: Vec3, luz: &LightInstance) -> bool {
+        let (direcao, distancia) = match luz.light {
+            Light::Point { .. } | Light::Spot { .. } => {
+                let ate_a_luz = luz.position - ponto;
                 (ate_a_luz.normalized(), ate_a_luz.length())
             }
             // Luz direcional não tem posição: qualquer coisa no caminho bloqueia,
             // por mais longe que esteja.
-            Light::Directional { direction, .. } => ((-direction).normalized(), f32::INFINITY),
+            Light::Directional { .. } => (-luz.forward(), f32::INFINITY),
             Light::Ambient { .. } => return false,
         };
 
@@ -501,14 +507,13 @@ fn refrata(d: Vec3, n: Vec3, indice: f32) -> Option<Vec3> {
 /// É aqui que os dois pipelines são diferentes: o rasterizador projeta a geometria
 /// *para* a tela, o ray tracer parte da tela *para* a cena.
 fn raio_primario(
-    camera: &Camera,
-    base: (Vec3, Vec3, Vec3),
+    camera_instance: &CameraInstance,
     x: u32,
     y: u32,
     largura: u32,
     altura: u32,
 ) -> Ray {
-    let (direita, cima, frente) = base;
+    let (direita, cima, frente) = camera_instance.basis;
 
     // Centro do pixel, não o canto.
     let x = x as f32 + 0.5;
@@ -517,13 +522,8 @@ fn raio_primario(
     let u = 2.0 * x / largura as f32 - 1.0;
     let v = 1.0 - 2.0 * y / altura as f32;
 
-    match *camera {
-        Camera::Perspective {
-            fov,
-            aspect,
-            position,
-            ..
-        } => {
+    match camera_instance.camera {
+        Camera::Perspective { fov, aspect, .. } => {
             let meia_altura = (fov.to_radians() * 0.5).tan();
 
             let deslocamento_pra_frente = frente;
@@ -533,16 +533,12 @@ fn raio_primario(
             let direcao =
                 deslocamento_pra_frente + deslocamento_pra_direita + deslocamento_pra_cima;
 
-            Ray::new(position, direcao)
+            Ray::new(camera_instance.position, direcao)
         }
-        Camera::Orthographic {
-            width,
-            height,
-            position,
-            ..
-        } => {
+        Camera::Orthographic { width, height, .. } => {
             // Aqui a origem é que varia por pixel; a direção é a mesma pra todos.
-            let origem = position + direita * (u * width * 0.5) + cima * (v * height * 0.5);
+            let origem =
+                camera_instance.position + direita * (u * width * 0.5) + cima * (v * height * 0.5);
             Ray::new(origem, frente)
         }
     }

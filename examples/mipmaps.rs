@@ -43,20 +43,31 @@ fn main() -> Result<(), Box<dyn Error>> {
         textura.height(),
     );
 
-    let scene = Scene::new(Camera::Perspective {
-        fov: 50.0,
-        aspect: LARGURA as f32 / ALTURA as f32,
-        near: 0.1,
-        far: 1000.0,
-        position: Vec3::new(0.0, 1.0, 0.0),
-        look_at: Vec3::new(0.0, 0.0, -10.0),
-        up: Vec3::new(0.0, 1.0, 0.0),
-    })
-    .with_light(Light::Ambient {
-        color: Rgb::WHITE,
-        intensity: 1.0,
-    })
-    .with_object(Object::new(chao(500.0), Material::textured(textura)));
+    let scene = Scene {
+        objects: vec![
+            Object::camera(
+                Camera::Perspective {
+                    fov: 50.0,
+                    aspect: LARGURA as f32 / ALTURA as f32,
+                    near: 0.1,
+                    far: 1000.0,
+                },
+                Transform::looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, -10.0)),
+            ),
+            Object::light(
+                Light::Ambient {
+                    color: Rgb::WHITE,
+                    intensity: 1.0,
+                },
+                Transform::IDENTITY,
+            ),
+            Object::geometry(
+                chao(500.0),
+                Material::textured(textura),
+                Transform::IDENTITY,
+            ),
+        ],
+    };
 
     let base = Parameters {
         output: OutputOptions {
@@ -86,12 +97,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let resultado = Rasterizer.render(&scene, &params);
         let tempo = inicio.elapsed();
 
-        let Some(imagem) = resultado.color.as_ref() else {
-            continue;
-        };
-
         let arquivo = format!("./renders/mipmaps_{nome}.png");
-        comum::grava_textura(&arquivo, imagem, Rgb::to_srgb)?;
+        comum::grava_textura(&arquivo, &resultado.color, Rgb::to_srgb)?;
 
         println!("{nome}: {tempo:.1?} -> {arquivo}");
     }
@@ -101,7 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 // Um quadrado em y = 0, de lado 2·alcance, com a uv crescendo junto com x e z
 // pra textura repetir pelo chão todo.
-fn chao(alcance: f32) -> Primitive {
+fn chao(alcance: f32) -> Geometry {
     let cantos = [
         Vec3::new(-alcance, 0.0, alcance),
         Vec3::new(alcance, 0.0, alcance),
@@ -109,7 +116,7 @@ fn chao(alcance: f32) -> Primitive {
         Vec3::new(-alcance, 0.0, -alcance),
     ];
 
-    Primitive::Mesh(Mesh {
+    Geometry::Mesh(Mesh {
         vertices: cantos.to_vec(),
         indices: vec![0, 1, 2, 0, 2, 3],
         normals: Some(vec![Vec3::new(0.0, 1.0, 0.0); 4]),

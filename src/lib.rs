@@ -31,12 +31,11 @@ pub mod prelude {
     pub use crate::rasterizer::Rasterizer;
     pub use crate::raytracer::RayTracer;
     pub use crate::render::{
-        BufferKind, BufferRef, ColorBuffer, RenderPass, RenderResult, RenderStats, Renderer,
-        ScalarBuffer,
+        ColorBuffer, RasterizationResult, RayTracingResult, RenderResult, Renderer, ScalarBuffer,
     };
     pub use crate::scene::{
-        Camera, Content, Instance, Light, Material, MaterialSample, Mesh, Object, Primitive, Scene,
-        Value, eixos_da_uv,
+        Camera, CameraInstance, Content, Geometry, GeometryInstance, Light, LightInstance,
+        Material, MaterialSample, Mesh, Object, Scene, Value, eixos_da_uv,
     };
     pub use crate::shading::{Surface, shade};
     pub use crate::texture::{Footprint, Texture, TextureError};

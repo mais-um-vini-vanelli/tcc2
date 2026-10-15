@@ -6,70 +6,37 @@ use crate::color::Rgb;
 use crate::parameters::{OutputOptions, Parameters, Tonemap};
 use crate::scene::Scene;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RenderPass {
-    /// A imagem final.
-    Color,
-    /// Profundidade da superfície visível, em unidades.
-    Depth,
-    /// Normal da superfície visível (debug de shading).
-    Normal,
-    /// Coordenadas de textura visíveis, para conferir mapeamento.
-    Uv,
-    /// Raios lançados por pixel, contando sombra e recursão. Só o ray tracer
-    /// produz.
-    RayCount,
-    /// Nós de BVH testados por pixel, por todos os raios dele. Só o ray tracer
-    /// produz, e só com a BVH ligada.
-    BvhHeatmap,
-}
-
-impl RenderPass {
-    /// Passes que os dois modos conseguem produzir — a base da validação
-    /// cruzada entre `Rasterizer` e `RayTracer`.
-    pub const SHARED: [RenderPass; 4] = [
-        RenderPass::Color,
-        RenderPass::Depth,
-        RenderPass::Normal,
-        RenderPass::Uv,
-    ];
-
-    /// Formato do buffer que este passe produz.
-    pub fn buffer_kind(self) -> BufferKind {
-        match self {
-            RenderPass::Color | RenderPass::Normal | RenderPass::Uv => BufferKind::Color,
-            RenderPass::Depth | RenderPass::RayCount | RenderPass::BvhHeatmap => BufferKind::Scalar,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BufferKind {
-    Color,
-    Scalar,
-}
-
-/// Imagem de saída: cor em float, um `Rgb` por pixel.
+/// Uma imagem: `width * height` elementos.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ColorBuffer {
+pub struct Buffer<T> {
     width: u32,
     height: u32,
-    pixels: Vec<Rgb>,
+    pixels: Vec<T>,
 }
 
-impl ColorBuffer {
-    /// Buffer preenchido com uma cor sólida.
-    pub fn filled(width: u32, height: u32, color: Rgb) -> Self {
-        let n = width as usize * height as usize;
-        ColorBuffer {
+pub type ColorBuffer = Buffer<Rgb>;
+pub type ScalarBuffer = Buffer<f32>;
+
+impl<T: Copy> Buffer<T> {
+    pub fn filled(width: u32, height: u32, value: T) -> Self {
+        let size = width as usize * height as usize;
+        Buffer {
             width,
             height,
-            pixels: vec![color; n],
+            pixels: vec![value; size],
         }
     }
 
-    pub fn new(width: u32, height: u32) -> Self {
-        ColorBuffer::filled(width, height, Rgb::BLACK)
+    pub fn from_pixels(width: u32, height: u32, pixels: Vec<T>) -> Option<Self> {
+        if pixels.len() == width as usize * height as usize {
+            Some(Buffer {
+                width,
+                height,
+                pixels,
+            })
+        } else {
+            None
+        }
     }
 
     pub fn width(&self) -> u32 {
@@ -80,112 +47,58 @@ impl ColorBuffer {
         self.height
     }
 
-    pub fn pixels(&self) -> &[Rgb] {
+    pub fn pixels(&self) -> &[T] {
         &self.pixels
     }
 
-    pub fn get(&self, x: u32, y: u32) -> Option<Rgb> {
+    pub fn get(&self, x: u32, y: u32) -> Option<T> {
         self.index(x, y).map(|i| self.pixels[i])
     }
 
-    pub fn set(&mut self, x: u32, y: u32, color: Rgb) {
-        if let Some(i) = self.index(x, y) {
-            self.pixels[i] = color;
-        }
-    }
-
-    // Teoria: cor-e-saida.md
-    /// O último estágio dos dois pipelines: exposição e tone mapping em todos
-    /// os pixels.
-    pub(crate) fn apply_output(&mut self, output: &OutputOptions) {
-        for pixel in &mut self.pixels {
-            *pixel = {
-                let c = *pixel * output.exposure;
-                match output.tonemap {
-                    Tonemap::None => c,
-                    Tonemap::Reinhard => c.map(|v| v / (1.0 + v)),
-                }
-            };
+    pub fn set(&mut self, x: u32, y: u32, value: T) {
+        match self.index(x, y) {
+            Some(i) => self.pixels[i] = value,
+            None => panic!("indices out of bounds"),
         }
     }
 
     fn index(&self, x: u32, y: u32) -> Option<usize> {
-        if x >= self.width || y >= self.height {
-            return None;
+        if x < self.width && y < self.height {
+            Some((y * self.width + x) as usize)
+        } else {
+            None
         }
-        Some((y * self.width + x) as usize)
     }
 }
 
-/// Buffer de uma grandeza escalar por pixel: profundidade, contagem de raios, nós de BVH testados.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ScalarBuffer {
-    width: u32,
-    height: u32,
-    values: Vec<f32>,
+impl<T: Copy + Default> Buffer<T> {
+    pub fn new(width: u32, height: u32) -> Self {
+        Buffer::filled(width, height, T::default())
+    }
 }
 
 impl ScalarBuffer {
-    pub fn filled(width: u32, height: u32, value: f32) -> Self {
-        let n = width as usize * height as usize;
-        ScalarBuffer {
-            width,
-            height,
-            values: vec![value; n],
-        }
-    }
+    /// Converte para grayscale, normalizando linearmente o intervalo dos
+    /// valores finitos para `[0, 1]`. Cuidado ao comparar duas imagens, porque
+    /// um intervalo diferente vai gerar intensidades diferentes pro mesmo valor
+    /// bruto de pixel.
+    pub fn to_color(&self) -> ColorBuffer {
+        let mut intervalo: Option<(f32, f32)> = None;
 
-    pub fn new(width: u32, height: u32) -> Self {
-        ScalarBuffer::filled(width, height, 0.0)
-    }
-
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    pub fn values(&self) -> &[f32] {
-        &self.values
-    }
-
-    pub fn get(&self, x: u32, y: u32) -> Option<f32> {
-        self.index(x, y).map(|i| self.values[i])
-    }
-
-    pub fn set(&mut self, x: u32, y: u32, value: f32) {
-        if let Some(i) = self.index(x, y) {
-            self.values[i] = value;
-        }
-    }
-
-    pub fn finite_range(&self) -> Option<(f32, f32)> {
-        let mut range: Option<(f32, f32)> = None;
-
-        for &v in &self.values {
-            if v.is_finite() {
-                range = Some(match range {
-                    None => (v, v),
-                    Some((lo, hi)) => (lo.min(v), hi.max(v)),
+        for &val in &self.pixels {
+            if val.is_finite() {
+                intervalo = Some(match intervalo {
+                    None => (val, val),
+                    Some((lo, hi)) => (lo.min(val), hi.max(val)),
                 });
             }
         }
 
-        range
-    }
-
-    /// Visualiza como escala de cinza, normalizando linearmente o intervalo
-    /// `[min, max]` para `[0, 1]`. Cuidado ao comparar duas imagens, porque um intervalo
-    /// diferente vai gerar intensidades diferentes pro mesmo valor bruto de pixel.
-    pub fn to_color(&self, range: Option<(f32, f32)>) -> ColorBuffer {
-        let (lo, hi) = range.or_else(|| self.finite_range()).unwrap_or((0.0, 1.0));
-
+        let (lo, hi) = intervalo.unwrap_or((0.0, 1.0));
         let span = hi - lo;
 
         let pixels = self
-            .values
+            .pixels
             .iter()
             .map(|&v| {
                 if v.is_finite() {
@@ -203,83 +116,26 @@ impl ScalarBuffer {
             pixels,
         }
     }
-
-    fn index(&self, x: u32, y: u32) -> Option<usize> {
-        if x >= self.width || y >= self.height {
-            return None;
-        }
-        Some((y * self.width + x) as usize)
-    }
 }
 
-/// Um buffer emprestado do `RenderResult`, no formato que o passe pede.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BufferRef<'a> {
-    Color(&'a ColorBuffer),
-    Scalar(&'a ScalarBuffer),
-}
-
-impl<'a> BufferRef<'a> {
-    pub fn kind(self) -> BufferKind {
-        match self {
-            BufferRef::Color(_) => BufferKind::Color,
-            BufferRef::Scalar(_) => BufferKind::Scalar,
-        }
-    }
-
-    pub fn as_color(self) -> Option<&'a ColorBuffer> {
-        match self {
-            BufferRef::Color(b) => Some(b),
-            BufferRef::Scalar(_) => None,
-        }
-    }
-
-    pub fn as_scalar(self) -> Option<&'a ScalarBuffer> {
-        match self {
-            BufferRef::Scalar(b) => Some(b),
-            BufferRef::Color(_) => None,
-        }
-    }
-
-    /// Versão colorida do buffer, pronta para escrever em arquivo: buffer de
-    /// cor sai como está, escalar é normalizado para cinza.
-    pub fn to_color(self) -> ColorBuffer {
-        match self {
-            BufferRef::Color(b) => b.clone(),
-            BufferRef::Scalar(b) => b.to_color(None),
-        }
-    }
-
-    pub fn dimensions(self) -> (u32, u32) {
-        match self {
-            BufferRef::Color(b) => (b.width(), b.height()),
-            BufferRef::Scalar(b) => (b.width(), b.height()),
-        }
-    }
-}
-
-impl<'a> From<&'a ColorBuffer> for BufferRef<'a> {
-    fn from(b: &'a ColorBuffer) -> BufferRef<'a> {
-        BufferRef::Color(b)
-    }
-}
-
-impl<'a> From<&'a ScalarBuffer> for BufferRef<'a> {
-    fn from(b: &'a ScalarBuffer) -> BufferRef<'a> {
-        BufferRef::Scalar(b)
-    }
-}
-
-/// Números coletados durante o render. Cada renderer preenche o que faz sentido
-/// para ele e deixa o resto zerado.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct RenderStats {
-    /// Testes de interseção/cobertura raio-primitivo ou pixel-triângulo.
+pub struct RasterizationResult {
+    /// Testes de cobertura pixel-triângulo.
     pub primitive_tests: u64,
     /// Triângulos descartados pelo backface culling.
     pub backfaces_culled: u64,
     /// Polígonos recortados contra o frustum.
     pub polygons_clipped: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RayTracingResult {
+    /// Raios lançados por pixel, contando sombra e recursão.
+    pub ray_count: ScalarBuffer,
+    /// Nós de BVH testados por pixel, por todos os raios dele.
+    pub bvh_heatmap: ScalarBuffer,
+    /// Testes de interseção entre raios e primitivos.
+    pub primitive_tests: u64,
     /// Raios lançados no total (primários + sombra + secundários).
     pub rays: u64,
     /// Caixas de nó de BVH testadas contra um raio.
@@ -294,48 +150,56 @@ pub struct RenderStats {
     pub bvh_build_time: Duration,
 }
 
-/// O que um render devolve: um campo por `RenderPass`, `None` no que este modo
-/// não sabe produzir.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct RenderResult {
-    pub color: Option<ColorBuffer>,
-    pub depth: Option<ScalarBuffer>,
-    pub normal: Option<ColorBuffer>,
-    pub uv: Option<ColorBuffer>,
-    pub ray_count: Option<ScalarBuffer>,
-    pub bvh_heatmap: Option<ScalarBuffer>,
-    pub stats: RenderStats,
+    pub color: ColorBuffer,
+    pub depth: ScalarBuffer,
+    pub normal: ColorBuffer,
+    pub uv: ColorBuffer,
+    pub rasterization: RasterizationResult,
+    pub ray_tracing: RayTracingResult,
 }
 
 impl RenderResult {
-    pub fn new() -> Self {
-        RenderResult::default()
+    pub fn new(width: u32, height: u32, background: Rgb) -> Self {
+        RenderResult {
+            color: ColorBuffer::filled(width, height, background),
+            depth: ScalarBuffer::filled(width, height, f32::INFINITY),
+            normal: ColorBuffer::new(width, height),
+            uv: ColorBuffer::new(width, height),
+            rasterization: RasterizationResult::default(),
+            ray_tracing: RayTracingResult {
+                ray_count: ScalarBuffer::new(width, height),
+                bvh_heatmap: ScalarBuffer::new(width, height),
+                primitive_tests: 0,
+                rays: 0,
+                bvh_nodes_visited: 0,
+                tlas_depth: 0,
+                blas_depth: 0,
+                bvh_build_time: Duration::ZERO,
+            },
+        }
     }
 
-    /// Acesso pelo passe, para código que compara os dois modos sem saber de
-    /// antemão qual buffer vai olhar.
-    pub fn get(&self, pass: RenderPass) -> Option<BufferRef<'_>> {
-        match pass {
-            RenderPass::Color => self.color.as_ref().map(BufferRef::from),
-            RenderPass::Normal => self.normal.as_ref().map(BufferRef::from),
-            RenderPass::Uv => self.uv.as_ref().map(BufferRef::from),
-            RenderPass::Depth => self.depth.as_ref().map(BufferRef::from),
-            RenderPass::RayCount => self.ray_count.as_ref().map(BufferRef::from),
-            RenderPass::BvhHeatmap => self.bvh_heatmap.as_ref().map(BufferRef::from),
+    /// Aplica a exposure e tonemap.
+    pub fn apply_output(&mut self, output: &OutputOptions) {
+        for pixel in &mut self.color.pixels {
+            *pixel = {
+                let c = *pixel * output.exposure;
+                match output.tonemap {
+                    Tonemap::None => c,
+                    Tonemap::Reinhard => c.map(|v| v / (1.0 + v)),
+                }
+            };
         }
     }
 }
 
-/// A interface comum, que `Rasterizer` e `RayTracer` implementam. Permite
-/// escrever código genérico sobre `R: Renderer` pra comparar o resultado de dois
+/// A interface comum, que `Rasterizer` e `RayTracer` implementam, pra poder
+/// escrever código genérico sobre `R: Renderer` e comparar o resultado dos dois
 /// modos sobre a mesma cena.
 pub trait Renderer {
-    fn name(&self) -> &'static str;
-
-    /// Renderiza `scene` com `params`, devolvendo todos os passes que este modo
-    /// sabe produzir.
-    ///
-    /// Função pura: mesma entrada, mesma saída, sem estado guardado entre
-    /// chamadas.
+    /// Renderiza `scene` com `params` e retorna a imagem final e as informações
+    /// de debug.
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult;
 }

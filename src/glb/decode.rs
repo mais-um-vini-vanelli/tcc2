@@ -5,7 +5,7 @@ use crate::color::Rgb;
 use crate::math::{Tangent, Vec2, Vec3};
 use crate::parameters::Parameters;
 use crate::scene::{
-    Camera, Content, Light, Material, Mesh, Object, Primitive, Scene, Value as Canal,
+    Camera, Content, Geometry, Light, Material, Mesh, Object, Scene, Value as Canal,
 };
 use crate::texture::Texture;
 use crate::transform::Transform;
@@ -37,22 +37,13 @@ pub fn decode(bytes: &[u8]) -> Result<(Scene, Option<Parameters>), Error> {
     Ok((scene, parameters))
 }
 
-fn decode_camera(projecao: &gltf::Camera, no: &gltf::Node) -> Camera {
-    let matrix = no.transform().matrix();
-
-    let position = column(&matrix, 3);
-    let up = direction(&matrix, Vec3::new(0.0, 1.0, 0.0));
-    let look_at = position + direction(&matrix, Vec3::new(0.0, 0.0, -1.0));
-
+fn decode_camera(projecao: &gltf::Camera) -> Camera {
     match projecao.projection() {
         gltf::camera::Projection::Perspective(p) => Camera::Perspective {
             fov: p.yfov().to_degrees(),
             aspect: p.aspect_ratio().unwrap_or(0.1),
             near: p.znear(),
             far: p.zfar().unwrap_or(1000.0),
-            position,
-            look_at,
-            up,
         },
 
         gltf::camera::Projection::Orthographic(o) => Camera::Orthographic {
@@ -60,41 +51,23 @@ fn decode_camera(projecao: &gltf::Camera, no: &gltf::Node) -> Camera {
             height: 2.0 * o.ymag(),
             near: o.znear(),
             far: o.zfar(),
-            position,
-            look_at,
-            up,
         },
     }
 }
 
-fn decode_light(luz: &gltf::khr_lights_punctual::Light, no: &gltf::Node) -> Light {
-    let matrix = no.transform().matrix();
-
-    let position = column(&matrix, 3);
-    let direction = direction(&matrix, Vec3::new(0.0, 0.0, -1.0));
-
+fn decode_light(luz: &gltf::khr_lights_punctual::Light) -> Light {
     let color = Rgb::new(luz.color()[0], luz.color()[1], luz.color()[2]);
     let intensity = luz.intensity();
 
     match luz.kind() {
-        gltf::khr_lights_punctual::Kind::Point => Light::Point {
-            position,
-            color,
-            intensity,
-        },
+        gltf::khr_lights_punctual::Kind::Point => Light::Point { color, intensity },
 
-        gltf::khr_lights_punctual::Kind::Directional => Light::Directional {
-            direction,
-            color,
-            intensity,
-        },
+        gltf::khr_lights_punctual::Kind::Directional => Light::Directional { color, intensity },
 
         gltf::khr_lights_punctual::Kind::Spot {
             inner_cone_angle,
             outer_cone_angle,
         } => Light::Spot {
-            position,
-            direction,
             inner_angle: inner_cone_angle.to_degrees(),
             outer_angle: outer_cone_angle.to_degrees(),
             color,
@@ -112,9 +85,9 @@ fn decode_object(
     let extras = no.extension_value(EXTENSION);
 
     let content = if let Some(projecao) = no.camera() {
-        Some(Content::Camera(decode_camera(&projecao, no)))
+        Some(Content::Camera(decode_camera(&projecao)))
     } else if let Some(luz) = no.light() {
-        Some(Content::Light(decode_light(&luz, no)))
+        Some(Content::Light(decode_light(&luz)))
     } else if let Some(ambiente) = extras.and_then(|e| non_null_field(e, "ambient")) {
         Some(Content::Light(Light::Ambient {
             color: non_null_field(ambiente, "color")
@@ -150,21 +123,12 @@ fn decode_object(
         .map(|filho| decode_object(&filho, buffers, imagens, materiais))
         .collect::<Result<Vec<_>, Error>>()?;
 
-    let transform = match &content {
-        Some(Content::Camera(_))
-        | Some(Content::Light(
-            Light::Point { .. } | Light::Directional { .. } | Light::Spot { .. },
-        )) => Transform::IDENTITY,
+    let (translation, rotation, scale) = no.transform().decomposed();
 
-        _ => {
-            let (translation, rotation, scale) = no.transform().decomposed();
-
-            Transform {
-                translation: Vec3::new(translation[0], translation[1], translation[2]),
-                rotation: euler(rotation),
-                scale: Vec3::new(scale[0], scale[1], scale[2]),
-            }
-        }
+    let transform = Transform {
+        translation: Vec3::new(translation[0], translation[1], translation[2]),
+        rotation: euler(rotation),
+        scale: Vec3::new(scale[0], scale[1], scale[2]),
     };
 
     Ok(Object {
@@ -178,13 +142,13 @@ fn decode_geometry(
     malha: &gltf::Mesh,
     primitive: &gltf::Primitive,
     buffers: &[gltf::buffer::Data],
-) -> Result<Primitive, Error> {
+) -> Result<Geometry, Error> {
     let marca = malha
         .extension_value(EXTENSION)
-        .and_then(|extras| non_null_field(extras, "primitive"));
+        .and_then(|extras| non_null_field(extras, "geometry"));
 
     match marca {
-        None => Ok(Primitive::Mesh(decode_mesh(primitive, buffers)?)),
+        None => Ok(Geometry::Mesh(decode_mesh(primitive, buffers)?)),
 
         Some(Value::String(nome)) if nome == "triangle" => {
             let malha: &Mesh = &decode_mesh(primitive, buffers)?;
@@ -204,46 +168,29 @@ fn decode_geometry(
                 .map(|i| i.map(|k| k as usize))
                 .ok_or("triangle com menos de três índices")?;
 
-            Ok(Primitive::Triangle {
+            Ok(Geometry::Triangle {
                 points: tres(&malha.vertices, trio)
                     .ok_or("triangle com índice fora da lista de vértices")?,
-                normals: malha.normals.as_deref().and_then(|n| tres(n, trio)),
-                tangents: malha.tangents.as_deref().and_then(|t| tres(t, trio)),
-                uvs: malha.uvs.as_deref().and_then(|u| tres(u, trio)),
             })
         }
 
         Some(v) => {
-            let to_vec3 = |val: &Value| -> Option<Vec3> {
-                Some(Vec3::new(
-                    val.get(0)?.as_f64()? as f32,
-                    val.get(1)?.as_f64()? as f32,
-                    val.get(2)?.as_f64()? as f32,
-                ))
-            };
-
             if non_null_field(v, "sphere").is_some() {
                 let esfera = &v["sphere"];
 
-                match (
-                    non_null_field(esfera, "center").and_then(to_vec3),
-                    non_null_field(esfera, "radius").and_then(|r| r.as_f64().map(|r| r as f32)),
-                ) {
-                    (Some(center), Some(radius)) => Ok(Primitive::Sphere { center, radius }),
-                    _ => Err("sphere sem center ou radius".into()),
+                match non_null_field(esfera, "radius").and_then(|r| r.as_f64().map(|r| r as f32)) {
+                    Some(radius) => Ok(Geometry::Sphere { radius }),
+                    _ => Err("sphere sem radius".into()),
                 }
             } else if non_null_field(v, "cube").is_some() {
                 let cubo = &v["cube"];
 
-                match (
-                    non_null_field(cubo, "center").and_then(to_vec3),
-                    non_null_field(cubo, "half_edge").and_then(|h| h.as_f64().map(|h| h as f32)),
-                ) {
-                    (Some(center), Some(half_edge)) => Ok(Primitive::Cube { center, half_edge }),
-                    _ => Err("cube sem center ou half_edge".into()),
+                match non_null_field(cubo, "half_edge").and_then(|h| h.as_f64().map(|h| h as f32)) {
+                    Some(half_edge) => Ok(Geometry::Cube { half_edge }),
+                    _ => Err("cube sem half_edge".into()),
                 }
             } else {
-                Err("primitive desconhecido.".into())
+                Err("geometry desconhecida.".into())
             }
         }
     }
@@ -407,14 +354,6 @@ fn pop_image(
         .collect();
 
     Ok((dados.width, dados.height, texels))
-}
-
-fn column(mat: &[[f32; 4]; 4], col: usize) -> Vec3 {
-    Vec3::new(mat[col][0], mat[col][1], mat[col][2])
-}
-
-fn direction(m: &[[f32; 4]; 4], v: Vec3) -> Vec3 {
-    column(m, 0) * v.x + column(m, 1) * v.y + column(m, 2) * v.z
 }
 
 fn euler(quaternion: [f32; 4]) -> Vec3 {

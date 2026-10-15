@@ -34,11 +34,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         ("volta", &volta, &params_volta.unwrap()),
     ] {
         let resultado = RayTracer.render(cena, &params);
-        let buffer = resultado.color.as_ref().ok_or("o ray tracer não deu cor")?;
 
         comum::grava_textura(
             &format!("./renders/formato_{nome}.png"),
-            buffer,
+            &resultado.color,
             Rgb::to_srgb,
         )?;
     }
@@ -68,69 +67,76 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
         ]),
     };
 
-    let cena = Scene::new(Camera::Perspective {
-        fov: 42.0,
-        aspect: LARGURA as f32 / ALTURA as f32,
-        near: 0.1,
-        far: 60.0,
-        position: Vec3::new(4.5, 3.2, 7.0),
-        look_at: Vec3::new(0.0, 1.0, 0.0),
-        up: Vec3::new(0.0, 1.0, 0.0),
-    })
-    .with_light(Light::Point {
-        position: Vec3::new(3.0, 6.0, 4.0),
-        color: Rgb::WHITE,
-        intensity: 220.0,
-    })
-    .with_light(Light::Directional {
-        direction: Vec3::new(-0.5, -0.8, -0.4),
-        color: Rgb::new(0.6, 0.7, 1.0),
-        intensity: 0.7,
-    })
-    .with_light(Light::Spot {
-        position: Vec3::new(-4.0, 5.0, 2.0),
-        direction: Vec3::new(0.6, -1.0, -0.2),
-        inner_angle: 12.0,
-        outer_angle: 26.0,
-        color: Rgb::new(1.0, 0.9, 0.7),
-        intensity: 180.0,
-    })
-    .with_light(Light::Ambient {
-        color: Rgb::new(0.5, 0.6, 0.8),
-        intensity: 0.12,
-    })
-    // Chão: malha de verdade, com textura de cor e mapa de normais.
-    .with_object(Object::new(
-        Primitive::Mesh(chao),
-        Material {
-            albedo: Value::Map(xadrez(64, Rgb::gray(0.72), Rgb::new(0.18, 0.2, 0.26))?),
-            roughness: Value::Constant(0.85),
-            normal: Some(ondulado(64)?),
-            ..Material::default()
-        },
-    ))
-    // Esfera analítica de metal: tudo constante, tem que voltar idêntica.
-    .with_object(
-        Object::new(
-            Primitive::sphere(Vec3::ZERO, 1.0),
-            Material::metal(Rgb::new(0.95, 0.78, 0.35), 0.12),
-        )
-        .with_transform(Transform {
-            translation: Vec3::new(-1.9, 1.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-        }),
-    )
-    .with_object(
-        Object::group()
-            .with_transform(Transform {
+    let cena = Scene {
+        objects: vec![
+            Object::camera(
+                Camera::Perspective {
+                    fov: 42.0,
+                    aspect: LARGURA as f32 / ALTURA as f32,
+                    near: 0.1,
+                    far: 60.0,
+                },
+                Transform::looking_at(Vec3::new(4.5, 3.2, 7.0), Vec3::new(0.0, 1.0, 0.0)),
+            ),
+            Object::light(
+                Light::Point {
+                    color: Rgb::WHITE,
+                    intensity: 220.0,
+                },
+                Transform {
+                    translation: Vec3::new(3.0, 6.0, 4.0),
+                    ..Transform::IDENTITY
+                },
+            ),
+            Object::light(
+                Light::Directional {
+                    color: Rgb::new(0.6, 0.7, 1.0),
+                    intensity: 0.7,
+                },
+                Transform::looking_at(Vec3::ZERO, Vec3::new(-0.5, -0.8, -0.4)),
+            ),
+            Object::light(
+                Light::Spot {
+                    inner_angle: 12.0,
+                    outer_angle: 26.0,
+                    color: Rgb::new(1.0, 0.9, 0.7),
+                    intensity: 180.0,
+                },
+                Transform::looking_at(Vec3::new(-4.0, 5.0, 2.0), Vec3::new(0.6, -1.0, -0.2)),
+            ),
+            Object::light(
+                Light::Ambient {
+                    color: Rgb::new(0.5, 0.6, 0.8),
+                    intensity: 0.12,
+                },
+                Transform::IDENTITY,
+            ),
+            Object::geometry(
+                Geometry::Mesh(chao),
+                Material {
+                    albedo: Value::Map(xadrez(64, Rgb::gray(0.72), Rgb::new(0.18, 0.2, 0.26))?),
+                    roughness: Value::Constant(0.85),
+                    normal: Some(ondulado(64)?),
+                    ..Material::default()
+                },
+                Transform::IDENTITY,
+            ),
+            Object::geometry(
+                Geometry::sphere(1.0),
+                Material::metal(Rgb::new(0.95, 0.78, 0.35), 0.12),
+                Transform {
+                    translation: Vec3::new(-1.9, 1.0, 0.0),
+                    ..Transform::IDENTITY
+                },
+            ),
+            Object::group(Transform {
                 translation: Vec3::new(0.3, 0.0, 0.0),
                 rotation: Vec3::new(0.0, 24.0, 0.0),
                 scale: Vec3::ONE,
             })
-            .with_child(
-                Object::new(
-                    Primitive::cube(Vec3::ZERO, 0.8),
+            .with_children(vec![
+                Object::geometry(
+                    Geometry::cube(0.8),
                     Material {
                         albedo: Value::Map(xadrez(
                             32,
@@ -140,28 +146,22 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
                         roughness: Value::Map(gradiente(32)?),
                         ..Material::default()
                     },
+                    Transform {
+                        translation: Vec3::new(1.4, 0.8, 0.6),
+                        rotation: Vec3::new(18.0, 35.0, 12.0),
+                        scale: Vec3::new(1.0, 1.3, 1.0),
+                    },
                 )
-                .with_transform(Transform {
-                    translation: Vec3::new(1.4, 0.8, 0.6),
-                    rotation: Vec3::new(18.0, 35.0, 12.0),
-                    scale: Vec3::new(1.0, 1.3, 1.0),
-                })
-                .with_child(
-                    Object::new(
-                        Primitive::sphere(Vec3::ZERO, 0.28),
-                        Material::emissive(Rgb::new(2.6, 1.7, 0.8)),
-                    )
-                    .with_transform(Transform {
+                .with_children(vec![Object::geometry(
+                    Geometry::sphere(0.28),
+                    Material::emissive(Rgb::new(2.6, 1.7, 0.8)),
+                    Transform {
                         translation: Vec3::new(1.0, 1.4, -1.6),
                         ..Transform::IDENTITY
-                    })
-                    .with_shadows(false),
-                ),
-            )
-            // Vidro, com transmissão e índice de refração.
-            .with_child(
-                Object::new(
-                    Primitive::sphere(Vec3::ZERO, 0.7),
+                    },
+                )]),
+                Object::geometry(
+                    Geometry::sphere(0.7),
                     Material {
                         albedo: Value::Constant(Rgb::gray(0.06)),
                         roughness: Value::Constant(0.03),
@@ -169,31 +169,23 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
                         refractive_index: 1.52,
                         ..Material::default()
                     },
-                )
-                .with_transform(Transform {
-                    translation: Vec3::new(0.0, 0.7, 2.4),
-                    ..Transform::IDENTITY
-                }),
-            ),
-    )
-    // Triângulo solto, pra checar que ele não volta como malha.
-    .with_object(Object::new(
-        Primitive::Triangle {
-            points: [
-                Vec3::new(-4.2, 0.02, -1.0),
-                Vec3::new(-2.6, 0.02, -2.2),
-                Vec3::new(-3.4, 2.4, -1.6),
-            ],
-            normals: None,
-            tangents: None,
-            uvs: Some([
-                Vec2::new(0.0, 1.0),
-                Vec2::new(1.0, 1.0),
-                Vec2::new(0.5, 0.0),
+                    Transform {
+                        translation: Vec3::new(0.0, 0.7, 2.4),
+                        ..Transform::IDENTITY
+                    },
+                ),
             ]),
-        },
-        Material::diffuse(Rgb::new(0.35, 0.7, 0.45)),
-    ));
+            Object::geometry(
+                Geometry::triangle([
+                    Vec3::new(-4.2, 0.02, -1.0),
+                    Vec3::new(-2.6, 0.02, -2.2),
+                    Vec3::new(-3.4, 2.4, -1.6),
+                ]),
+                Material::diffuse(Rgb::new(0.35, 0.7, 0.45)),
+                Transform::IDENTITY,
+            ),
+        ],
+    };
 
     Ok(cena)
 }

@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 use crate::math::{Aabb, Ray, Vec3};
 use crate::parameters::{BvhSplit, TransformMethod};
 use crate::raytracer::Contador;
-use crate::scene::{Instance, Primitive};
+use crate::scene::{Geometry, GeometryInstance};
 
 // Teoria: bvh.md#quando-parar-de-dividir
 /// Na mediana, a folha fecha com até este número de itens.
@@ -40,11 +40,15 @@ pub(crate) struct Aceleracao {
 }
 
 impl Aceleracao {
-    pub fn build(instancias: &[Instance], split: BvhSplit, method: TransformMethod) -> Aceleracao {
+    pub fn build(
+        instancias: &[GeometryInstance],
+        split: BvhSplit,
+        method: TransformMethod,
+    ) -> Aceleracao {
         let blas: Vec<Option<Bvh>> = instancias
             .iter()
             .map(|instancia| match instancia.geometry {
-                Primitive::Mesh(malha) => Some(Bvh::build(
+                Geometry::Mesh(malha) => Some(Bvh::build(
                     (0..malha.face_count())
                         .filter_map(|i| {
                             Some(Item {
@@ -103,7 +107,7 @@ impl Aceleracao {
     /// As AABBs dos nós da TLAS e da BLAS até `profundidade`.
     pub fn aabbs(
         &self,
-        instancias: &[Instance],
+        instancias: &[GeometryInstance],
         method: TransformMethod,
         profundidade: u32,
     ) -> Vec<(u32, [Vec3; 8])> {

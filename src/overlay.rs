@@ -1,10 +1,10 @@
 use crate::color::Rgb;
 use crate::math::{Vec2, Vec3};
 use crate::render::ColorBuffer;
-use crate::scene::Camera;
+use crate::scene::CameraInstance;
 
 /// Desenha as arestas da caixa a partir dos oito cantos em espaço de mundo.
-pub fn caixa(destino: &mut ColorBuffer, camera: &Camera, cantos: [Vec3; 8], cor: Rgb) {
+pub fn caixa(destino: &mut ColorBuffer, camera: &CameraInstance, cantos: [Vec3; 8], cor: Rgb) {
     const ARESTAS: [(usize, usize); 12] = [
         // ao longo de x
         (0, 1),
@@ -29,18 +29,27 @@ pub fn caixa(destino: &mut ColorBuffer, camera: &Camera, cantos: [Vec3; 8], cor:
 }
 
 /// Desenha o segmento de `a` a `b`, os dois em espaço de mundo, sem teste de profundidade.
-pub fn linha(destino: &mut ColorBuffer, camera: &Camera, a: Vec3, b: Vec3, cor: Rgb) {
+pub fn linha(
+    destino: &mut ColorBuffer,
+    camera_instance: &CameraInstance,
+    a: Vec3,
+    b: Vec3,
+    cor: Rgb,
+) {
     let (largura, altura) = (destino.width(), destino.height());
 
-    let (a, b) = (camera.to_camera_space(a), camera.to_camera_space(b));
+    let (a, b) = (
+        camera_instance.to_camera_space(a),
+        camera_instance.to_camera_space(b),
+    );
 
-    let Some((a, b)) = recorta_no_near(camera, a, b) else {
+    let Some((a, b)) = recorta_no_near(camera_instance, a, b) else {
         return;
     };
 
     let (Some(a), Some(b)) = (
-        camera.to_screen_space(a, largura, altura),
-        camera.to_screen_space(b, largura, altura),
+        camera_instance.camera.to_screen_space(a, largura, altura),
+        camera_instance.camera.to_screen_space(b, largura, altura),
     ) else {
         return;
     };
@@ -61,8 +70,8 @@ pub fn linha(destino: &mut ColorBuffer, camera: &Camera, a: Vec3, b: Vec3, cor: 
 
 /// O trecho do segmento com `z >= near`, em espaço de câmera, ou `None` se ele
 /// está todo antes do plano.
-fn recorta_no_near(camera: &Camera, a: Vec3, b: Vec3) -> Option<(Vec3, Vec3)> {
-    let (near, _far) = camera.clip_planes();
+fn recorta_no_near(camera_instance: &CameraInstance, a: Vec3, b: Vec3) -> Option<(Vec3, Vec3)> {
+    let (near, _far) = camera_instance.camera.clip_planes();
 
     match (a.z >= near, b.z >= near) {
         (true, true) => Some((a, b)),

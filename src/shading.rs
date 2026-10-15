@@ -20,7 +20,7 @@
 use crate::color::Rgb;
 use crate::math::{Vec2, Vec3};
 use crate::parameters::ReflectanceModel;
-use crate::scene::{Light, MaterialSample};
+use crate::scene::{Light, LightInstance, MaterialSample};
 
 /// O ponto que recebe o shading. Todos os vetores em espaço de mundo, e as
 /// normais unitárias.
@@ -42,18 +42,18 @@ pub struct Surface {
 pub fn shade(
     surface: &Surface,
     material: &MaterialSample,
-    lights: &[Light],
+    light_instances: &[LightInstance],
     view: Vec3,
     reflectance: ReflectanceModel,
-    visibility: &dyn Fn(&Surface, &Light) -> f32,
+    visibility: &dyn Fn(&Surface, &LightInstance) -> f32,
 ) -> Rgb {
     let n = surface.normal;
     let v = view;
 
     let mut cor = material.emission;
 
-    for luz in lights {
-        if let Light::Ambient { color, intensity } = *luz {
+    for luz in light_instances {
+        if let Light::Ambient { color, intensity } = luz.light {
             // A ambiente não tem direção. É o termo que impede a sombra de fechar em preto chapado enquanto não há iluminação indireta.
             cor = cor + material.albedo * color * intensity;
             continue;
@@ -85,19 +85,15 @@ pub fn shade(
 }
 
 /// A visibilidade de quem não tem sombra: toda luz chega inteira.
-pub fn always_visible(_surface: &Surface, _light: &Light) -> f32 {
+pub fn always_visible(_surface: &Surface, _light: &LightInstance) -> f32 {
     1.0
 }
 
 /// Direção **para** a luz e a radiância que chega ao ponto.
-fn incidencia(light: &Light, point: Vec3) -> (Vec3, Rgb) {
-    match *light {
-        Light::Point {
-            position,
-            color,
-            intensity,
-        } => {
-            let ate_a_luz = position - point;
+fn incidencia(light_instance: &LightInstance, point: Vec3) -> (Vec3, Rgb) {
+    match light_instance.light {
+        Light::Point { color, intensity } => {
+            let ate_a_luz = light_instance.position - point;
 
             // v · v = |v|^2, então d^2 = ate_a_luz.dot(ate_a_luz).
             let distancia2 = ate_a_luz.dot(ate_a_luz).max(1e-6);
@@ -106,14 +102,8 @@ fn incidencia(light: &Light, point: Vec3) -> (Vec3, Rgb) {
             // intensity já vem em watts / 4*PI, então watts por feixe = intensity / d2.
             (ate_a_luz.normalized(), color * (intensity / distancia2))
         }
-        Light::Directional {
-            direction,
-            color,
-            intensity,
-        } => ((-direction).normalized(), color * intensity),
+        Light::Directional { color, intensity } => (-light_instance.forward(), color * intensity),
         Light::Spot {
-            position,
-            direction,
             inner_angle,
             outer_angle,
             color,
@@ -123,17 +113,16 @@ fn incidencia(light: &Light, point: Vec3) -> (Vec3, Rgb) {
             // Um spot é uma luz pontual com um cone por cima: mesma direção, mesma
             // atenuação por 1/d^2, e um fator a mais que depende do ângulo.
             let (l, radiancia) = incidencia(
-                &Light::Point {
-                    position,
-                    color,
-                    intensity,
+                &LightInstance {
+                    light: Light::Point { color, intensity },
+                    ..*light_instance
                 },
                 point,
             );
 
             // cos do ângulo entre o eixo do spot e o raio que sai da luz até o
             // ponto.
-            let cos_ponto = direction.normalized().dot(-l);
+            let cos_ponto = light_instance.forward().dot(-l);
 
             // Comparar cossenos evita um acos por ponto; o cosseno
             // diminui quando o ângulo cresce, então cos_interno > cos_externo.

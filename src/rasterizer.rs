@@ -3,15 +3,13 @@
 //! Teoria: rasterizer.md#a-pipeline
 //!
 //! O rasterizador trabalha só com malha: todo objeto da cena passa por
-//! `Primitive::tessellate` na entrada.
-//!
-//! Ainda **não** existem aqui: wireframe, msaa e sombra projetada.
+//! `Geometry::tessellate` na entrada.
 
 use crate::color::Rgb;
 use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
 use crate::parameters::{Parameters, ShadingFrequency};
-use crate::render::{ColorBuffer, RenderResult, RenderStats, Renderer, ScalarBuffer};
-use crate::scene::{Camera, Light, Material, Primitive, Scene};
+use crate::render::{RasterizationResult, RenderResult, Renderer};
+use crate::scene::{Camera, CameraInstance, Geometry, LightInstance, Material, Scene};
 use crate::shading::{self, Surface};
 use crate::texture::Footprint;
 
@@ -19,38 +17,28 @@ use crate::texture::Footprint;
 pub struct Rasterizer;
 
 impl Renderer for Rasterizer {
-    fn name(&self) -> &'static str {
-        "rasterizador"
-    }
-
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
         let (largura, altura) = (params.output.width, params.output.height);
 
         let fundo = params.output.background;
 
-        let mut resultado = RenderResult {
-            color: Some(ColorBuffer::filled(largura, altura, fundo)),
-            depth: Some(ScalarBuffer::filled(largura, altura, f32::INFINITY)),
-            normal: Some(ColorBuffer::filled(largura, altura, Rgb::BLACK)),
-            uv: Some(ColorBuffer::filled(largura, altura, Rgb::BLACK)),
-            ..RenderResult::new()
-        };
+        let mut resultado = RenderResult::new(largura, altura, fundo);
 
-        let mut stats = RenderStats::default();
+        let mut stats = RasterizationResult::default();
 
-        let (camera, lights, instances) = scene.flatten(params.transform.method);
+        let (camera_instance, light_instances, instances) = scene.flatten(params.transform.method);
 
-        let Some(camera) = camera else {
+        let Some(camera_instance) = camera_instance else {
             // Sem câmera não há de onde olhar: sobra o fundo.
             return resultado;
         };
 
-        let planos = frustum(&camera);
-        let perspectiva = matches!(camera, Camera::Perspective { .. });
+        let planos = frustum(&camera_instance.camera);
+        let perspectiva = matches!(camera_instance.camera, Camera::Perspective { .. });
 
         let contexto = Contexto {
-            camera: &camera,
-            lights: &lights,
+            camera: &camera_instance,
+            lights: &light_instances,
             params,
             perspectiva,
         };
@@ -64,7 +52,7 @@ impl Renderer for Rasterizer {
                 };
 
                 if let Some(on_triangle) = params.rasterization.on_triangle {
-                    if let Primitive::Mesh(_) = instancia.geometry {
+                    if let Geometry::Mesh(_) = instancia.geometry {
                         on_triangle(id, indice);
                     }
                 }
@@ -73,7 +61,7 @@ impl Renderer for Rasterizer {
                 // *geometria*; o ray tracer resolve o mesmo problema no sentido
                 // contrário, transformando o raio.
                 let triangulo = face.map(|v| Vertex {
-                    position: camera.to_camera_space(
+                    position: camera_instance.to_camera_space(
                         instancia
                             .chain
                             .apply_point(v.position, params.transform.method),
@@ -94,7 +82,9 @@ impl Renderer for Rasterizer {
                     let recortado = [poligono[0], poligono[i], poligono[i + 1]];
                     let tela = recortado.map(|v| {
                         Some(Vertex {
-                            position: camera.to_screen_space(v.position, largura, altura)?,
+                            position: camera_instance
+                                .camera
+                                .to_screen_space(v.position, largura, altura)?,
                             ..v
                         })
                     });
@@ -122,7 +112,7 @@ impl Renderer for Rasterizer {
                     }
 
                     // O shading acontece no espaço de mundo.
-                    let mundo = recortado.map(|v| camera.from_camera_space(v.position));
+                    let mundo = recortado.map(|v| camera_instance.from_camera_space(v.position));
 
                     let shading = contexto.shade_vertex(
                         instancia.material,
@@ -147,11 +137,9 @@ impl Renderer for Rasterizer {
             }
         }
 
-        if let Some(cor) = &mut resultado.color {
-            cor.apply_output(&params.output);
-        }
+        resultado.apply_output(&params.output);
 
-        resultado.stats = stats;
+        resultado.rasterization = stats;
         resultado
     }
 }
@@ -159,8 +147,8 @@ impl Renderer for Rasterizer {
 /// O que o shading precisa saber da cena e que não muda de um triângulo para o
 /// outro.
 struct Contexto<'a> {
-    camera: &'a Camera,
-    lights: &'a [Light],
+    camera: &'a CameraInstance,
+    lights: &'a [LightInstance],
     params: &'a Parameters,
     perspectiva: bool,
 }
@@ -191,7 +179,7 @@ impl Contexto<'_> {
                     &superficie,
                     &amostra,
                     self.lights,
-                    self.camera.view_from(superficie.point),
+                    self.camera.view(superficie.point),
                     self.params.shading.reflectance,
                     &shading::always_visible,
                 )
@@ -225,7 +213,7 @@ impl Contexto<'_> {
                         &superficie,
                         &amostra,
                         self.lights,
-                        self.camera.view_from(centro),
+                        self.camera.view(centro),
                         self.params.shading.reflectance,
                         &shading::always_visible,
                     )
@@ -246,7 +234,7 @@ impl Contexto<'_> {
                     &superficie,
                     &amostra,
                     self.lights,
-                    self.camera.view_from(ponto),
+                    self.camera.view(ponto),
                     self.params.shading.reflectance,
                     &shading::always_visible,
                 )
@@ -314,7 +302,11 @@ fn frustum(camera: &Camera) -> [Plane; 6] {
 ///
 /// Pra um ponto estar visível pra câmera, ele precisa estar dentro dos semiespaços definidos por todos
 // os 6 planos.
-fn recorta(triangulo: [Vertex; 3], planos: &[Plane; 6], stats: &mut RenderStats) -> Vec<Vertex> {
+fn recorta(
+    triangulo: [Vertex; 3],
+    planos: &[Plane; 6],
+    stats: &mut RasterizationResult,
+) -> Vec<Vertex> {
     let mut poligono = triangulo.to_vec();
     let mut recortou = false;
 
@@ -383,16 +375,15 @@ fn preenche(
     destino: &mut RenderResult,
     triangulo: &Triangulo,
     contexto: &Contexto,
-    stats: &mut RenderStats,
+    stats: &mut RasterizationResult,
 ) {
-    let (Some(cor), Some(profundidade), Some(mapa_normal), Some(mapa_uv)) = (
-        destino.color.as_mut(),
-        destino.depth.as_mut(),
-        destino.normal.as_mut(),
-        destino.uv.as_mut(),
-    ) else {
-        return;
-    };
+    let RenderResult {
+        color: cor,
+        depth: profundidade,
+        normal: mapa_normal,
+        uv: mapa_uv,
+        ..
+    } = destino;
 
     let params = contexto.params;
 
@@ -418,9 +409,9 @@ fn preenche(
         let pesos_de_tela = arestas.map(|w| w / area);
 
         if contexto.perspectiva && params.rasterization.perspective_correct {
-            Baricentrics::perspective(pesos_de_tela, profundidades)
+            Baricentrics::perspective_corrected(pesos_de_tela, profundidades)
         } else {
-            Baricentrics::orthographic(pesos_de_tela)
+            Baricentrics::new(pesos_de_tela)
         }
     };
 

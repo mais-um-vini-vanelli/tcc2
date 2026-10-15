@@ -104,15 +104,15 @@ func _primitive(mesh: int, index: int, casts_shadows: bool) -> Tcc2Geometry:
 	primitive.cast_shadows = casts_shadows
 
 	if index == 0:
-		var tcc2_primitive = _extras("meshes", mesh).get("primitive");
+		var tcc2_geometry = _extras("meshes", mesh).get("geometry");
 		
-		if tcc2_primitive != null and tcc2_primitive is Dictionary:
-			if tcc2_primitive.has("sphere"):
-				var sphere: Dictionary = tcc2_primitive["sphere"]
+		if tcc2_geometry != null and tcc2_geometry is Dictionary:
+			if tcc2_geometry.has("sphere"):
+				var sphere: Dictionary = tcc2_geometry["sphere"]
 				primitive.kind = Tcc2Geometry.Kind.SPHERE
 				primitive.sphere.radius = float(sphere.get("radius", 1.0))
-			elif tcc2_primitive.has("cube"):
-				var cube: Dictionary = tcc2_primitive["cube"]
+			elif tcc2_geometry.has("cube"):
+				var cube: Dictionary = tcc2_geometry["cube"]
 				primitive.kind = Tcc2Geometry.Kind.CUBE
 				primitive.cube.half_edge = float(cube.get("half_edge", 0.5))
 

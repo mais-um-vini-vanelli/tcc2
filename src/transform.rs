@@ -2,10 +2,10 @@
 //!
 //! Teoria: transform.md#o-transform
 //!
-//! A geometria de um `Primitive` está em **espaço local**; o `Transform` do
-//! objeto é o que a leva pro mundo. Os dois pipelines usam esta struct em
-//! sentidos opostos: o rasterizador transforma a geometria (`apply_*`), o ray
-//! tracer transforma o raio com a inversa (`undo_*`).
+//! A `Geometry` de um objeto está em **espaço local**; o `Transform` dele é o
+//! que a leva pro mundo. Os dois pipelines usam esta struct em sentidos
+//! opostos: o rasterizador transforma a geometria (`apply_*`), o ray tracer
+//! transforma o raio com a inversa (`undo_*`).
 
 use crate::math::{Ray, Tangent, Vec3};
 use crate::parameters::TransformMethod;
@@ -31,6 +31,26 @@ impl Transform {
         rotation: Vec3::ZERO,
         scale: Vec3::ONE,
     };
+
+    /// Monta um transform que leva o objeto pra `position` e olhando pra `target`.
+    /// O transform de quem está em `position` e olha para `target`, sem roll.
+    pub fn looking_at(position: Vec3, target: Vec3) -> Transform {
+        let frente = (target - position).normalized();
+
+        Transform {
+            translation: position,
+            rotation: Vec3::new(
+                // frente.y é o deslocamento vertical, então o asin() dele devolve a rotação
+                // em x
+                frente.y.asin().to_degrees(),
+                // pra rotação em y, olhamos pro deslocamento de frente.xz; atan() dele
+                // devolve a rotação
+                (-frente.x).atan2(-frente.z).to_degrees(),
+                0.0,
+            ),
+            scale: Vec3::ONE,
+        }
+    }
 
     // Teoria: transform.md#a-ordem-das-tres-etapas
     /// Local -> mundo: escala, rotaciona, translada.

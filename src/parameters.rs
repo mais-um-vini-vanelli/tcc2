@@ -44,12 +44,8 @@ pub enum TransformMethod {
 
 #[derive(Debug, Clone, Copy)]
 pub struct RasterizationOptions {
-    /// Amostras por pixel do *multisampling*. `None` = uma amostra por pixel.
-    pub msaa: Option<u8>,
     /// Descarta triângulos de face oposta à câmera.
     pub backface_cull: bool,
-    /// Desenha só as arestas, sem preencher o interior.
-    pub wireframe: bool,
     /// Correção de perspectiva na interpolação das baricêntricas. Desligar
     /// mostra a distorção clássica em triângulos inclinados.
     pub perspective_correct: bool,
@@ -67,9 +63,7 @@ pub struct RasterizationOptions {
 impl Default for RasterizationOptions {
     fn default() -> Self {
         RasterizationOptions {
-            msaa: None,
             backface_cull: true,
-            wireframe: false,
             perspective_correct: true,
             depth_test: true,
             on_fragment: None,

@@ -25,7 +25,7 @@ vira sempre o mesmo volume, e a profundidade de um ponto vira simplesmente o seu
 
 A conversão de um ponto do mundo tem dois passos:
 
-1. tirar a posição da câmera do ponto: `d = ponto - camera.position()`. O vetor
+1. tirar a posição da câmera do ponto: `d = ponto - camera.position`. O vetor
    `d` vai da câmera até o ponto; ele já é o ponto visto de um sistema em que a
    câmera está em `(0, 0, 0)`, só que ainda medido nos eixos do mundo;
 2. descobrir as coordenadas de `d` nos eixos da câmera, com o produto escalar:

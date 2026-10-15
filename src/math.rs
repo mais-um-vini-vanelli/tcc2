@@ -420,13 +420,13 @@ pub struct Baricentrics {
 impl Baricentrics {
     /// `screen` são as edge functions divididas pela área do triângulo. Sob
     /// projeção afim eles já são os pesos no mundo.
-    pub fn orthographic(screen: [f32; 3]) -> Self {
+    pub fn new(screen: [f32; 3]) -> Self {
         Baricentrics { weights: screen }
     }
 
     /// `screen` são as edge functions divididas pela área do triângulo;
     /// `depths`, o z de cada vértice em espaço de câmera.
-    pub fn perspective(screen: [f32; 3], depths: [f32; 3]) -> Self {
+    pub fn perspective_corrected(screen: [f32; 3], depths: [f32; 3]) -> Self {
         let [l0, l1, l2] = screen;
         let [z0, z1, z2] = depths;
 

@@ -19,9 +19,7 @@ pub(super) fn encode(p: &Parameters) -> Value {
             },
         },
         "rasterization": {
-            "msaa": p.rasterization.msaa,
             "backface_cull": p.rasterization.backface_cull,
-            "wireframe": p.rasterization.wireframe,
             "perspective_correct": p.rasterization.perspective_correct,
             "depth_test": p.rasterization.depth_test,
         },
@@ -119,11 +117,7 @@ pub(super) fn decode(v: &Value) -> Parameters {
             },
         },
         rasterization: RasterizationOptions {
-            msaa: non_null_field(rasterization, "msaa")
-                .and_then(Value::as_u64)
-                .map(|n| n as u8),
             backface_cull: to_bool(rasterization, "backface_cull", raster.backface_cull),
-            wireframe: to_bool(rasterization, "wireframe", raster.wireframe),
             perspective_correct: to_bool(
                 rasterization,
                 "perspective_correct",

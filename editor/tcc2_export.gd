@@ -341,10 +341,10 @@ func _mesh(node: Tcc2Geometry) -> int:
 		}],
 	}
 
-	var tcc2_primitive = _tcc2_primitive(node)
+	var tcc2_geometry = _tcc2_geometry(node)
 
-	if tcc2_primitive != null:
-		entry["extensions"] = {EXTENSION: {"primitive": tcc2_primitive}}
+	if tcc2_geometry != null:
+		entry["extensions"] = {EXTENSION: {"geometry": tcc2_geometry}}
 
 	_json["meshes"].append(entry)
 	var index: int = _json["meshes"].size() - 1
@@ -380,12 +380,11 @@ func _surface(node: Tcc2Geometry) -> Mesh:
 	ball.height = node.sphere.radius * 2.0
 	return ball
 
-func _tcc2_primitive(node: Tcc2Geometry):
+func _tcc2_geometry(node: Tcc2Geometry):
 	match node.kind:
 		Tcc2Geometry.Kind.SPHERE:
 			return {
 				"sphere": {
-					"center": [0.0, 0.0, 0.0],
 					"radius": node.sphere.radius,
 				},
 			}
@@ -393,7 +392,6 @@ func _tcc2_primitive(node: Tcc2Geometry):
 		Tcc2Geometry.Kind.CUBE:
 			return {
 				"cube": {
-					"center": [0.0, 0.0, 0.0],
 					"half_edge": node.cube.half_edge,
 				},
 			}

@@ -6,49 +6,41 @@ use crate::parameters::{Filtering, TransformMethod};
 use crate::texture::{Footprint, Texture};
 use crate::transform::{Chain, Transform};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Scene {
     pub objects: Vec<Object>,
 }
 
 impl Scene {
-    pub fn new(camera: Camera) -> Self {
-        Scene {
-            objects: vec![Object::camera(camera)],
-        }
-    }
-
-    pub fn with_light(mut self, light: Light) -> Self {
-        self.objects.push(Object::light(light));
-        self
-    }
-
-    pub fn with_object(mut self, object: Object) -> Self {
-        self.objects.push(object);
-        self
-    }
-
     /// Percorre a árvore e devolve o que os renderizadores consomem: a câmera, as
     /// luzes e as instâncias.
     pub fn flatten(
         &self,
         method: TransformMethod,
-    ) -> (Option<Camera>, Vec<Light>, Vec<Instance<'_>>) {
+    ) -> (
+        Option<CameraInstance>,
+        Vec<LightInstance>,
+        Vec<GeometryInstance<'_>>,
+    ) {
         let mut saida = (None, Vec::new(), Vec::new());
         let mut cadeia = Vec::new();
 
         for raiz in &self.objects {
-            Self::desce(raiz, &mut cadeia, method, &mut saida);
+            Self::descend(raiz, &mut cadeia, method, &mut saida);
         }
 
         saida
     }
 
-    fn desce<'a>(
+    fn descend<'a>(
         no: &'a Object,
         cadeia: &mut Vec<Transform>,
         method: TransformMethod,
-        saida: &mut (Option<Camera>, Vec<Light>, Vec<Instance<'a>>),
+        saida: &mut (
+            Option<CameraInstance>,
+            Vec<LightInstance>,
+            Vec<GeometryInstance<'a>>,
+        ),
     ) {
         let (camera, lights, instances) = &mut *saida;
 
@@ -61,7 +53,7 @@ impl Scene {
                 geometry,
                 material,
                 casts_shadows,
-            }) => instances.push(Instance {
+            }) => instances.push(GeometryInstance {
                 geometry,
                 material,
                 casts_shadows: *casts_shadows,
@@ -69,30 +61,114 @@ impl Scene {
             }),
 
             Some(Content::Camera(local)) => {
-                let chain = Chain::from_root_first(cadeia);
-                camera.get_or_insert_with(|| local.transformed(&chain, method));
+                camera.get_or_insert_with(|| {
+                    let (position, basis) =
+                        Self::apply_position_and_basis(&Chain::from_root_first(cadeia), method);
+
+                    CameraInstance {
+                        camera: *local,
+                        position,
+                        basis,
+                    }
+                });
             }
 
             Some(Content::Light(luz)) => {
-                let chain = Chain::from_root_first(cadeia);
-                lights.push(luz.transformed(&chain, method));
+                let (position, basis) =
+                    Self::apply_position_and_basis(&Chain::from_root_first(cadeia), method);
+
+                lights.push(LightInstance {
+                    light: *luz,
+                    position,
+                    basis,
+                });
             }
         }
 
         for filho in &no.children {
-            Self::desce(filho, cadeia, method, saida);
+            Self::descend(filho, cadeia, method, saida);
         }
 
         cadeia.pop();
     }
+
+    /// Move câmeras e luzes de local space pra world space, transformando a posição
+    /// e os vetores da base.
+    fn apply_position_and_basis(
+        cadeia: &Chain,
+        method: TransformMethod,
+    ) -> (Vec3, (Vec3, Vec3, Vec3)) {
+        let frente = cadeia
+            .apply_direction(Vec3::new(0.0, 0.0, -1.0), method)
+            .normalized();
+
+        let cima = cadeia.apply_direction(Vec3::new(0.0, 1.0, 0.0), method);
+        let direita = frente.cross(cima).normalized();
+
+        (
+            cadeia.apply_point(Vec3::ZERO, method),
+            (direita, direita.cross(frente), frente),
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Instance<'a> {
-    pub geometry: &'a Primitive,
+pub struct GeometryInstance<'a> {
+    pub geometry: &'a Geometry,
     pub material: &'a Material,
     pub casts_shadows: bool,
     pub chain: Chain,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraInstance {
+    pub camera: Camera,
+    pub position: Vec3,
+    /// Os 3 vetores da base da câmera `(direita, cima, frente)`, já em world space.
+    pub basis: (Vec3, Vec3, Vec3),
+}
+
+impl CameraInstance {
+    /// Move `point` de world space para camera space.
+    pub fn to_camera_space(&self, point: Vec3) -> Vec3 {
+        let (direita, cima, frente) = self.basis;
+
+        let d = point - self.position;
+        Vec3::new(d.dot(direita), d.dot(cima), d.dot(frente))
+    }
+
+    /// Move `point` de camera space para world space.
+    pub fn from_camera_space(&self, point: Vec3) -> Vec3 {
+        let (direita, cima, frente) = self.basis;
+
+        self.position + direita * point.x + cima * point.y + frente * point.z
+    }
+
+    /// Direção do raio de visão da câmera para o ponto.
+    ///
+    /// Sob perspectiva os raios de visão convergem na posição da câmera.
+    /// Sob ortográfica os raios de visão são paralelos à frente da base.
+    pub fn view(&self, point: Vec3) -> Vec3 {
+        match self.camera {
+            Camera::Perspective { .. } => (self.position - point).normalized(),
+            Camera::Orthographic { .. } => -self.basis.2,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LightInstance {
+    pub light: Light,
+    pub position: Vec3,
+    /// Os 3 vetores da base da luz `(direita, cima, frente)`, já em world space.
+    pub basis: (Vec3, Vec3, Vec3),
+}
+
+impl LightInstance {
+    /// A direção pra onde a luz aponta.
+    pub fn forward(&self) -> Vec3 {
+        self.basis.2
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -100,70 +176,58 @@ pub enum Content {
     Camera(Camera),
     Light(Light),
     Geometry {
-        geometry: Primitive,
+        geometry: Geometry,
         material: Material,
         casts_shadows: bool,
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Object {
-    /// O transform deste elo, relativo ao pai.
     pub transform: Transform,
     pub content: Option<Content>,
     pub children: Vec<Object>,
 }
 
 impl Object {
-    pub fn new(geometry: Primitive, material: Material) -> Self {
+    pub fn geometry(geometry: Geometry, material: Material, transform: Transform) -> Self {
         Object {
+            transform,
             content: Some(Content::Geometry {
                 geometry,
                 material,
                 casts_shadows: true,
             }),
-            ..Object::group()
+            children: Vec::new(),
         }
     }
 
-    /// Nó sem conteúdo: existe pelo transform, que vale pra árvore toda
-    /// pendurada nele.
-    pub fn group() -> Self {
-        Object::default()
-    }
-
-    pub fn camera(camera: Camera) -> Self {
+    pub fn camera(camera: Camera, transform: Transform) -> Self {
         Object {
+            transform,
             content: Some(Content::Camera(camera)),
-            ..Object::group()
+            children: Vec::new(),
         }
     }
 
-    pub fn light(light: Light) -> Self {
+    pub fn light(light: Light, transform: Transform) -> Self {
         Object {
+            transform,
             content: Some(Content::Light(light)),
-            ..Object::group()
+            children: Vec::new(),
         }
     }
 
-    pub fn with_transform(mut self, transform: Transform) -> Self {
-        self.transform = transform;
-        self
-    }
-
-    /// Sem efeito num nó que não é geometria.
-    pub fn with_shadows(mut self, casts_shadows: bool) -> Self {
-        if let Some(Content::Geometry {
-            casts_shadows: c, ..
-        }) = &mut self.content
-        {
-            *c = casts_shadows;
+    pub fn group(transform: Transform) -> Self {
+        Object {
+            transform,
+            content: None,
+            children: Vec::new(),
         }
-        self
     }
 
-    pub fn with_child(mut self, child: Object) -> Self {
-        self.children.push(child);
+    pub fn with_children(mut self, children: Vec<Object>) -> Self {
+        self.children = children;
         self
     }
 }
@@ -177,9 +241,6 @@ pub enum Camera {
         aspect: f32,
         near: f32,
         far: f32,
-        position: Vec3,
-        look_at: Vec3,
-        up: Vec3,
     },
     Orthographic {
         /// Largura do volume de visão, em unidades.
@@ -188,66 +249,16 @@ pub enum Camera {
         height: f32,
         near: f32,
         far: f32,
-        position: Vec3,
-        look_at: Vec3,
-        up: Vec3,
     },
 }
 
 impl Camera {
-    pub fn position(&self) -> Vec3 {
-        match *self {
-            Camera::Perspective { position, .. } | Camera::Orthographic { position, .. } => {
-                position
-            }
-        }
-    }
-
-    pub fn look_at(&self) -> Vec3 {
-        match *self {
-            Camera::Perspective { look_at, .. } | Camera::Orthographic { look_at, .. } => look_at,
-        }
-    }
-
-    pub fn up(&self) -> Vec3 {
-        match *self {
-            Camera::Perspective { up, .. } | Camera::Orthographic { up, .. } => up,
-        }
-    }
-
     pub fn clip_planes(&self) -> (f32, f32) {
         match *self {
             Camera::Perspective { near, far, .. } | Camera::Orthographic { near, far, .. } => {
                 (near, far)
             }
         }
-    }
-
-    /// Base da câmera `(direita, cima, frente)`, em espaço de mundo.
-    ///
-    /// O up informado pelo usuário não precisa ser exatamente perpendicular à
-    /// direção de visão, porque ele é recalculado aqui.
-    pub fn basis(&self) -> (Vec3, Vec3, Vec3) {
-        let forward = (self.look_at() - self.position()).normalized();
-        let right = forward.cross(self.up()).normalized();
-        let up = right.cross(forward);
-
-        (right, up, forward)
-    }
-
-    // Teoria: rasterizer.md#mundo-para-camera-space
-    pub fn to_camera_space(&self, ponto: Vec3) -> Vec3 {
-        let (direita, cima, frente) = self.basis();
-
-        let d = ponto - self.position();
-        Vec3::new(d.dot(direita), d.dot(cima), d.dot(frente))
-    }
-
-    /// Câmera -> mundo, a inversa de `to_camera_space`.
-    pub fn from_camera_space(&self, p: Vec3) -> Vec3 {
-        let (direita, cima, frente) = self.basis();
-
-        self.position() + direita * p.x + cima * p.y + frente * p.z
     }
 
     // Teoria: rasterizer.md#camera-space-para-ndc
@@ -278,80 +289,17 @@ impl Camera {
             z,
         ))
     }
-
-    /// A câmera com `position`/`look_at`/`up` levados pro mundo pelos transforms.
-    pub fn transformed(&self, chain: &Chain, method: TransformMethod) -> Camera {
-        match *self {
-            Camera::Perspective {
-                fov,
-                aspect,
-                near,
-                far,
-                position,
-                look_at,
-                up,
-            } => Camera::Perspective {
-                fov,
-                aspect,
-                near,
-                far,
-                position: (|p| chain.apply_point(p, method))(position),
-                look_at: (|p| chain.apply_point(p, method))(look_at),
-                up: (|d| chain.apply_direction(d, method))(up),
-            },
-
-            Camera::Orthographic {
-                width,
-                height,
-                near,
-                far,
-                position,
-                look_at,
-                up,
-            } => Camera::Orthographic {
-                width,
-                height,
-                near,
-                far,
-                position: (|p| chain.apply_point(p, method))(position),
-                look_at: (|p| chain.apply_point(p, method))(look_at),
-                up: (|d| chain.apply_direction(d, method))(up),
-            },
-        }
-    }
-
-    /// Direção do ponto **para** a câmera.
-    ///
-    /// Sob perspectiva todos os raios de visão convergem na posição da câmera;
-    /// sob ortográfica eles são paralelos, e a direção não depende do ponto.
-    pub fn view_from(&self, point: Vec3) -> Vec3 {
-        match self {
-            Camera::Perspective { position, .. } => (*position - point).normalized(),
-            Camera::Orthographic { .. } => -self.basis().2,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Light {
     /// Luz pontual: irradia em todas as direções e atenua com o quadrado da
     /// distância.
-    Point {
-        position: Vec3,
-        color: Rgb,
-        intensity: f32,
-    },
+    Point { color: Rgb, intensity: f32 },
     /// Luz direcional: raios paralelos, sem posição e sem atenuação.
-    Directional {
-        direction: Vec3,
-        color: Rgb,
-        intensity: f32,
-    },
+    Directional { color: Rgb, intensity: f32 },
     /// Luz pontual restrita a um cone.
     Spot {
-        position: Vec3,
-        /// Eixo do cone, saindo da luz.
-        direction: Vec3,
         /// Meio-ângulo do cone interno, em graus.
         inner_angle: f32,
         /// Meio-ângulo do cone externo, em graus.
@@ -379,49 +327,6 @@ impl Light {
             | Light::Directional { intensity, .. }
             | Light::Spot { intensity, .. }
             | Light::Ambient { intensity, .. } => intensity,
-        }
-    }
-
-    /// A luz com `position`/`direction` levados pro mundo pelos transforms.
-    pub fn transformed(&self, chain: &Chain, method: TransformMethod) -> Light {
-        match *self {
-            Light::Point {
-                position,
-                color,
-                intensity,
-            } => Light::Point {
-                position: (|p| chain.apply_point(p, method))(position),
-                color,
-                intensity,
-            },
-
-            Light::Directional {
-                direction,
-                color,
-                intensity,
-            } => Light::Directional {
-                direction: (|d| chain.apply_direction(d, method).normalized())(direction),
-                color,
-                intensity,
-            },
-
-            Light::Spot {
-                position,
-                direction,
-                inner_angle,
-                outer_angle,
-                color,
-                intensity,
-            } => Light::Spot {
-                position: (|p| chain.apply_point(p, method))(position),
-                direction: (|d| chain.apply_direction(d, method).normalized())(direction),
-                inner_angle,
-                outer_angle,
-                color,
-                intensity,
-            },
-
-            Light::Ambient { .. } => *self,
         }
     }
 }
@@ -633,7 +538,7 @@ pub struct MaterialSample {
 }
 
 /// Malha indexada de triângulos: é o formato que o rasterizador consome, e o
-/// que todo primitivo vira depois de `Primitive::tessellate`.
+/// que toda geometria vira depois de `Geometry::tessellate`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mesh {
     pub vertices: Vec<Vec3>,
@@ -684,12 +589,40 @@ impl Mesh {
 
         let pontos = tres(&self.vertices, trio)?;
 
-        Some(monta_triangulo(
-            pontos,
-            self.normals.as_deref().and_then(|n| tres(n, trio)),
-            self.tangents.as_deref().and_then(|t| tres(t, trio)),
-            self.uvs.as_deref().and_then(|u| tres(u, trio)),
-        ))
+        let normais = self
+            .normals
+            .as_deref()
+            .and_then(|n| tres(n, trio))
+            .unwrap_or_else(|| {
+                let n = (pontos[1] - pontos[0])
+                    .cross(pontos[2] - pontos[0])
+                    .normalized();
+
+                [n; 3]
+            });
+
+        let uvs = self
+            .uvs
+            .as_deref()
+            .and_then(|u| tres(u, trio))
+            .unwrap_or([Vec2::ZERO; 3]);
+
+        let tangentes = self
+            .tangents
+            .as_deref()
+            .and_then(|t| tres(t, trio))
+            .unwrap_or_else(|| match eixos_da_uv(pontos, uvs) {
+                Some((du, dv)) => [0, 1, 2].map(|k| Tangent::from_uv_axes(normais[k], du, dv)),
+                // Se o triângulo de uvs é degenerado, qualquer perpendicular à normal serve.
+                None => normais.map(Tangent::any_perpendicular),
+            });
+
+        Some([0, 1, 2].map(|k| Vertex {
+            position: pontos[k],
+            normal: normais[k],
+            tangent: tangentes[k],
+            uv: uvs[k],
+        }))
     }
 }
 
@@ -707,79 +640,63 @@ pub struct Hit {
 
 /// Geometria renderizável, em espaço local.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Primitive {
-    Triangle {
-        points: [Vec3; 3],
-        /// Normais por vértice.
-        normals: Option<[Vec3; 3]>,
-        /// Tangentes por vértice.
-        tangents: Option<[Tangent; 3]>,
-        uvs: Option<[Vec2; 3]>,
-    },
+pub enum Geometry {
+    Triangle { points: [Vec3; 3] },
+    Cube { half_edge: f32 },
+    Sphere { radius: f32 },
     Mesh(Mesh),
-    Sphere {
-        center: Vec3,
-        radius: f32,
-    },
-    Cube {
-        center: Vec3,
-        half_edge: f32,
-    },
 }
 
-impl Primitive {
-    /// Triângulo sem normais nem uv
+impl Geometry {
     pub fn triangle(points: [Vec3; 3]) -> Self {
-        Primitive::Triangle {
-            points,
-            normals: None,
-            tangents: None,
-            uvs: None,
-        }
+        Geometry::Triangle { points }
     }
 
     /// Malha sem normais nem uv.
     /// As faces são trios consecutivos de `indices`, cada índice apontando pra uma entrada de `vertices`.
     pub fn mesh(vertices: Vec<Vec3>, indices: Vec<u32>) -> Self {
-        Primitive::Mesh(Mesh::new(vertices, indices))
+        Geometry::Mesh(Mesh::new(vertices, indices))
     }
 
-    pub fn sphere(center: Vec3, radius: f32) -> Self {
-        Primitive::Sphere { center, radius }
+    pub fn sphere(radius: f32) -> Self {
+        Geometry::Sphere { radius }
     }
 
     /// Cubo centrado em `center`, com aresta `2 * half_edge`.
-    pub fn cube(center: Vec3, half_edge: f32) -> Self {
-        Primitive::Cube { center, half_edge }
+    pub fn cube(half_edge: f32) -> Self {
+        Geometry::Cube { half_edge }
     }
 
     // Teoria: tesselacao.md
-    /// Converte o primitivo em malha de triângulos.
+    /// Converte a geometria em malha de triângulos.
     pub fn tessellate(&self) -> Mesh {
         match self {
-            Primitive::Triangle {
-                points,
-                normals,
-                tangents,
-                uvs,
-            } => Mesh {
-                vertices: points.to_vec(),
-                indices: vec![0, 1, 2],
-                normals: normals.map(|n| n.to_vec()),
-                tangents: tangents.map(|t| t.to_vec()),
-                uvs: uvs.map(|u| u.to_vec()),
-            },
+            Geometry::Triangle { points } => {
+                let uvs = [
+                    Vec2::new(0.0, 0.0),
+                    Vec2::new(1.0, 0.0),
+                    Vec2::new(0.0, 1.0),
+                ];
 
-            Primitive::Mesh(malha) => malha.clone(),
+                Mesh {
+                    vertices: points.to_vec(),
+                    indices: vec![0, 1, 2],
+                    normals: None,
+                    tangents: None,
+                    uvs: Some(uvs.to_vec()),
+                }
+            }
 
-            Primitive::Sphere { center, radius } => Self::esfera_uv(*center, *radius),
+            Geometry::Mesh(malha) => malha.clone(),
 
-            Primitive::Cube { center, half_edge } => Self::cubo(*center, *half_edge),
+            Geometry::Sphere { radius } => Self::esfera_uv(Vec3::ZERO, *radius),
+
+            Geometry::Cube { half_edge } => Self::cubo(Vec3::ZERO, *half_edge),
         }
     }
 
     // Teoria: raytracer.md#o-raio-e-a-esfera
-    /// Interseção do raio com o primitivo, em espaço local — o par de
+    /// Interseção do raio com a geometria, em espaço local — o par de
     /// `tessellate` do lado do ray tracer: um resolve a superfície por
     /// aproximação em triângulos, o outro pela equação exata.
     ///
@@ -787,10 +704,11 @@ impl Primitive {
     /// escolhe *quais* primitivos testar, não como.
     pub fn intersect(&self, ray: Ray) -> Option<Hit> {
         match self {
-            Primitive::Sphere { center, radius } => {
-                let t = intersecao_esfera(ray, *center, *radius)?;
+            Geometry::Sphere { radius } => {
+                let center = Vec3::ZERO;
+                let t = intersecao_esfera(ray, center, *radius)?;
 
-                let normal = (ray.at(t) - *center).normalized();
+                let normal = (ray.at(t) - center).normalized();
 
                 Some(Hit {
                     t,
@@ -801,40 +719,51 @@ impl Primitive {
                 })
             }
 
-            Primitive::Triangle {
-                points,
-                normals,
-                tangents,
-                uvs,
-            } => intersecao_triangulo(ray, monta_triangulo(*points, *normals, *tangents, *uvs)),
+            Geometry::Triangle { points } => {
+                let (t, [_, u, v]) = moller_trumbore(ray, *points)?;
 
-            Primitive::Mesh(malha) => (0..malha.face_count())
+                let edge1 = points[1] - points[0];
+                let edge2 = points[2] - points[0];
+                let normal = edge1.cross(edge2).normalized();
+
+                Some(Hit {
+                    t,
+                    normal,
+                    geometric_normal: normal,
+                    tangent: Tangent::from_uv_axes(normal, edge1, edge2),
+                    uv: Vec2::new(u, v),
+                })
+            }
+
+            Geometry::Mesh(malha) => (0..malha.face_count())
                 .filter_map(|i| intersecao_triangulo(ray, malha.face(i)?))
                 .reduce(mais_perto),
 
-            Primitive::Cube { center, half_edge } => intersecao_cubo(ray, *center, *half_edge),
+            Geometry::Cube { half_edge } => intersecao_cubo(ray, Vec3::ZERO, *half_edge),
         }
     }
 
-    /// A AABB que contém o primitivo, em espaço local.
+    /// A AABB que contém a geometria, em espaço local.
     pub fn bounds(&self) -> Aabb {
         match self {
-            Primitive::Triangle { points, .. } => Aabb::around(*points),
-            Primitive::Mesh(malha) => Aabb::around(malha.vertices.iter().copied()),
+            Geometry::Triangle { points } => Aabb::around(*points),
+            Geometry::Mesh(malha) => Aabb::around(malha.vertices.iter().copied()),
 
-            Primitive::Sphere { center, radius } => {
+            Geometry::Sphere { radius } => {
+                let centro = Vec3::ZERO;
                 let meio = Vec3::ONE * radius.abs();
                 Aabb {
-                    min: *center - meio,
-                    max: *center + meio,
+                    min: centro - meio,
+                    max: centro + meio,
                 }
             }
 
-            Primitive::Cube { center, half_edge } => {
+            Geometry::Cube { half_edge } => {
+                let centro = Vec3::ZERO;
                 let meio = Vec3::ONE * half_edge.abs();
                 Aabb {
-                    min: *center - meio,
-                    max: *center + meio,
+                    min: centro - meio,
+                    max: centro + meio,
                 }
             }
         }
@@ -992,38 +921,6 @@ fn uv_do_cubo(a: f32, b: f32) -> Vec2 {
     Vec2::new((a + 1.0) * 0.5, (b + 1.0) * 0.5)
 }
 
-/// Resolve os atributos de um triângulo solto: sem normais informadas, a normal
-/// é a da própria face; sem uv, a origem da textura; sem tangentes, a base que
-/// a uv do próprio triângulo define.
-fn monta_triangulo(
-    pontos: [Vec3; 3],
-    normais: Option<[Vec3; 3]>,
-    tangentes: Option<[Tangent; 3]>,
-    uvs: Option<[Vec2; 3]>,
-) -> [Vertex; 3] {
-    let normais = normais.unwrap_or_else(|| {
-        let n = (pontos[1] - pontos[0])
-            .cross(pontos[2] - pontos[0])
-            .normalized();
-        [n; 3]
-    });
-
-    let uvs = uvs.unwrap_or([Vec2::ZERO; 3]);
-
-    let tangentes = tangentes.unwrap_or_else(|| match eixos_da_uv(pontos, uvs) {
-        Some((du, dv)) => [0, 1, 2].map(|k| Tangent::from_uv_axes(normais[k], du, dv)),
-        // Se o triângulo de uvs é degenerado, qualquer perpendicular à normal serve.
-        None => normais.map(Tangent::any_perpendicular),
-    });
-
-    [0, 1, 2].map(|k| Vertex {
-        position: pontos[k],
-        normal: normais[k],
-        tangent: tangentes[k],
-        uv: uvs[k],
-    })
-}
-
 /// As direções, no espaço, em que o `u` e o `v` da uv crescem sobre um
 /// triângulo. `None` quando a uv é degenerada e não define direção nenhuma.
 ///
@@ -1084,12 +981,12 @@ fn mais_perto(a: Hit, b: Hit) -> Hit {
     if b.t < a.t { b } else { a }
 }
 
-pub(crate) fn intersecao_triangulo(ray: Ray, face: [Vertex; 3]) -> Option<Hit> {
+pub fn intersecao_triangulo(ray: Ray, face: [Vertex; 3]) -> Option<Hit> {
     let (t, pesos) = moller_trumbore(ray, face.map(|v| v.position))?;
 
     // No raytracer a geometria não passa por divisão por z diretamente, então podemos calcular as baricêntricas sem
     // corrigir isso.
-    let baricentricas = Baricentrics::orthographic(pesos);
+    let baricentricas = Baricentrics::new(pesos);
 
     let normal = baricentricas
         .interpolate_vec3(face.map(|v| v.normal))

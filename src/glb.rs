@@ -2,17 +2,17 @@
 //!
 //! O arquivo é um `.glb` válido — qualquer visualizador abre e mostra a cena.
 //! Os campos específicos da lib vão em extensions `TCC2_extras`:
-//! `Light::Ambient`, `Object.casts_shadows` e qual primitivo analítico uma malha
+//! `Light::Ambient`, `Object.casts_shadows` e qual geometria analítica uma malha
 //! tesselada representa.
 //!
 //! O resto vai em campo nativo:
 //!
 //! | Tipo da lib | Onde vai |
 //! |---|---|
-//! | [`Camera`] | nó com `matrix` + `cameras[i]`; `position` é a coluna 3, `look_at` sai do −Z e `up` do +Y |
-//! | [`Light::Point`], [`Directional`](Light::Directional), [`Spot`](Light::Spot) | nó + `KHR_lights_punctual`, com a intensidade **crua** (sem converter para candela/lux) |
+//! | [`Camera`] | `cameras[i]`, só a projeção: onde ela está é o transform do nó, como no glTF (olha pro −Z local, +Y pra cima) |
+//! | [`Light::Point`], [`Directional`](Light::Directional), [`Spot`](Light::Spot) | nó + `KHR_lights_punctual`, com a intensidade **crua** (sem converter para candela/lux); o eixo é o −Z do nó |
 //! | [`Transform`] | `translation`/`rotation`/`scale` do nó, com o Euler XYZ virando quatérnio |
-//! | [`Primitive::Mesh`], [`Triangle`](Primitive::Triangle) | `POSITION` e, só quando existem, `NORMAL`/`TANGENT`/`TEXCOORD_0`, mais `indices` |
+//! | [`Geometry::Mesh`], [`Triangle`](Geometry::Triangle) | `POSITION` e, só quando existem, `NORMAL`/`TANGENT`/`TEXCOORD_0`, mais `indices` |
 //! | [`Material`] | `pbrMetallicRoughness`, `normalTexture`, `emissiveFactor` e as extensões `KHR_materials_transmission`, `_ior` e `_emissive_strength` |
 //!
 //! # Uso
@@ -21,10 +21,12 @@
 //! # use tcc2::prelude::*;
 //! # use tcc2::glb;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # let cena = Scene::new(Camera::Orthographic {
-//! #     width: 1.0, height: 1.0, near: 0.1, far: 10.0,
-//! #     position: Vec3::new(0.0, 0.0, 3.0), look_at: Vec3::ZERO, up: Vec3::new(0.0, 1.0, 0.0),
-//! # });
+//! # let cena = Scene {
+//! #     objects: vec![Object::camera(
+//! #         Camera::Orthographic { width: 1.0, height: 1.0, near: 0.1, far: 10.0 },
+//! #         Transform::looking_at(Vec3::new(0.0, 0.0, 3.0), Vec3::ZERO, Vec3::new(0.0, 1.0, 0.0)),
+//! #     )],
+//! # };
 //! std::fs::write("cena.tcc2.glb", glb::encode(&cena, None)?)?;
 //!
 //! let (cena, parametros) = glb::decode(&std::fs::read("cena.tcc2.glb")?)?;
