@@ -14,21 +14,16 @@
 //! Com `acceleration.bvh` ligado, quem escolhe quais objetos e triângulos cada
 //! raio testa é a BVH de `bvh.rs`; desligado, todo raio testa a cena inteira.
 
-use std::cell::Cell;
-use std::time::{Duration, Instant};
-
 use crate::color::Rgb;
 use crate::math::{Ray, Vec3};
 use crate::parameters::Parameters;
-use crate::render::{RenderResult, Renderer};
+use crate::render::{Contador, RenderResult, Renderer};
 use crate::scene::{
-    self, Camera, CameraInstance, Geometry, GeometryInstance, Hit, Light, LightInstance, Material,
-    Scene,
+    Camera, CameraInstance, GeometryInstance, Light, LightInstance, Material, Scene,
 };
 use crate::shading::{self, Surface};
 
 use crate::bvh::Aceleracao;
-use crate::overlay;
 
 // Teoria: raytracer.md#o-acne-e-o-epsilon
 /// Deslocamento da origem de todo raio secundário, para que a superfície que o
@@ -46,13 +41,13 @@ pub struct RayTracer;
 impl Renderer for RayTracer {
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
         let (largura, altura) = (params.output.width, params.output.height);
-        let fundo = params.output.background;
 
-        let mut resultado = RenderResult::new(largura, altura, fundo);
+        let (camera_instance, environment, light_instances, instancias) =
+            scene.flatten(params.transform.method);
+
+        let mut resultado = RenderResult::new(largura, altura, environment);
 
         let contador = Contador::default();
-
-        let (camera_instance, light_instances, instancias) = scene.flatten(params.transform.method);
 
         let Some(camera_instance) = camera_instance else {
             // Sem câmera não há de onde partir raio: sobra o fundo.
@@ -60,23 +55,17 @@ impl Renderer for RayTracer {
         };
 
         let aceleracao = params.ray_tracing.acceleration.bvh.then(|| {
-            let inicio = Instant::now();
-            let aceleracao = Aceleracao::build(
+            Aceleracao::build(
                 &instancias,
                 params.ray_tracing.acceleration.split,
                 params.transform.method,
-            );
-
-            contador.atualiza(|s| {
-                s.bvh_build_time = inicio.elapsed();
-                (s.tlas_depth, s.blas_depth) = aceleracao.depth();
-            });
-
-            aceleracao
+                &contador,
+            )
         });
 
         let contexto = Contexto {
             lights: light_instances,
+            environment,
             instancias,
             params,
             aceleracao,
@@ -116,29 +105,17 @@ impl Renderer for RayTracer {
 
         resultado.apply_output(&params.output);
 
-        if let Some(profundidade) = params.ray_tracing.acceleration.wireframe {
-            if let Some(aceleracao) = &contexto.aceleracao {
-                let aabbs =
-                    aceleracao.aabbs(&contexto.instancias, params.transform.method, profundidade);
-
-                const CORES: [Rgb; 6] = [
-                    Rgb::new(1.0, 1.00, 1.0),
-                    Rgb::new(1.0, 0.85, 0.2),
-                    Rgb::new(0.3, 1.00, 0.4),
-                    Rgb::new(0.3, 0.80, 1.0),
-                    Rgb::new(0.8, 0.40, 1.0),
-                    Rgb::new(1.0, 0.40, 0.4),
-                ];
-
-                for (nivel, cantos) in aabbs {
-                    overlay::caixa(
-                        &mut resultado.color,
-                        &camera_instance,
-                        cantos,
-                        CORES[(nivel.max(1) - 1) as usize % CORES.len()],
-                    );
-                }
-            }
+        if let (Some(profundidade), Some(aceleracao)) = (
+            params.ray_tracing.acceleration.wireframe,
+            &contexto.aceleracao,
+        ) {
+            aceleracao.wireframe(
+                &mut resultado.color,
+                &camera_instance,
+                &contexto.instancias,
+                params.transform.method,
+                profundidade,
+            );
         }
 
         let contagem = contexto.contador.stats();
@@ -155,55 +132,11 @@ impl Renderer for RayTracer {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-struct Contagem {
-    primitive_tests: u64,
-    rays: u64,
-    bvh_nodes_visited: u64,
-    tlas_depth: u32,
-    blas_depth: u32,
-    bvh_build_time: Duration,
-}
-
-/// Contadores do render.
-///
-/// `Cell` porque o callback de visibilidade que `shade` recebe é `Fn`, não
-/// `FnMut`, e mesmo assim precisa contabilizar o raio de sombra que dispara.
-/// `Contagem` é `Copy`, então a célula sai barata.
-#[derive(Debug, Default)]
-pub(crate) struct Contador(Cell<Contagem>);
-
-impl Contador {
-    pub(crate) fn raio(&self) {
-        self.atualiza(|s| s.rays += 1);
-    }
-
-    pub(crate) fn teste(&self) {
-        self.testes(1);
-    }
-
-    pub(crate) fn testes(&self, quantos: u64) {
-        self.atualiza(|s| s.primitive_tests += quantos);
-    }
-
-    pub(crate) fn no(&self) {
-        self.atualiza(|s| s.bvh_nodes_visited += 1);
-    }
-
-    fn stats(&self) -> Contagem {
-        self.0.get()
-    }
-
-    fn atualiza(&self, f: impl FnOnce(&mut Contagem)) {
-        let mut stats = self.0.get();
-        f(&mut stats);
-        self.0.set(stats);
-    }
-}
-
 /// O que todo raio do render consulta.
 struct Contexto<'a> {
     lights: Vec<LightInstance>,
+    /// O que o raio devolve quando não acerta nada.
+    environment: Rgb,
     instancias: Vec<GeometryInstance<'a>>,
     params: &'a Parameters,
     /// `None` com a BVH desligada: aí todo raio testa todo objeto.
@@ -233,7 +166,7 @@ impl<'a> Contexto<'a> {
         let opcoes = &self.params.ray_tracing;
 
         let Some(acerto) = self.mais_proximo(raio, t_min, t_max, Consulta::Visao) else {
-            return self.params.output.background;
+            return self.environment;
         };
 
         let superficie = acerto.surface;
@@ -347,83 +280,56 @@ impl<'a> Contexto<'a> {
         t_max: f32,
         consulta: Consulta,
     ) -> Option<Acerto<'a>> {
-        // Teoria: transform.md#o-raio-vai-para-o-espaco-local
-        // O rasterizador leva a geometria pro mundo; aqui é o raio que vem pro
-        // espaço local do objeto. Isso permite usar equações arbitrárias tipo a
-        // da esfera pro teste de interseção. O `t` é igual nos dois espaços.
-        let intersecta = |i: usize, limite: f32| -> Option<(f32, Hit)> {
-            let instancia = &self.instancias[i];
+        let (i, hit) = if self.params.ray_tracing.acceleration.bvh {
+            self.aceleracao.as_ref().unwrap().mais_proximo(
+                &self.instancias,
+                raio,
+                consulta == Consulta::Sombra,
+                t_min,
+                t_max,
+                self.params.transform.method,
+                &self.contador,
+            )?
+        } else {
+            let mut t_max = t_max;
+            let mut closest = None;
 
-            if consulta == Consulta::Sombra && !instancia.casts_shadows {
-                return None;
+            for (i, inst) in self.instancias.iter().enumerate() {
+                let ray_local = inst.chain.undo_ray(raio, self.params.transform.method);
+                let hit = inst.geometry.intersect(ray_local);
+
+                self.contador.teste();
+
+                if let Some(hit) = hit {
+                    if hit.t > t_min && hit.t < t_max {
+                        t_max = hit.t;
+                        closest = Some((i, hit));
+                    }
+                }
             }
 
-            let local = instancia.chain.undo_ray(raio, self.params.transform.method);
-
-            let hit = match self.aceleracao.as_ref().and_then(|a| a.blas[i].as_ref()) {
-                Some(blas) => {
-                    let Geometry::Mesh(malha) = instancia.geometry else {
-                        unreachable!();
-                    };
-
-                    let (_, hit) =
-                        blas.percorre(local, t_min, limite, &self.contador, |face, _| {
-                            self.contador.teste();
-
-                            let hit = scene::intersecao_triangulo(local, malha.face(face)?)?;
-                            Some((hit.t, hit))
-                        })?;
-
-                    hit
-                }
-
-                None => {
-                    // Sem BLAS a malha testa face por face, e a conta tem que mostrar.
-                    self.contador.testes(match instancia.geometry {
-                        Geometry::Mesh(malha) => malha.face_count() as u64,
-                        _ => 1,
-                    });
-
-                    instancia.geometry.intersect(local)?
-                }
-            };
-
-            Some((hit.t, hit))
+            closest?
         };
 
-        let (i, hit) = match &self.aceleracao {
-            Some(aceleracao) => {
-                aceleracao
-                    .tlas
-                    .percorre(raio, t_min, t_max, &self.contador, intersecta)?
-            }
-
-            // Força bruta: testa toda instância e fica com o menor t.
-            None => (0..self.instancias.len())
-                .filter_map(|i| Some((i, intersecta(i, t_max)?.1)))
-                .filter(|(_, hit)| hit.t >= t_min && hit.t < t_max)
-                .min_by(|(_, a), (_, b)| a.t.total_cmp(&b.t))?,
-        };
-
-        let instancia = &self.instancias[i];
+        let inst = &self.instancias[i];
         let method = self.params.transform.method;
 
-        let normal = instancia.material.shading_normal(
+        let normal = inst.material.shading_normal(
             hit.uv,
             None,
             self.params.shading.filtering,
-            instancia.chain.apply_normal(hit.normal, method),
-            instancia.chain.apply_tangent(hit.tangent, method),
+            inst.chain.apply_normal(hit.normal, method),
+            inst.chain.apply_tangent(hit.tangent, method),
         );
 
         Some(Acerto {
-            material: instancia.material,
+            material: inst.material,
             surface: Surface {
                 point: raio.at(hit.t),
                 normal,
                 uv: hit.uv,
             },
-            normal_geometrica: instancia.chain.apply_normal(hit.geometric_normal, method),
+            normal_geometrica: inst.chain.apply_normal(hit.geometric_normal, method),
         })
     }
 
@@ -438,7 +344,7 @@ impl<'a> Contexto<'a> {
             // Luz direcional não tem posição: qualquer coisa no caminho bloqueia,
             // por mais longe que esteja.
             Light::Directional { .. } => (-luz.forward(), f32::INFINITY),
-            Light::Ambient { .. } => return false,
+            Light::Environment { .. } => return false,
         };
 
         let sombra = Ray::new(desloca(ponto, geometrica, direcao), direcao);

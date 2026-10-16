@@ -54,6 +54,105 @@ layout_mode = 2
 step = 0.01
 allow_greater = true
 
+[node name="AXLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234567]
+layout_mode = 2
+text = "a x"
+
+[node name="a_x" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234568]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
+[node name="AYLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234569]
+layout_mode = 2
+text = "y"
+
+[node name="a_y" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234570]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
+[node name="AZLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234571]
+layout_mode = 2
+text = "z"
+
+[node name="a_z" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234572]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
+[node name="BXLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234573]
+layout_mode = 2
+text = "b x"
+
+[node name="b_x" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234574]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
+[node name="BYLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234575]
+layout_mode = 2
+text = "y"
+
+[node name="b_y" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234576]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
+[node name="BZLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234577]
+layout_mode = 2
+text = "z"
+
+[node name="b_z" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234578]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
+[node name="CXLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234579]
+layout_mode = 2
+text = "c x"
+
+[node name="c_x" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234580]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
+[node name="CYLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234581]
+layout_mode = 2
+text = "y"
+
+[node name="c_y" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234582]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
+[node name="CZLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234583]
+layout_mode = 2
+text = "z"
+
+[node name="c_z" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234584]
+unique_name_in_owner = true
+layout_mode = 2
+step = 0.01
+allow_greater = true
+allow_lesser = true
+
 [node name="SourceLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=2059406977]
 layout_mode = 2
 text = "source"

@@ -23,6 +23,5 @@ func _build() -> void:
 
 	bind(%width, node, &"width")
 	bind(%height, node, &"height")
-	bind(%background, node, &"background")
 	bind(%exposure, node, &"exposure")
 	bind(%tonemap, node, &"tonemap")

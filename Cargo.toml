@@ -3,6 +3,9 @@ name = "tcc2"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = ["godot"]
+
 [features]
 glb = ["dep:gltf", "dep:serde_json", "dep:image"]
 

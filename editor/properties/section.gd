@@ -1,3 +1,4 @@
+@tool
 class_name Tcc2Section extends PanelContainer
 
 var title: String:
@@ -22,6 +23,9 @@ func _ready() -> void:
 	header.theme_type_variation = &"SectionHeader"
 	header.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	header.text = header.text.to_upper()
+
+	if Engine.is_editor_hint():
+		return
 
 	var arrow := func(open: bool) -> Texture2D:
 		return get_theme_icon(&"fold" if open else &"unfold", &"SectionHeader")

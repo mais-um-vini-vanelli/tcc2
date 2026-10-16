@@ -1,6 +1,6 @@
 class_name Tcc2Light extends Tcc2Node
 
-enum Kind {POINT, DIRECTIONAL, SPOT, AMBIENT}
+enum Kind {POINT, DIRECTIONAL, SPOT, ENVIRONMENT}
 
 class Point:
 	var light: Tcc2Light
@@ -38,7 +38,7 @@ class Spot:
 
 	var intensity: float = 1.0
 
-class Ambient:
+class Environment_:
 	var light: Tcc2Light
 
 	var color: Color = Color.WHITE:
@@ -56,7 +56,7 @@ var kind: Kind = Kind.POINT:
 var point := Point.new()
 var directional := Directional.new()
 var spot := Spot.new()
-var ambient := Ambient.new()
+var environment := Environment_.new()
 
 var _icon: Sprite3D
 var _gizmo: MeshInstance3D
@@ -66,7 +66,7 @@ func _init() -> void:
 	point.light = self
 	directional.light = self
 	spot.light = self
-	ambient.light = self
+	environment.light = self
 
 func _ready() -> void:
 	super()
@@ -88,8 +88,8 @@ func model():
 		Kind.SPOT:
 			return spot
 
-		Kind.AMBIENT:
-			return ambient
+		Kind.ENVIRONMENT:
+			return environment
 
 	return point
 

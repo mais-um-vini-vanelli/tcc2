@@ -1,6 +1,6 @@
 class_name Tcc2Geometry extends Tcc2Node
 
-enum Kind {SPHERE, CUBE, MESH}
+enum Kind {SPHERE, CUBE, MESH, TRIANGLE}
 
 class Sphere:
 	var geometry: Tcc2Geometry
@@ -36,6 +36,24 @@ class MeshFile:
 			surface = value
 			geometry._rebuild_preview()
 
+class Triangle:
+	var geometry: Tcc2Geometry
+
+	var a: Vector3 = Vector3(-0.5, -0.5, 0.0):
+		set(value):
+			a = value
+			geometry._rebuild_preview()
+
+	var b: Vector3 = Vector3(0.5, -0.5, 0.0):
+		set(value):
+			b = value
+			geometry._rebuild_preview()
+
+	var c: Vector3 = Vector3(0.0, 0.5, 0.0):
+		set(value):
+			c = value
+			geometry._rebuild_preview()
+
 var kind: Kind = Kind.SPHERE:
 	set(value):
 		kind = value
@@ -44,6 +62,7 @@ var kind: Kind = Kind.SPHERE:
 var sphere := Sphere.new()
 var cube := Cube.new()
 var mesh := MeshFile.new()
+var triangle := Triangle.new()
 
 @export var cast_shadows: bool = true
 
@@ -70,6 +89,7 @@ func _init() -> void:
 	sphere.geometry = self
 	cube.geometry = self
 	mesh.geometry = self
+	triangle.geometry = self
 
 func _ready() -> void:
 	super()
@@ -100,6 +120,9 @@ func model():
 		Kind.MESH:
 			return mesh
 
+		Kind.TRIANGLE:
+			return triangle
+
 	return sphere
 
 func set_selected(value: bool) -> void:
@@ -120,9 +143,13 @@ func _rebuild_preview() -> void:
 func _preview_mesh() -> Mesh:
 	match kind:
 		Kind.CUBE:
-			var box := BoxMesh.new()
-			box.size = Vector3.ONE * cube.half_edge * 2.0
-			return box
+			return Tcc2Tessellate.cube(cube.half_edge)
+
+		Kind.TRIANGLE:
+			if (triangle.b - triangle.a).cross(triangle.c - triangle.a).length_squared() == 0.0:
+				return null
+
+			return Tcc2Tessellate.triangle(triangle.a, triangle.b, triangle.c)
 
 		Kind.MESH:
 			if mesh.source.is_empty():
@@ -130,10 +157,7 @@ func _preview_mesh() -> Mesh:
 
 			return Tcc2Assets.surface(mesh.source, mesh.mesh, mesh.surface)
 
-	var ball := SphereMesh.new()
-	ball.radius = sphere.radius
-	ball.height = sphere.radius * 2
-	return ball
+	return Tcc2Tessellate.sphere(sphere.radius)
 
 func _set_preview_mesh(mesh: Mesh) -> void:
 	_preview.mesh = mesh

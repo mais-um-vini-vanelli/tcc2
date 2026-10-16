@@ -2,7 +2,7 @@
 //!
 //! O arquivo é um `.glb` válido — qualquer visualizador abre e mostra a cena.
 //! Os campos específicos da lib vão em extensions `TCC2_extras`:
-//! `Light::Ambient`, `Object.casts_shadows` e qual geometria analítica uma malha
+//! `Light::Environment`, `Object.casts_shadows` e qual geometria analítica uma malha
 //! tesselada representa.
 //!
 //! O resto vai em campo nativo:
@@ -10,7 +10,7 @@
 //! | Tipo da lib | Onde vai |
 //! |---|---|
 //! | [`Camera`] | `cameras[i]`, só a projeção: onde ela está é o transform do nó, como no glTF (olha pro −Z local, +Y pra cima) |
-//! | [`Light::Point`], [`Directional`](Light::Directional), [`Spot`](Light::Spot) | nó + `KHR_lights_punctual`, com a intensidade **crua** (sem converter para candela/lux); o eixo é o −Z do nó |
+//! | [`Light::Point`], [`Directional`](Light::Directional), [`Spot`](Light::Spot) | nó + `KHR_lights_punctual`, com a intensidade convertida para candela/lux por [`LUMENS_PER_WATT`]; o eixo é o −Z do nó |
 //! | [`Transform`] | `translation`/`rotation`/`scale` do nó, com o Euler XYZ virando quatérnio |
 //! | [`Geometry::Mesh`], [`Triangle`](Geometry::Triangle) | `POSITION` e, só quando existem, `NORMAL`/`TANGENT`/`TEXCOORD_0`, mais `indices` |
 //! | [`Material`] | `pbrMetallicRoughness`, `normalTexture`, `emissiveFactor` e as extensões `KHR_materials_transmission`, `_ior` e `_emissive_strength` |
@@ -44,6 +44,8 @@ pub use encode::encode;
 
 pub const EXTENSION: &str = "TCC2_extras";
 pub const VERSION: u64 = 1;
+
+pub const LUMENS_PER_WATT: f32 = 683.0;
 
 pub type Error = Box<dyn std::error::Error>;
 

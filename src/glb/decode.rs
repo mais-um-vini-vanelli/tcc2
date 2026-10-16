@@ -10,7 +10,7 @@ use crate::scene::{
 use crate::texture::Texture;
 use crate::transform::Transform;
 
-use super::{EXTENSION, Error, non_null_field};
+use super::{EXTENSION, Error, LUMENS_PER_WATT, non_null_field};
 
 pub fn decode(bytes: &[u8]) -> Result<(Scene, Option<Parameters>), Error> {
     let (documento, buffers, imagens) = gltf::import_slice(bytes)?;
@@ -57,7 +57,7 @@ fn decode_camera(projecao: &gltf::Camera) -> Camera {
 
 fn decode_light(luz: &gltf::khr_lights_punctual::Light) -> Light {
     let color = Rgb::new(luz.color()[0], luz.color()[1], luz.color()[2]);
-    let intensity = luz.intensity();
+    let intensity = luz.intensity() / LUMENS_PER_WATT;
 
     match luz.kind() {
         gltf::khr_lights_punctual::Kind::Point => Light::Point { color, intensity },
@@ -88,8 +88,8 @@ fn decode_object(
         Some(Content::Camera(decode_camera(&projecao)))
     } else if let Some(luz) = no.light() {
         Some(Content::Light(decode_light(&luz)))
-    } else if let Some(ambiente) = extras.and_then(|e| non_null_field(e, "ambient")) {
-        Some(Content::Light(Light::Ambient {
+    } else if let Some(ambiente) = extras.and_then(|e| non_null_field(e, "environment")) {
+        Some(Content::Light(Light::Environment {
             color: non_null_field(ambiente, "color")
                 .and_then(|c| {
                     Some(Rgb::new(
@@ -286,23 +286,20 @@ fn decode_material(
         }
     };
 
-    let forca = material.emissive_strength().unwrap_or(1.0);
+    let [r, g, b] = material.emissive_factor();
+    let fator = Rgb::new(r, g, b) * material.emissive_strength().unwrap_or(1.0);
+
     let emissive = match material.emissive_texture() {
         Some(info) => {
             let (largura, altura, texels) = pop_image(info.texture().source().index(), imagens)?;
             let texels = texels
                 .into_iter()
-                .map(|t| Rgb::from_srgb(t) * forca)
+                .map(|t| Rgb::from_srgb(t) * fator)
                 .collect();
 
             Canal::Map(Texture::new(largura, altura, texels)?)
         }
-        None => {
-            let [r, g, b] = material.emissive_factor();
-            let fator = Rgb::new(r, g, b) * forca;
-
-            Canal::Constant(fator)
-        }
+        None => Canal::Constant(fator),
     };
 
     let normal = match material.normal_texture() {

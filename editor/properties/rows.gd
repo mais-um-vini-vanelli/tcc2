@@ -1,3 +1,4 @@
+@tool
 class_name Tcc2Rows extends Container
 
 const DOT := 1

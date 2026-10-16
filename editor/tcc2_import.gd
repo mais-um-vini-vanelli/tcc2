@@ -58,20 +58,20 @@ func _node(gltf: GLTFNode, node_index: int, node_name: String) -> Tcc2Node:
 	if gltf.light >= 0:
 		return _light(_state.get_lights()[gltf.light])
 	else:
-		var ambient: Dictionary = _extras("nodes", node_index).get("ambient", {})
+		var environment: Dictionary = _extras("nodes", node_index).get("environment", {})
 
-		if not ambient.is_empty():
+		if not environment.is_empty():
 			var light := Tcc2Light.new()
-			light.kind = Tcc2Light.Kind.AMBIENT
+			light.kind = Tcc2Light.Kind.ENVIRONMENT
 
-			var color = ambient.get("color")
+			var color = environment.get("color")
 
 			if color != null and color is Array and color.size() >= 3:
-				light.ambient.color = Color(color[0], color[1], color[2]).linear_to_srgb()
+				light.environment.color = Color(color[0], color[1], color[2]).linear_to_srgb()
 			else:
-				light.ambient.color = Color.WHITE
+				light.environment.color = Color.WHITE
 
-			light.ambient.intensity = float(ambient.get("intensity", 1.0))
+			light.environment.intensity = float(environment.get("intensity", 1.0))
 			return light
 
 	# A group, or a camera there was no room for: the children still matter.
@@ -106,7 +106,15 @@ func _primitive(mesh: int, index: int, casts_shadows: bool) -> Tcc2Geometry:
 	if index == 0:
 		var tcc2_geometry = _extras("meshes", mesh).get("geometry");
 		
-		if tcc2_geometry != null and tcc2_geometry is Dictionary:
+		if tcc2_geometry is String and tcc2_geometry == "triangle":
+			var points := _triangle_points(mesh, index)
+
+			if points.size() == 3:
+				primitive.kind = Tcc2Geometry.Kind.TRIANGLE
+				primitive.triangle.a = points[0]
+				primitive.triangle.b = points[1]
+				primitive.triangle.c = points[2]
+		elif tcc2_geometry != null and tcc2_geometry is Dictionary:
 			if tcc2_geometry.has("sphere"):
 				var sphere: Dictionary = tcc2_geometry["sphere"]
 				primitive.kind = Tcc2Geometry.Kind.SPHERE
@@ -117,6 +125,29 @@ func _primitive(mesh: int, index: int, casts_shadows: bool) -> Tcc2Geometry:
 				primitive.cube.half_edge = float(cube.get("half_edge", 0.5))
 
 	return primitive
+
+func _triangle_points(mesh: int, index: int) -> PackedVector3Array:
+	var surface := Tcc2Assets.surface(_path, mesh, index)
+
+	if surface == null or surface.get_surface_count() == 0:
+		return PackedVector3Array()
+
+	var arrays := surface.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices = arrays[Mesh.ARRAY_INDEX]
+
+	if indices == null or indices.size() < 3:
+		return PackedVector3Array()
+
+	var points := PackedVector3Array()
+
+	for i in [indices[0], indices[2], indices[1]]:
+		if i < 0 or i >= vertices.size():
+			return PackedVector3Array()
+
+		points.append(vertices[i])
+
+	return points
 
 func _camera(gltf: GLTFCamera) -> Tcc2Camera:
 	var node := Tcc2Camera.new()
@@ -151,7 +182,7 @@ func _light(gltf: GLTFLight) -> Tcc2Light:
 
 	var model = node.model()
 	model.color = gltf.color.linear_to_srgb()
-	model.intensity = gltf.intensity
+	model.intensity = gltf.intensity / Tcc2Export.LUMENS_PER_WATT
 
 	return node
 
@@ -301,11 +332,6 @@ static func parameters(path: String, scene: Tcc2Scene) -> bool:
 	scene.exposure = float(output.get("exposure", scene.exposure))
 	scene.tonemap = pick.call(["none", "reinhard"], output.get("tonemap"),
 		scene.tonemap)
-
-	var background = output.get("background")
-
-	if background is Array and background.size() >= 3:
-		scene.background = Color(background[0], background[1], background[2]).linear_to_srgb()
 
 	return true
 

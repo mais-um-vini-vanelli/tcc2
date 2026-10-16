@@ -9,11 +9,14 @@
 //! cada nó pela mediana ou pelo SAH, conforme `AccelerationOptions.split`.
 
 use std::collections::VecDeque;
+use std::time::Instant;
 
+use crate::color::Rgb;
 use crate::math::{Aabb, Ray, Vec3};
 use crate::parameters::{BvhSplit, TransformMethod};
-use crate::raytracer::Contador;
-use crate::scene::{Geometry, GeometryInstance};
+use crate::render::{ColorBuffer, Contador};
+use crate::scene::{CameraInstance, Geometry, GeometryInstance, Hit};
+use crate::{overlay, scene};
 
 // Teoria: bvh.md#quando-parar-de-dividir
 /// Na mediana, a folha fecha com até este número de itens.
@@ -33,7 +36,7 @@ const MAX_ITENS_POR_FOLHA: usize = 8;
 
 // Teoria: bvh.md#dois-niveis
 /// As duas árvores da cena.
-pub(crate) struct Aceleracao {
+pub struct Aceleracao {
     pub tlas: Bvh,
     /// Uma por instância, na ordem de `Scene::flatten`. Só malha tem.
     pub blas: Vec<Option<Bvh>>,
@@ -44,7 +47,10 @@ impl Aceleracao {
         instancias: &[GeometryInstance],
         split: BvhSplit,
         method: TransformMethod,
+        contador: &Contador,
     ) -> Aceleracao {
+        let inicio = Instant::now();
+
         let blas: Vec<Option<Bvh>> = instancias
             .iter()
             .map(|instancia| match instancia.geometry {
@@ -83,10 +89,17 @@ impl Aceleracao {
             })
             .collect();
 
-        Aceleracao {
+        let aceleracao = Aceleracao {
             tlas: Bvh::build(itens, split),
             blas,
-        }
+        };
+
+        contador.atualiza(|s| {
+            s.bvh_build_time = inicio.elapsed();
+            (s.tlas_depth, s.blas_depth) = aceleracao.depth();
+        });
+
+        aceleracao
     }
 
     // Teoria: bvh.md#as-duas-profundidades
@@ -104,8 +117,87 @@ impl Aceleracao {
         (self.tlas.depth(), blas)
     }
 
+    /// Desenha as caixas da TLAS e das BLAS até `profundidade`, uma cor por nível.
+    pub fn wireframe(
+        &self,
+        destino: &mut ColorBuffer,
+        camera: &CameraInstance,
+        instancias: &[GeometryInstance],
+        method: TransformMethod,
+        profundidade: u32,
+    ) {
+        const CORES: [Rgb; 6] = [
+            Rgb::new(1.0, 1.00, 1.0),
+            Rgb::new(1.0, 0.85, 0.2),
+            Rgb::new(0.3, 1.00, 0.4),
+            Rgb::new(0.3, 0.80, 1.0),
+            Rgb::new(0.8, 0.40, 1.0),
+            Rgb::new(1.0, 0.40, 0.4),
+        ];
+
+        for (nivel, cantos) in self.aabbs(instancias, method, profundidade) {
+            overlay::caixa(
+                destino,
+                camera,
+                cantos,
+                CORES[(nivel.max(1) - 1) as usize % CORES.len()],
+            );
+        }
+    }
+
+    pub fn mais_proximo(
+        &self,
+        instancias: &[GeometryInstance],
+        raio: Ray,
+        is_shadow: bool,
+        t_min: f32,
+        t_max: f32,
+        method: TransformMethod,
+        contador: &Contador,
+    ) -> Option<(usize, Hit)> {
+        let intersect_geometry = |i: usize, t_max: f32| -> Option<(f32, Hit)> {
+            let inst = &instancias[i];
+
+            if is_shadow && !inst.casts_shadows {
+                return None;
+            }
+
+            // Teoria: transform.md#o-raio-vai-para-o-espaco-local
+            // O rasterizador leva a geometria pro mundo; aqui é o raio que vem pro
+            // espaço local do objeto. Isso permite usar equações arbitrárias tipo a
+            // da esfera pro teste de interseção. O `t` é igual nos dois espaços.
+            let ray_local = inst.chain.undo_ray(raio, method);
+
+            let hit = match inst.geometry {
+                Geometry::Mesh(mesh) => {
+                    let intersect_face = |i, _| {
+                        let hit = scene::intersecao_triangulo(ray_local, mesh.face(i).unwrap());
+                        contador.teste();
+
+                        hit.map(|hit| (hit.t, hit))
+                    };
+
+                    let blas = self.blas[i].as_ref().unwrap();
+                    blas.percorre(ray_local, t_min, t_max, &contador, intersect_face)
+                        .map(|(_, hit)| hit)
+                }
+
+                _ => {
+                    let hit = inst.geometry.intersect(ray_local);
+                    contador.teste();
+                    hit
+                }
+            };
+
+            hit.map(|hit| (hit.t, hit))
+        };
+
+        self.tlas
+            .percorre(raio, t_min, t_max, &contador, intersect_geometry)
+    }
+
     /// As AABBs dos nós da TLAS e da BLAS até `profundidade`.
-    pub fn aabbs(
+    fn aabbs(
         &self,
         instancias: &[GeometryInstance],
         method: TransformMethod,

@@ -2,16 +2,23 @@
 //!
 //! Teoria: texturas.md
 
+use std::sync::OnceLock;
+
 use crate::color::Rgb;
 use crate::math::Vec2;
 use crate::parameters::Filtering;
 use crate::render::ColorBuffer;
 
 /// Imagem de textura em memória.
-///
-/// A pirâmide de mipmaps é gerada na construção.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Texture {
+    base: ColorBuffer,
+    mipmaps: OnceLock<Mipmaps>,
+}
+
+// Teoria: texturas.md#a-pirâmide
+#[derive(Debug, Clone, PartialEq)]
+pub struct Mipmaps {
     /// O nível 0 primeiro. Cada um tem metade dos lados do anterior, até 1x1.
     levels: Vec<ColorBuffer>,
 }
@@ -32,35 +39,68 @@ impl Texture {
         let base = ColorBuffer::from_pixels(width, height, texels)
             .ok_or(TextureError::WrongPixelCount { expected, found })?;
 
-        let mut levels = vec![base];
+        Ok(Texture {
+            base,
+            mipmaps: OnceLock::new(),
+        })
+    }
+
+    pub fn width(&self) -> u32 {
+        self.base.width()
+    }
+
+    pub fn height(&self) -> u32 {
+        self.base.height()
+    }
+
+    /// Os texels do nível 0.
+    pub fn texels(&self) -> &[Rgb] {
+        self.base.pixels()
+    }
+
+    /// Um texel do nível 0.
+    pub fn texel(&self, x: u32, y: u32) -> Option<Rgb> {
+        self.base.get(x, y)
+    }
+
+    /// A pirâmide, construída na primeira chamada.
+    pub fn generate_mipmaps(&self) {
+        self.mipmaps.get_or_init(|| Mipmaps::new(&self.base));
+    }
+
+    pub fn miplevels(&self) -> usize {
+        self.mipmaps.get().unwrap().levels.len()
+    }
+
+    /// Lê a textura com o filtro pedido. Os filtros com mipmap escolhem o nível
+    /// pela footprint do pixel; os outros dois, ficam no 0.
+    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, filtering: Filtering) -> Rgb {
+        // Teoria: texturas.md#os-filtros
+        match (filtering, footprint) {
+            (Filtering::Nearest, _) => nearest(&self.base, uv),
+            // Sem footprint não há nível pra escolher, e os dois filtros com
+            // mipmap caem no 0, que é a própria imagem: é o caso do ray tracer,
+            // que assim nunca constrói a pirâmide.
+            (Filtering::Bilinear, _) | (_, None) => bilinear(&self.base, uv),
+            (Filtering::MipmapBilinear, Some(footprint)) => {
+                self.mipmaps.get().unwrap().mipmap_bilinear(uv, footprint)
+            }
+            (Filtering::Trilinear, Some(footprint)) => {
+                self.mipmaps.get().unwrap().trilinear(uv, footprint)
+            }
+        }
+    }
+}
+
+impl Mipmaps {
+    fn new(base: &ColorBuffer) -> Self {
+        let mut levels = vec![base.clone()];
 
         while let Some(anterior) = levels.last().filter(|n| n.width() > 1 || n.height() > 1) {
             levels.push(reduz(anterior));
         }
 
-        Ok(Texture { levels })
-    }
-
-    pub fn width(&self) -> u32 {
-        self.levels[0].width()
-    }
-
-    pub fn height(&self) -> u32 {
-        self.levels[0].height()
-    }
-
-    /// Os texels do nível 0.
-    pub fn texels(&self) -> &[Rgb] {
-        self.levels[0].pixels()
-    }
-
-    /// Um texel do nível 0.
-    pub fn texel(&self, x: u32, y: u32) -> Option<Rgb> {
-        self.levels[0].get(x, y)
-    }
-
-    pub fn miplevels(&self) -> usize {
-        self.levels.len()
+        Mipmaps { levels }
     }
 
     // Teoria: texturas.md#do-footprint-para-o-nível
@@ -84,27 +124,24 @@ impl Texture {
         self.clamp_miplevel(texels_em_dx.max(texels_em_dy).log2())
     }
 
-    /// Lê a textura com o filtro pedido. Os filtros com mipmap escolhem o nível
-    /// pela footprint do pixel; os outros dois, ficam no 0.
-    pub fn sample(&self, uv: Vec2, footprint: Option<Footprint>, filtering: Filtering) -> Rgb {
-        // Teoria: texturas.md#os-filtros
-        let nivel = || footprint.map_or(0.0, |footprint| self.level_of_detail(footprint));
+    /// Os quatro texels vizinhos, no nível de mip mais próximo.
+    fn mipmap_bilinear(&self, uv: Vec2, footprint: Footprint) -> Rgb {
+        bilinear(
+            &self.levels[self.level_of_detail(footprint).round() as usize],
+            uv,
+        )
+    }
 
-        match filtering {
-            Filtering::Nearest => nearest(&self.levels[0], uv),
-            Filtering::Bilinear => bilinear(&self.levels[0], uv),
-            Filtering::MipmapBilinear => bilinear(&self.levels[nivel().round() as usize], uv),
-            Filtering::Trilinear => {
-                let lambda = nivel();
-                let d = lambda.floor() as usize;
-                let frac = lambda - d as f32;
+    /// Bilinear nos dois níveis vizinhos, interpolados entre si.
+    fn trilinear(&self, uv: Vec2, footprint: Footprint) -> Rgb {
+        let lambda = self.level_of_detail(footprint);
+        let d = lambda.floor() as usize;
+        let frac = lambda - d as f32;
 
-                if frac == 0.0 || d == self.levels.len() - 1 {
-                    bilinear(&self.levels[d], uv)
-                } else {
-                    bilinear(&self.levels[d], uv).lerp(bilinear(&self.levels[d + 1], uv), frac)
-                }
-            }
+        if frac == 0.0 || d == self.levels.len() - 1 {
+            bilinear(&self.levels[d], uv)
+        } else {
+            bilinear(&self.levels[d], uv).lerp(bilinear(&self.levels[d + 1], uv), frac)
         }
     }
 

@@ -373,11 +373,12 @@ func _remove(node: Tcc2Node) -> void:
 enum {
 	ADD_SPHERE,
 	ADD_CUBE,
+	ADD_TRIANGLE,
 	ADD_MESH,
 	ADD_POINT_LIGHT,
 	ADD_DIRECTIONAL_LIGHT,
 	ADD_SPOT_LIGHT,
-	ADD_AMBIENT_LIGHT,
+	ADD_ENVIRONMENT_LIGHT,
 	ADD_PERSPECTIVE_CAMERA,
 	ADD_ORTHOGRAPHIC_CAMERA,
 	ADD_GROUP,
@@ -388,13 +389,14 @@ func _on_add_pressed() -> void:
 
 	popup_menu.add_item("Sphere", ADD_SPHERE)
 	popup_menu.add_item("Cube", ADD_CUBE)
+	popup_menu.add_item("Triangle", ADD_TRIANGLE)
 	popup_menu.add_item("Mesh", ADD_MESH)
 
 	popup_menu.add_separator()
 	popup_menu.add_item("Point light", ADD_POINT_LIGHT)
 	popup_menu.add_item("Directional light", ADD_DIRECTIONAL_LIGHT)
 	popup_menu.add_item("Spot light", ADD_SPOT_LIGHT)
-	popup_menu.add_item("Ambient light", ADD_AMBIENT_LIGHT)
+	popup_menu.add_item("Environment light", ADD_ENVIRONMENT_LIGHT)
 
 	popup_menu.add_separator()
 	popup_menu.add_item("Perspective camera", ADD_PERSPECTIVE_CAMERA)
@@ -424,6 +426,11 @@ func _on_popup_menu_id_pressed(id: int) -> void:
 			geometry.kind = Tcc2Geometry.Kind.CUBE
 			_add(target, geometry, "Cube")
 
+		ADD_TRIANGLE:
+			var geometry := Tcc2Geometry.new()
+			geometry.kind = Tcc2Geometry.Kind.TRIANGLE
+			_add(target, geometry, "Triangle")
+
 		ADD_MESH:
 			var geometry := Tcc2Geometry.new()
 			geometry.kind = Tcc2Geometry.Kind.MESH
@@ -444,10 +451,10 @@ func _on_popup_menu_id_pressed(id: int) -> void:
 			light.kind = Tcc2Light.Kind.SPOT
 			_add(target, light, "SpotLight")
 
-		ADD_AMBIENT_LIGHT:
+		ADD_ENVIRONMENT_LIGHT:
 			var light := Tcc2Light.new()
-			light.kind = Tcc2Light.Kind.AMBIENT
-			_add(target, light, "AmbientLight")
+			light.kind = Tcc2Light.Kind.ENVIRONMENT
+			_add(target, light, "EnvironmentLight")
 
 		ADD_PERSPECTIVE_CAMERA:
 			var cam := Tcc2Camera.new()

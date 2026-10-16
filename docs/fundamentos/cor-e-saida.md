@@ -2,7 +2,8 @@
 
 ## Exposição
 
-A exposição é um fator que multiplica todos os pixels antes do tonemap: `c = pixel * exposure`.
+A exposição é um fator que multiplica todos os pixels antes do tonemap: `c = pixel * 2^exposure`. Cada
+`+1` em `exposure` dobra a luz que chega ao filme e cada `-1` corta pela metade.
 
 ## Tone mapping
 

@@ -1,0 +1,11 @@
+[package]
+name = "tcc2_godot"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+tcc2 = { path = ".." }
+godot = "0.5"

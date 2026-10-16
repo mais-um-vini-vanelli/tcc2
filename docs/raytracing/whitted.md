@@ -96,7 +96,7 @@ A direção e o alcance dependem do tipo da luz:
 ```text
 Point        direção = (posição - p) normalizada,  alcance = |posição - p|
 Directional  direção = -direction,                 alcance = infinito
-Ambient      não tem direção: nada a testar, sempre visível
+Environment  não tem direção: nada a testar, sempre visível
 ```
 
 Na luz pontual, um objeto *atrás* da luz não faz sombra nenhuma, por isso

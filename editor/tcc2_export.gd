@@ -3,6 +3,8 @@ class_name Tcc2Export
 const EXTENSION := "TCC2_extras"
 const VERSION := 1
 
+const LUMENS_PER_WATT := 683.0
+
 const FLOAT := 5126
 const UNSIGNED_INT := 5125
 const TRIANGLES := 4
@@ -208,23 +210,23 @@ func _light_node(node: Tcc2Light) -> Dictionary:
 	var model = node.model()
 	var color: Color = model.color
 
-	if node.kind == Tcc2Light.Kind.AMBIENT:
-		var ambient := _trs(node.transform)
+	if node.kind == Tcc2Light.Kind.ENVIRONMENT:
+		var environment := _trs(node.transform)
 
-		ambient["extensions"] = {
+		environment["extensions"] = {
 			EXTENSION: {
-				"ambient": {
+				"environment": {
 					"color": _linear(color),
 					"intensity": model.intensity,
 				},
 			},
 		}
 
-		return ambient
+		return environment
 
 	var light := {
 		"color": _linear(color),
-		"intensity": model.intensity,
+		"intensity": model.intensity * LUMENS_PER_WATT,
 	}
 
 	match node.kind:
@@ -357,9 +359,18 @@ func _mesh(node: Tcc2Geometry) -> int:
 func _surface(node: Tcc2Geometry) -> Mesh:
 	match node.kind:
 		Tcc2Geometry.Kind.CUBE:
-			var box := BoxMesh.new()
-			box.size = Vector3.ONE * node.cube.half_edge * 2.0
-			return box
+			return Tcc2Tessellate.cube(node.cube.half_edge)
+
+		Tcc2Geometry.Kind.TRIANGLE:
+			var a := node.triangle.a
+			var b := node.triangle.b
+			var c := node.triangle.c
+
+			if (b - a).cross(c - a).length_squared() == 0.0:
+				_warn("%s: the three points fall in a line, dropped" % node.name)
+				return ArrayMesh.new()
+
+			return Tcc2Tessellate.triangle(a, b, c)
 
 		Tcc2Geometry.Kind.MESH:
 			if node.mesh.source.is_empty():
@@ -375,10 +386,7 @@ func _surface(node: Tcc2Geometry) -> Mesh:
 
 			return built
 
-	var ball := SphereMesh.new()
-	ball.radius = node.sphere.radius
-	ball.height = node.sphere.radius * 2.0
-	return ball
+	return Tcc2Tessellate.sphere(node.sphere.radius)
 
 func _tcc2_geometry(node: Tcc2Geometry):
 	match node.kind:
@@ -395,6 +403,9 @@ func _tcc2_geometry(node: Tcc2Geometry):
 					"half_edge": node.cube.half_edge,
 				},
 			}
+
+		Tcc2Geometry.Kind.TRIANGLE:
+			return "triangle"
 
 	return null
 
@@ -729,7 +740,6 @@ func _parameters(scene: Tcc2Scene) -> Dictionary:
 		"output": {
 			"width": scene.width,
 			"height": scene.height,
-			"background": _linear(scene.background),
 			"exposure": scene.exposure,
 			"tonemap": TONEMAP[scene.tonemap],
 		},

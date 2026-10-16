@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://d4kwrq4r2o5q5" path="res://properties/scene_form.gd" id="1_0k82w"]
 [ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_mnwxo"]
 [ext_resource type="Script" uid="uid://cexlinptor5e6" path="res://properties/check.gd" id="check_box"]
-[ext_resource type="Script" path="res://properties/rows.gd" id="rows"]
+[ext_resource type="Script" uid="uid://b2ywqkn8rfd3m" path="res://properties/rows.gd" id="rows"]
 
 [node name="ScenePanel" type="VBoxContainer" unique_id=680120217]
 script = ExtResource("1_0k82w")
@@ -333,16 +333,6 @@ max_value = 4096.0
 value = 1.0
 rounded = true
 
-[node name="BackgroundLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=655665969]
-layout_mode = 2
-text = "background"
-
-[node name="background" type="ColorPickerButton" parent="Output/Stack/Body/Rows" unique_id=1327726623]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(100, 0)
-layout_mode = 2
-edit_alpha = false
-
 [node name="ExposureLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=596102467]
 layout_mode = 2
 text = "exposure"
@@ -350,8 +340,9 @@ text = "exposure"
 [node name="exposure" type="SpinBox" parent="Output/Stack/Body/Rows" unique_id=851464611]
 unique_name_in_owner = true
 layout_mode = 2
-step = 0.01
+step = 0.1
 allow_greater = true
+allow_lesser = true
 
 [node name="TonemapLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=2092387296]
 layout_mode = 2

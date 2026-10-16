@@ -13,7 +13,7 @@ use crate::scene::{self, Camera, Content, Geometry, Light, Material, Mesh, Objec
 use crate::texture::Texture;
 use crate::transform::Transform;
 
-use super::{EXTENSION, Error, VERSION};
+use super::{EXTENSION, Error, LUMENS_PER_WATT, VERSION};
 
 pub fn encode(scene: &Scene, parameters: Option<&Parameters>) -> Result<Vec<u8>, Error> {
     let mut json_gltf = json::Root::default();
@@ -147,13 +147,13 @@ fn encode_camera(camera: Camera, json_gltf: &mut json::Root) -> json::Node {
 fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
     use json::extensions::scene::khr_lights_punctual as khr;
 
-    if let Light::Ambient { color, intensity } = luz {
-        // A ambiente não tem equivalente no glTF: ela vai para uma extension.
+    if let Light::Environment { color, intensity } = luz {
+        // O ambiente não tem equivalente no glTF: ele vai para uma extension.
         return json::Node {
             extensions: Some(json::extensions::scene::Node {
                 others: Map::from_iter([(
                     EXTENSION.into(),
-                    json!({ "ambient": { "color": [color.r, color.g, color.b], "intensity": intensity } }),
+                    json!({ "environment": { "color": [color.r, color.g, color.b], "intensity": intensity } }),
                 )]),
                 ..Default::default()
             }),
@@ -164,7 +164,7 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
     let punctual = |tipo, spot| khr::Light {
         type_: Valid(tipo),
         color: [luz.color().r, luz.color().g, luz.color().b],
-        intensity: luz.intensity(),
+        intensity: luz.intensity() * LUMENS_PER_WATT,
         range: None,
         spot,
         extensions: None,
@@ -189,7 +189,7 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
             }),
         ),
 
-        Light::Ambient { .. } => unreachable!(),
+        Light::Environment { .. } => unreachable!(),
     };
 
     let light_gltf = json_gltf.push(light);

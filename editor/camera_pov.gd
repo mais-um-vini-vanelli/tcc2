@@ -73,7 +73,7 @@ func _sync() -> void:
 	if scene == null:
 		return
 
-	_environment.background_color = scene.background
+	_environment.background_color = _environment_color()
 
 	_fit(maxi(scene.width, 1), maxi(scene.height, 1))
 
@@ -91,6 +91,20 @@ func _fit(width: int, height: int) -> void:
 	container.position = ((pane - output * factor) * 0.5).floor()
 	container.texture_filter = (CanvasItem.TEXTURE_FILTER_NEAREST if factor >= 1.0
 		else CanvasItem.TEXTURE_FILTER_LINEAR)
+
+func _environment_color() -> Color:
+	var r := 0.0
+	var g := 0.0
+	var b := 0.0
+
+	for light in scene_view.find_children("*", "Tcc2Light", true, false):
+		if light.kind == Tcc2Light.Kind.ENVIRONMENT:
+			var env = light.environment
+			r += env.color.r * env.intensity
+			g += env.color.g * env.intensity
+			b += env.color.b * env.intensity
+
+	return Color(r, g, b)
 
 func _scene() -> Tcc2Scene:
 	var found := scene_view.find_children("*", "Tcc2Scene", true, false)

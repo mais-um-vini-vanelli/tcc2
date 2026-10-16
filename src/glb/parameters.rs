@@ -6,7 +6,6 @@
 
 use serde_json::{Value, json};
 
-use crate::color::Rgb;
 use crate::parameters::*;
 
 use super::non_null_field;
@@ -56,11 +55,6 @@ pub(super) fn encode(p: &Parameters) -> Value {
         "output": {
             "width": p.output.width,
             "height": p.output.height,
-            "background": [
-                p.output.background.r,
-                p.output.background.g,
-                p.output.background.b,
-            ],
             "exposure": p.output.exposure,
             "tonemap": match p.output.tonemap {
                 Tonemap::None => "none",
@@ -99,14 +93,6 @@ pub(super) fn decode(v: &Value) -> Parameters {
         non_null_field(objeto, nome)
             .and_then(Value::as_u64)
             .map_or(padrao, |n| n as u32)
-    }
-
-    fn to_rgb(v: &Value) -> Option<Rgb> {
-        Some(Rgb::new(
-            v.get(0)?.as_f64()? as f32,
-            v.get(1)?.as_f64()? as f32,
-            v.get(2)?.as_f64()? as f32,
-        ))
     }
 
     Parameters {
@@ -167,9 +153,6 @@ pub(super) fn decode(v: &Value) -> Parameters {
         output: OutputOptions {
             width: to_u32(output, "width", saida.width),
             height: to_u32(output, "height", saida.height),
-            background: non_null_field(output, "background")
-                .and_then(to_rgb)
-                .unwrap_or(saida.background),
             exposure: non_null_field(output, "exposure")
                 .and_then(|e| e.as_f64().map(|e| e as f32))
                 .unwrap_or(saida.exposure),

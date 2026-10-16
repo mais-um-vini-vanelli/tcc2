@@ -14,8 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cena = cena()?;
     let params = Parameters {
         output: OutputOptions {
-            background: Rgb::new(0.02, 0.03, 0.05),
-            exposure: 1.0,
+            exposure: 0.0,
             tonemap: Tonemap::Reinhard,
             ..Parameters::with_resolution(LARGURA, ALTURA).output
         },
@@ -105,7 +104,7 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
                 Transform::looking_at(Vec3::new(-4.0, 5.0, 2.0), Vec3::new(0.6, -1.0, -0.2)),
             ),
             Object::light(
-                Light::Ambient {
+                Light::Environment {
                     color: Rgb::new(0.5, 0.6, 0.8),
                     intensity: 0.12,
                 },

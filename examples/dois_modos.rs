@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Transform::looking_at(Vec3::ZERO, Vec3::new(-0.6, -1.0, -0.4)),
             ),
             Object::light(
-                Light::Ambient {
+                Light::Environment {
                     color: Rgb::new(0.4, 0.5, 0.7),
                     intensity: 0.08,
                 },
@@ -340,15 +340,15 @@ fn renderiza(
 
     for (buffer, nome) in [
         (&resultado.color, "color"),
-        (&resultado.normal, "normal"),
-        (&resultado.uv, "uv"),
+        (&resultado.rasterization.normal, "normal"),
+        (&resultado.rasterization.uv, "uv"),
     ] {
         let arquivo = format!("./renders/{prefixo}_{nome}.png");
         comum::grava_textura(&arquivo, buffer, Rgb::to_srgb)?;
     }
 
     for (buffer, nome) in [
-        (&resultado.depth, "depth"),
+        (&resultado.rasterization.depth, "depth"),
         (&resultado.ray_tracing.ray_count, "ray_count"),
         (&resultado.ray_tracing.bvh_heatmap, "bvh_heatmap"),
     ] {

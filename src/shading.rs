@@ -53,8 +53,8 @@ pub fn shade(
     let mut cor = material.emission;
 
     for luz in light_instances {
-        if let Light::Ambient { color, intensity } = luz.light {
-            // A ambiente não tem direção. É o termo que impede a sombra de fechar em preto chapado enquanto não há iluminação indireta.
+        if let Light::Environment { color, intensity } = luz.light {
+            // Vem de todo lado, então não há direção pra testar nem cosseno pra aplicar.
             cor = cor + material.albedo * color * intensity;
             continue;
         }
@@ -136,7 +136,7 @@ fn incidencia(light_instance: &LightInstance, point: Vec3) -> (Vec3, Rgb) {
             // o t^2 suaviza a borda.
             (l, radiancia * (t * t))
         }
-        Light::Ambient { .. } => unreachable!(),
+        Light::Environment { .. } => unreachable!(),
     }
 }
 

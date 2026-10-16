@@ -1,3 +1,4 @@
+@tool
 class_name Tcc2TransformSection extends Tcc2Section
 
 func bind(binder: Tcc2Binder, node: Tcc2Node) -> void:

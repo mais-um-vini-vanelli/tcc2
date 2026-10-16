@@ -1,5 +1,6 @@
 //! A interface comum aos dois pipelines.
 
+use std::cell::Cell;
 use std::time::Duration;
 
 use crate::color::Rgb;
@@ -118,8 +119,14 @@ impl ScalarBuffer {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RasterizationResult {
+    /// Profundidade do fragmento mais próximo em cada pixel.
+    pub depth: ScalarBuffer,
+    /// Normal de sombreamento, remapeada de `[-1, 1]` para `[0, 1]`.
+    pub normal: ColorBuffer,
+    /// Coordenada de textura interpolada, no canal rg.
+    pub uv: ColorBuffer,
     /// Testes de cobertura pixel-triângulo.
     pub primitive_tests: u64,
     /// Triângulos descartados pelo backface culling.
@@ -150,24 +157,67 @@ pub struct RayTracingResult {
     pub bvh_build_time: Duration,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Contagem {
+    pub primitive_tests: u64,
+    pub rays: u64,
+    pub bvh_nodes_visited: u64,
+    pub tlas_depth: u32,
+    pub blas_depth: u32,
+    pub bvh_build_time: Duration,
+}
+
+/// Contadores do render.
+///
+/// `Cell` porque o callback de visibilidade que `shade` recebe é `Fn`, não
+/// `FnMut`, e mesmo assim precisa contabilizar o raio de sombra que dispara.
+/// `Contagem` é `Copy`, então a célula sai barata.
+#[derive(Debug, Default)]
+pub(crate) struct Contador(Cell<Contagem>);
+
+impl Contador {
+    pub(crate) fn raio(&self) {
+        self.atualiza(|s| s.rays += 1);
+    }
+
+    pub(crate) fn teste(&self) {
+        self.atualiza(|s| s.primitive_tests += 1);
+    }
+
+    pub(crate) fn no(&self) {
+        self.atualiza(|s| s.bvh_nodes_visited += 1);
+    }
+
+    pub(crate) fn stats(&self) -> Contagem {
+        self.0.get()
+    }
+
+    pub(crate) fn atualiza(&self, f: impl FnOnce(&mut Contagem)) {
+        let mut stats = self.0.get();
+        f(&mut stats);
+        self.0.set(stats);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RenderResult {
     pub color: ColorBuffer,
-    pub depth: ScalarBuffer,
-    pub normal: ColorBuffer,
-    pub uv: ColorBuffer,
     pub rasterization: RasterizationResult,
     pub ray_tracing: RayTracingResult,
 }
 
 impl RenderResult {
-    pub fn new(width: u32, height: u32, background: Rgb) -> Self {
+    pub fn new(width: u32, height: u32, environment: Rgb) -> Self {
         RenderResult {
-            color: ColorBuffer::filled(width, height, background),
-            depth: ScalarBuffer::filled(width, height, f32::INFINITY),
-            normal: ColorBuffer::new(width, height),
-            uv: ColorBuffer::new(width, height),
-            rasterization: RasterizationResult::default(),
+            color: ColorBuffer::filled(width, height, environment),
+            rasterization: RasterizationResult {
+                depth: ScalarBuffer::filled(width, height, f32::INFINITY),
+                normal: ColorBuffer::new(width, height),
+                uv: ColorBuffer::new(width, height),
+                primitive_tests: 0,
+                backfaces_culled: 0,
+                polygons_clipped: 0,
+            },
             ray_tracing: RayTracingResult {
                 ray_count: ScalarBuffer::new(width, height),
                 bvh_heatmap: ScalarBuffer::new(width, height),
@@ -183,9 +233,11 @@ impl RenderResult {
 
     /// Aplica a exposure e tonemap.
     pub fn apply_output(&mut self, output: &OutputOptions) {
+        let exposure = 2.0f32.powf(output.exposure);
+
         for pixel in &mut self.color.pixels {
             *pixel = {
-                let c = *pixel * output.exposure;
+                let c = *pixel * exposure;
                 match output.tonemap {
                     Tonemap::None => c,
                     Tonemap::Reinhard => c.map(|v| v / (1.0 + v)),

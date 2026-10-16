@@ -1,6 +1,6 @@
 class_name Tcc2LightForm extends Tcc2Form
 
-const TITLES := ["Point", "Directional", "Spot", "Ambient"]
+const TITLES := ["Point", "Directional", "Spot", "Environment"]
 
 func _build() -> void:
 	var light := node as Tcc2Light

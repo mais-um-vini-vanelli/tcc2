@@ -35,6 +35,5 @@ var bvh_wireframe := 0
 # OutputOptions
 var width := 800
 var height := 600
-var background := Color.BLACK
-var exposure := 1.0
+var exposure := 0.0
 var tonemap := Tonemap.NONE

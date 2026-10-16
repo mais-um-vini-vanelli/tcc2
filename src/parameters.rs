@@ -4,8 +4,6 @@
 //! pipeline, então a própria struct documenta o pipeline para quem está
 //! aprendendo.
 
-use crate::color::Rgb;
-
 #[derive(Debug, Clone, Default)]
 pub struct Parameters {
     pub transform: TransformOptions,
@@ -55,8 +53,9 @@ pub struct RasterizationOptions {
     /// Chamado pra cada fragmento, antes do depth test. Não faz nada no
     /// render: existe só como lugar para pôr um breakpoint.
     pub on_fragment: Option<fn(u32, u32)>,
-    /// Chamado pra cada triângulo das meshes, no começo da pipeline. A função
-    /// recebe (index da instância conforme `Scene::flatten`, index da face).
+    /// Chamado pra cada triângulo dos objetos com geometria, no começo da pipeline. A
+    /// função recebe (index da instância conforme `Scene::flatten`, index da
+    /// face na malha que `Geometry::tessellate` devolve).
     pub on_triangle: Option<fn(usize, usize)>,
 }
 
@@ -188,8 +187,6 @@ impl Default for RayTracingOptions {
 pub struct OutputOptions {
     pub width: u32,
     pub height: u32,
-    /// Cor dos pixels que nenhum primitivo cobriu.
-    pub background: Rgb,
     /// Multiplica a radiância antes do tone mapping, como a exposição de uma
     /// câmera: clareia ou escurece a imagem sem mexer nas luzes.
     pub exposure: f32,
@@ -201,8 +198,7 @@ impl Default for OutputOptions {
         OutputOptions {
             width: 800,
             height: 600,
-            background: Rgb::BLACK,
-            exposure: 1.0,
+            exposure: 0.0,
             tonemap: Tonemap::default(),
         }
     }

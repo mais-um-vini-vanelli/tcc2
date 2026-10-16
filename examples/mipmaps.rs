@@ -28,8 +28,6 @@ use tcc2::prelude::*;
 const LARGURA: u32 = 800;
 const ALTURA: u32 = 450;
 
-const CEU: Rgb = Rgb::new(0.6, 0.75, 0.95);
-
 // Uma repetição da textura a cada 4 m de chão.
 const UV_POR_METRO: f32 = 0.25;
 
@@ -55,7 +53,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Transform::looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, -10.0)),
             ),
             Object::light(
-                Light::Ambient {
+                Light::Environment {
                     color: Rgb::WHITE,
                     intensity: 1.0,
                 },
@@ -73,7 +71,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         output: OutputOptions {
             width: LARGURA,
             height: ALTURA,
-            background: CEU,
             ..OutputOptions::default()
         },
         ..Parameters::default()

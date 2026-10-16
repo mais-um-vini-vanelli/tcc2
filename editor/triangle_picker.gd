@@ -133,9 +133,6 @@ func _pick(mouse: Vector2) -> Dictionary:
 	var best_distance := INF
 
 	for node in _instances(_scene()):
-		if node.kind != Tcc2Geometry.Kind.MESH:
-			continue
-
 		var preview := node.preview()
 
 		if preview == null or preview.mesh == null or not preview.visible:

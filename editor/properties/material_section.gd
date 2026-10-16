@@ -1,3 +1,4 @@
+@tool
 class_name Tcc2MaterialSection extends Tcc2Section
 
 func bind(binder: Tcc2Binder, mat: Tcc2Material) -> void:

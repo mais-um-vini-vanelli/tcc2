@@ -19,15 +19,26 @@ impl Scene {
         method: TransformMethod,
     ) -> (
         Option<CameraInstance>,
+        Rgb,
         Vec<LightInstance>,
         Vec<GeometryInstance<'_>>,
     ) {
-        let mut saida = (None, Vec::new(), Vec::new());
+        let mut saida = (None, Rgb::BLACK, Vec::new(), Vec::new());
         let mut cadeia = Vec::new();
 
         for raiz in &self.objects {
             Self::descend(raiz, &mut cadeia, method, &mut saida);
         }
+
+        let (_, environment, lights, _) = &mut saida;
+
+        *environment = lights
+            .iter()
+            .filter_map(|luz| match luz.light {
+                Light::Environment { color, intensity } => Some(color * intensity),
+                _ => None,
+            })
+            .fold(Rgb::BLACK, |a, b| a + b);
 
         saida
     }
@@ -38,11 +49,12 @@ impl Scene {
         method: TransformMethod,
         saida: &mut (
             Option<CameraInstance>,
+            Rgb,
             Vec<LightInstance>,
             Vec<GeometryInstance<'a>>,
         ),
     ) {
-        let (camera, lights, instances) = &mut *saida;
+        let (camera, _, lights, instances) = &mut *saida;
 
         cadeia.push(no.transform);
 
@@ -152,6 +164,14 @@ impl CameraInstance {
         match self.camera {
             Camera::Perspective { .. } => (self.position - point).normalized(),
             Camera::Orthographic { .. } => -self.basis.2,
+        }
+    }
+
+    pub fn is_perspective(&self) -> bool {
+        if let Camera::Perspective { .. } = self.camera {
+            true
+        } else {
+            false
         }
     }
 }
@@ -307,8 +327,10 @@ pub enum Light {
         color: Rgb,
         intensity: f32,
     },
-    /// Luz ambiente
-    Ambient { color: Rgb, intensity: f32 },
+    /// Luz que chega de todas as direções por igual, e também o que a câmera vê
+    /// onde não há geometria: o céu da cena. Enquanto não há iluminação
+    /// indireta, é o que impede a sombra de fechar em preto chapado.
+    Environment { color: Rgb, intensity: f32 },
 }
 
 impl Light {
@@ -317,7 +339,7 @@ impl Light {
             Light::Point { color, .. }
             | Light::Directional { color, .. }
             | Light::Spot { color, .. }
-            | Light::Ambient { color, .. } => color,
+            | Light::Environment { color, .. } => color,
         }
     }
 
@@ -326,7 +348,7 @@ impl Light {
             Light::Point { intensity, .. }
             | Light::Directional { intensity, .. }
             | Light::Spot { intensity, .. }
-            | Light::Ambient { intensity, .. } => intensity,
+            | Light::Environment { intensity, .. } => intensity,
         }
     }
 }
@@ -336,6 +358,15 @@ impl Light {
 pub enum Value<T> {
     Constant(T),
     Map(Texture),
+}
+
+impl<T> Value<T> {
+    fn texture(&self) -> Option<&Texture> {
+        match self {
+            Value::Constant(_) => None,
+            Value::Map(textura) => Some(textura),
+        }
+    }
 }
 
 impl Value<Rgb> {
@@ -439,6 +470,20 @@ impl Material {
             albedo: Value::Map(texture),
             roughness: Value::Constant(1.0),
             ..Material::default()
+        }
+    }
+
+    pub fn generate_mipmaps(&self) {
+        let mapas = [
+            self.albedo.texture(),
+            self.metallic.texture(),
+            self.roughness.texture(),
+            self.emissive.texture(),
+            self.normal.as_ref(),
+        ];
+
+        for mapa in mapas.into_iter().flatten() {
+            mapa.generate_mipmaps();
         }
     }
 

@@ -38,6 +38,6 @@ pub mod prelude {
         Material, MaterialSample, Mesh, Object, Scene, Value, eixos_da_uv,
     };
     pub use crate::shading::{Surface, shade};
-    pub use crate::texture::{Footprint, Texture, TextureError};
+    pub use crate::texture::{Footprint, Mipmaps, Texture, TextureError};
     pub use crate::transform::{Chain, Transform};
 }

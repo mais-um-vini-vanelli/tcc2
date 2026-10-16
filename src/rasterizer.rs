@@ -7,9 +7,9 @@
 
 use crate::color::Rgb;
 use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
-use crate::parameters::{Parameters, ShadingFrequency};
+use crate::parameters::{Filtering, Parameters, ShadingFrequency};
 use crate::render::{RasterizationResult, RenderResult, Renderer};
-use crate::scene::{Camera, CameraInstance, Geometry, LightInstance, Material, Scene};
+use crate::scene::{Camera, CameraInstance, LightInstance, Material, Scene};
 use crate::shading::{self, Surface};
 use crate::texture::Footprint;
 
@@ -20,13 +20,16 @@ impl Renderer for Rasterizer {
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
         let (largura, altura) = (params.output.width, params.output.height);
 
-        let fundo = params.output.background;
+        let (camera_instance, environment, light_instances, instances) =
+            scene.flatten(params.transform.method);
 
-        let mut resultado = RenderResult::new(largura, altura, fundo);
+        if let Filtering::MipmapBilinear | Filtering::Trilinear = params.shading.filtering {
+            for instancia in &instances {
+                instancia.material.generate_mipmaps();
+            }
+        }
 
-        let mut stats = RasterizationResult::default();
-
-        let (camera_instance, light_instances, instances) = scene.flatten(params.transform.method);
+        let mut resultado = RenderResult::new(largura, altura, environment);
 
         let Some(camera_instance) = camera_instance else {
             // Sem câmera não há de onde olhar: sobra o fundo.
@@ -34,13 +37,11 @@ impl Renderer for Rasterizer {
         };
 
         let planos = frustum(&camera_instance.camera);
-        let perspectiva = matches!(camera_instance.camera, Camera::Perspective { .. });
 
         let contexto = Contexto {
             camera: &camera_instance,
             lights: &light_instances,
             params,
-            perspectiva,
         };
 
         for (id, instancia) in instances.iter().enumerate() {
@@ -52,15 +53,13 @@ impl Renderer for Rasterizer {
                 };
 
                 if let Some(on_triangle) = params.rasterization.on_triangle {
-                    if let Geometry::Mesh(_) = instancia.geometry {
-                        on_triangle(id, indice);
-                    }
+                    on_triangle(id, indice);
                 }
 
                 // Local -> mundo -> câmera. Aqui o rasterizador transforma a
                 // *geometria*; o ray tracer resolve o mesmo problema no sentido
                 // contrário, transformando o raio.
-                let triangulo = face.map(|v| Vertex {
+                let tri_camera = face.map(|v| Vertex {
                     position: camera_instance.to_camera_space(
                         instancia
                             .chain
@@ -75,63 +74,47 @@ impl Renderer for Rasterizer {
                     uv: v.uv,
                 });
 
-                let poligono = recorta(triangulo, &planos, &mut stats);
+                let triangles = clip(tri_camera, &planos, &mut resultado.rasterization);
 
                 // O recorte devolve um polígono convexo de N vértices; desenhar com triangle fan.
-                for i in 1..poligono.len().saturating_sub(1) {
-                    let recortado = [poligono[0], poligono[i], poligono[i + 1]];
-                    let tela = recortado.map(|v| {
-                        Some(Vertex {
-                            position: camera_instance
-                                .camera
-                                .to_screen_space(v.position, largura, altura)?,
-                            ..v
-                        })
+                for tri_clip in triangles {
+                    let [a, b, c] = tri_clip.map(|v| Vertex {
+                        position: camera_instance
+                            .camera
+                            .to_screen_space(v.position, largura, altura)
+                            .expect("O clipping já garante z >= near"),
+                        ..v
                     });
 
-                    let [Some(a), Some(b), Some(c)] = tela else {
-                        // O clipping já garante z >= near; não deve entrar aqui.
-                        break;
-                    };
-
-                    let area = borda(a.position.xy(), b.position.xy(), c.position.xy());
+                    let area = edge(a.position.xy(), b.position.xy(), c.position.xy());
                     if area == 0.0 {
-                        // Triângulo sem área (uma linha)
+                        // Triângulo degenerado
                         continue;
                     }
 
-                    // Teoria: rasterizer.md#backface-culling
-                    // Backface culling:
-                    // Descartamos aqui fora porque um mesmo triângulo pode virar vários durante o clipping
-                    // daí descartar dentro do preenche poderia trazer uma contagem de triângulos dercartados
-                    // estranha para o usuário.
-
                     if params.rasterization.backface_cull && area > 0.0 {
-                        stats.backfaces_culled += 1;
+                        resultado.rasterization.backfaces_culled += 1;
                         break;
                     }
 
                     // O shading acontece no espaço de mundo.
-                    let mundo = recortado.map(|v| camera_instance.from_camera_space(v.position));
+                    let tri_world = tri_clip.map(|v| Vertex {
+                        position: camera_instance.from_camera_space(v.position),
+                        ..v
+                    });
 
-                    let shading = contexto.shade_vertex(
-                        instancia.material,
-                        mundo,
-                        recortado.map(|v| v.normal),
-                        recortado.map(|v| v.uv),
-                    );
+                    let shading = contexto.shade_vertex(instancia.material, tri_world);
 
-                    preenche(
+                    fill(
                         &mut resultado,
                         &Triangulo {
                             tela: [a, b, c],
-                            mundo,
+                            mundo: tri_world.map(|v| v.position),
                             area,
                             shading,
                             material: instancia.material,
                         },
                         &contexto,
-                        &mut stats,
                     );
                 }
             }
@@ -139,7 +122,6 @@ impl Renderer for Rasterizer {
 
         resultado.apply_output(&params.output);
 
-        resultado.rasterization = stats;
         resultado
     }
 }
@@ -150,7 +132,6 @@ struct Contexto<'a> {
     camera: &'a CameraInstance,
     lights: &'a [LightInstance],
     params: &'a Parameters,
-    perspectiva: bool,
 }
 
 impl Contexto<'_> {
@@ -187,31 +168,26 @@ impl Contexto<'_> {
         }
     }
 
-    fn shade_vertex(
-        &self,
-        material: &Material,
-        mundo: [Vec3; 3],
-        normais: [Vec3; 3],
-        uvs: [Vec2; 3],
-    ) -> Shading {
+    fn shade_vertex(&self, material: &Material, vertices: [Vertex; 3]) -> Shading {
         match self.params.shading.frequency {
             ShadingFrequency::Flat => {
-                let normal = (mundo[1] - mundo[0])
-                    .cross(mundo[2] - mundo[0])
+                let positions = vertices.map(|v| v.position);
+                let uvs = vertices.map(|v| v.uv);
+
+                let normal = (positions[1] - positions[0])
+                    .cross(positions[2] - positions[0])
                     .normalized();
-                let centro = (mundo[0] + mundo[1] + mundo[2]) / 3.0;
+                let centro = (positions[0] + positions[1] + positions[2]) / 3.0;
                 let uv = (uvs[0] + uvs[1] + uvs[2]) / 3.0;
 
                 Shading::Face({
-                    let superficie = Surface {
-                        point: centro,
-                        normal,
-                        uv,
-                    };
-                    let amostra = material.sample(uv, None, self.params.shading.filtering);
                     shading::shade(
-                        &superficie,
-                        &amostra,
+                        &Surface {
+                            point: centro,
+                            normal,
+                            uv,
+                        },
+                        &material.sample(uv, None, self.params.shading.filtering),
                         self.lights,
                         self.camera.view(centro),
                         self.params.shading.reflectance,
@@ -219,22 +195,16 @@ impl Contexto<'_> {
                     )
                 })
             }
-            ShadingFrequency::Gouraud => Shading::Vertices([0, 1, 2].map(|k| {
-                let ponto = mundo[k];
-                let normal = normais[k];
-                let uv = uvs[k];
-
-                let superficie = Surface {
-                    point: ponto,
-                    normal,
-                    uv,
-                };
-                let amostra = material.sample(uv, None, self.params.shading.filtering);
+            ShadingFrequency::Gouraud => Shading::Vertices(vertices.map(|v| {
                 shading::shade(
-                    &superficie,
-                    &amostra,
+                    &Surface {
+                        point: v.position,
+                        normal: v.normal,
+                        uv: v.uv,
+                    },
+                    &material.sample(v.uv, None, self.params.shading.filtering),
                     self.lights,
-                    self.camera.view(ponto),
+                    self.camera.view(v.position),
                     self.params.shading.reflectance,
                     &shading::always_visible,
                 )
@@ -302,11 +272,11 @@ fn frustum(camera: &Camera) -> [Plane; 6] {
 ///
 /// Pra um ponto estar visível pra câmera, ele precisa estar dentro dos semiespaços definidos por todos
 // os 6 planos.
-fn recorta(
+fn clip(
     triangulo: [Vertex; 3],
     planos: &[Plane; 6],
     stats: &mut RasterizationResult,
-) -> Vec<Vertex> {
+) -> Vec<[Vertex; 3]> {
     let mut poligono = triangulo.to_vec();
     let mut recortou = false;
 
@@ -315,8 +285,10 @@ fn recorta(
         if poligono.iter().all(|v| plano.distance(v.position) >= 0.0) {
             continue;
         }
+
         poligono = recorta_no_plano(&poligono, *plano);
         recortou = true;
+
         if poligono.len() < 3 {
             // Todos os pontos do triângulo estão fora do plano: é descartado
             break;
@@ -326,7 +298,14 @@ fn recorta(
     if recortou {
         stats.polygons_clipped += 1;
     }
-    poligono
+
+    let mut triangulos = Vec::with_capacity(poligono.len() - 2);
+
+    for i in 1..poligono.len().saturating_sub(1) {
+        triangulos.push([poligono[0], poligono[i], poligono[i + 1]]);
+    }
+
+    triangulos
 }
 
 // Teoria: rasterizer.md#recorte-no-plano
@@ -364,26 +343,27 @@ fn recorta_no_plano(poligono: &[Vertex], plano: Plane) -> Vec<Vertex> {
 
 // Teoria: rasterizer.md#edge-functions
 /// A edge function de Pineda (1988).
-fn borda(a: Vec2, b: Vec2, p: Vec2) -> f32 {
+fn edge(a: Vec2, b: Vec2, p: Vec2) -> f32 {
     let u = b - a;
     let v = p - a;
 
     u.cross(v)
 }
 
-fn preenche(
-    destino: &mut RenderResult,
-    triangulo: &Triangulo,
-    contexto: &Contexto,
-    stats: &mut RasterizationResult,
-) {
+fn fill(destino: &mut RenderResult, triangulo: &Triangulo, contexto: &Contexto) {
     let RenderResult {
         color: cor,
+        rasterization: stats,
+        ..
+    } = destino;
+
+    let RasterizationResult {
         depth: profundidade,
         normal: mapa_normal,
         uv: mapa_uv,
+        primitive_tests,
         ..
-    } = destino;
+    } = stats;
 
     let params = contexto.params;
 
@@ -408,7 +388,7 @@ fn preenche(
     let baricentricas_de = |arestas: [f32; 3]| {
         let pesos_de_tela = arestas.map(|w| w / area);
 
-        if contexto.perspectiva && params.rasterization.perspective_correct {
+        if contexto.camera.is_perspective() && params.rasterization.perspective_correct {
             Baricentrics::perspective_corrected(pesos_de_tela, profundidades)
         } else {
             Baricentrics::new(pesos_de_tela)
@@ -416,16 +396,16 @@ fn preenche(
     };
 
     let uv_em = |p: Vec2| {
-        baricentricas_de([borda(b, c, p), borda(c, a, p), borda(a, b, p)]).interpolate_vec2(uvs)
+        baricentricas_de([edge(b, c, p), edge(c, a, p), edge(a, b, p)]).interpolate_vec2(uvs)
     };
 
     for y in min_y..=max_y {
         for x in min_x..=max_x {
-            stats.primitive_tests += 1;
+            *primitive_tests += 1;
 
             // Usar o centro do pixel. Pixel (1,1) tem centro 1.5,1.5 por exemplo
             let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
-            let [w0, w1, w2] = [borda(b, c, p), borda(c, a, p), borda(a, b, p)];
+            let [w0, w1, w2] = [edge(b, c, p), edge(c, a, p), edge(a, b, p)];
 
             // Sem backface culling, aceita as duas orientações. Um ponto está dentro do triângulo se ele está *do mesmo
             // lado das 3 arestas*
