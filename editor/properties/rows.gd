@@ -49,7 +49,9 @@ func _notification(what: int) -> void:
 		var value_size := value_cell.get_combined_minimum_size()
 		var height := maxf(name_size.y, value_size.y)
 
-		var value_width := minf(value_size.x, size.x)
+		var slack := maxf(size.x - gap - _text_width(name_cell), value_size.x)
+		var wish = value_cell.get_meta(&"wish", value_cell.get_combined_minimum_size().x)
+		var value_width := minf(clampf(wish, value_size.x, slack), size.x)
 
 		fit_child_in_rect(name_cell,
 			Rect2(0, y, maxf(size.x - gap - value_width, 0.0), height))

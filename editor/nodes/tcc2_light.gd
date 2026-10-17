@@ -10,7 +10,10 @@ class Point:
 			color = value
 			light._rebuild_preview()
 
-	var intensity: float = 1.0
+	var intensity: float = 1.0:
+		set(value):
+			intensity = value
+			light._apply_intensity()
 
 class Directional:
 	var light: Tcc2Light
@@ -20,7 +23,10 @@ class Directional:
 			color = value
 			light._rebuild_preview()
 
-	var intensity: float = 1.0
+	var intensity: float = 1.0:
+		set(value):
+			intensity = value
+			light._apply_intensity()
 
 class Spot:
 	var light: Tcc2Light
@@ -36,7 +42,10 @@ class Spot:
 			color = value
 			light._rebuild_preview()
 
-	var intensity: float = 1.0
+	var intensity: float = 1.0:
+		set(value):
+			intensity = value
+			light._apply_intensity()
 
 class Environment_:
 	var light: Tcc2Light
@@ -46,7 +55,10 @@ class Environment_:
 			color = value
 			light._rebuild_preview()
 
-	var intensity: float = 1.0
+	var intensity: float = 1.0:
+		set(value):
+			intensity = value
+			light._apply_intensity()
 
 var kind: Kind = Kind.POINT:
 	set(value):
@@ -74,6 +86,7 @@ func _ready() -> void:
 	_icon = _add_icon(preload("res://icons/Light.svg"))
 
 	_gizmo = MeshInstance3D.new()
+	_gizmo.layers = ICONS_LAYER
 	_gizmo.material_override = _selected_gizmo_material()
 	_gizmo.visible = false
 	add_child(_gizmo, false, Node.INTERNAL_MODE_FRONT)
@@ -117,9 +130,13 @@ func _rebuild_preview() -> void:
 		return
 
 	_preview.light_color = mod.color
-	_preview.light_energy = 1.0
+	_preview.light_energy = mod.intensity
 
 	add_child(_preview, false, Node.INTERNAL_MODE_FRONT)
+
+func _apply_intensity() -> void:
+	if _preview != null:
+		_preview.light_energy = model().intensity
 
 func _light_preview() -> Light3D:
 	match kind:

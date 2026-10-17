@@ -62,7 +62,7 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Sidebar" type="VSplitContainer" parent="Layout" unique_id=1940620640]
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 split_offsets = PackedInt32Array(340)
 split_offset = 340
@@ -158,7 +158,7 @@ script = ExtResource("2_h2yge")
 [node name="SceneView" type="SubViewport" parent="Layout/Viewport/ViewportClip/SubViewportContainer" unique_id=958468422]
 handle_input_locally = false
 msaa_3d = 2
-size = Vector2i(1298, 898)
+size = Vector2i(1238, 898)
 render_target_update_mode = 4
 
 [node name="Camera3D" type="Camera3D" parent="Layout/Viewport/ViewportClip/SubViewportContainer/SceneView" unique_id=1240250965]
@@ -241,3 +241,14 @@ mouse_default_cursor_shape = 2
 theme_type_variation = &"OverlayButton"
 toggle_mode = true
 icon = ExtResource("10_pixel")
+
+[node name="Help" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=1612316582]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+tooltip_text = "	LMB: select
+RMB hold + WASD/QE: fly
+Space + LMB drag: pan
+Drag and drop .glb file: import"
+theme_type_variation = &"OverlayButton"
+disabled = true
+text = "?"

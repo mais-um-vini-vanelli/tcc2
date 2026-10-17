@@ -233,7 +233,7 @@ static func _menus(theme: Theme) -> void:
 	theme.set_constant("icon_max_width", "PopupMenu", MARKER_WIDTH)
 	theme.set_constant("h_separation", "PopupMenu", GAP)
 	theme.set_constant("item_start_padding", "PopupMenu", GAP)
-	theme.set_constant("item_end_padding", "PopupMenu", GAP)
+	theme.set_constant("item_end_padding", "PopupMenu", GAP * 2)
 
 	var tip := _box(BG, DIM)
 	_margins(tip, PAD, GAP)
@@ -267,6 +267,15 @@ static func _buttons(theme: Theme) -> void:
 	for name in ["icon_hover_color", "icon_pressed_color",
 			"icon_hover_pressed_color", "icon_focus_color"]:
 		theme.set_color(name, "OverlayButton", INK)
+
+	theme.set_color("font_color", "OverlayButton", FG)
+	theme.set_color("font_disabled_color", "OverlayButton", MID)
+
+	for name in ["font_hover_color", "font_pressed_color",
+			"font_hover_pressed_color", "font_focus_color"]:
+		theme.set_color(name, "OverlayButton", INK)
+
+	theme.set_font_size("font_size", "OverlayButton", 24)
 
 	theme.set_constant("icon_max_width", "OverlayButton", 32)
 

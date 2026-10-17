@@ -19,7 +19,7 @@ class Perspective:
 class Orthographic:
 	var camera: Tcc2Camera
 
-	var height: float = 2.0:
+	var height: float = 1.0:
 		set(value):
 			height = value
 			camera._rebuild_preview()
@@ -48,6 +48,7 @@ func _ready() -> void:
 	_icon = _add_icon(preload("res://icons/Camera.svg"))
 
 	_gizmo = MeshInstance3D.new()
+	_gizmo.layers = ICONS_LAYER
 	add_child(_gizmo, false, Node.INTERNAL_MODE_FRONT)
 
 	_rebuild_preview()

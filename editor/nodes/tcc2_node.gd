@@ -12,6 +12,9 @@ func _ready() -> void:
 func set_selected(_value: bool) -> void:
 	pass
 
+func sync_preview(_scene: Tcc2Scene) -> void:
+	pass
+
 func _add_icon(texture: Texture2D) -> Sprite3D:
 	var icon := Sprite3D.new()
 	icon.texture = texture

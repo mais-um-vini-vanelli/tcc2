@@ -208,6 +208,7 @@ func _handle(axis: int, mesh: Mesh, distance: float) -> void:
 func _add_mesh(mesh: Mesh) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
+	instance.layers = Tcc2Node.ICONS_LAYER
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
 	return instance

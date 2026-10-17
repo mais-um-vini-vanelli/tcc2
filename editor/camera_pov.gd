@@ -31,14 +31,15 @@ func set_active(enabled: bool) -> void:
 
 	if camera == null:
 		_restore()
+		_pop()
 		editor_camera.current = true
 		return
 
 	_save()
 
 	_camera = Camera3D.new()
-	# Icons, the grid and the selection silhouettes sit on their own layers,
-	# which the preview skips.
+	# Icons, gizmos, the grid and the selection silhouettes sit on their own
+	# layers, which the preview skips.
 	_camera.cull_mask = (ALL_LAYERS
 		& ~Tcc2Node.ICONS_LAYER & ~Tcc2Node.SELECTION_LAYER)
 	_camera.environment = _build_environment()
@@ -74,6 +75,12 @@ func _sync() -> void:
 		return
 
 	_environment.background_color = _environment_color()
+	_environment.tonemap_exposure = pow(2.0, scene.exposure)
+	_environment.tonemap_mode = (Environment.TONE_MAPPER_REINHARDT
+		if scene.tonemap == Tcc2Scene.Tonemap.REINHARD
+		else Environment.TONE_MAPPER_LINEAR)
+
+	_push(scene)
 
 	_fit(maxi(scene.width, 1), maxi(scene.height, 1))
 
@@ -91,6 +98,14 @@ func _fit(width: int, height: int) -> void:
 	container.position = ((pane - output * factor) * 0.5).floor()
 	container.texture_filter = (CanvasItem.TEXTURE_FILTER_NEAREST if factor >= 1.0
 		else CanvasItem.TEXTURE_FILTER_LINEAR)
+
+func _push(scene: Tcc2Scene) -> void:
+	for node in scene_view.find_children("*", "Tcc2Node", true, false):
+		node.sync_preview(scene)
+
+func _pop() -> void:
+	for node in scene_view.find_children("*", "Tcc2Node", true, false):
+		node.sync_preview(null)
 
 func _environment_color() -> Color:
 	var r := 0.0
@@ -115,6 +130,7 @@ func _build_environment() -> Environment:
 
 	var copy: Environment = base.duplicate()
 	copy.background_mode = Environment.BG_COLOR
+	copy.tonemap_white = 16.0
 
 	return copy
 

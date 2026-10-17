@@ -46,7 +46,7 @@ func _ready() -> void:
 
 	var camera := Tcc2Camera.new()
 	camera.kind = Tcc2Camera.Kind.PERSPECTIVE
-	camera.name = "PerspectiveCamera"
+	camera.name = "Perspective"
 	camera.position = Vector3(0, 1, 4)
 	root.add_child(camera)
 	camera.rotation_degrees = Vector3(-14, 0, 0)
@@ -54,7 +54,7 @@ func _ready() -> void:
 
 	var light := Tcc2Light.new()
 	light.kind = Tcc2Light.Kind.DIRECTIONAL
-	light.name = "DirectionalLight"
+	light.name = "Directional"
 	light.position = Vector3(-2, 3, 2)
 	root.add_child(light)
 	light.rotation_degrees = Vector3(-45, -35, 0)
@@ -221,7 +221,7 @@ func _on_hierarchy_input(event: InputEvent) -> void:
 
 func _on_sub_viewport_container_tcc2_node_selected(node: Tcc2Node) -> void:
 	if node == null:
-		node = root
+		return
 
 	var item: TreeItem = _items[node]
 	item.select(0)
@@ -283,6 +283,7 @@ func _refresh_modes() -> void:
 	camera_pov.disabled = blind
 	pick_triangle.disabled = blind
 	pick_pixel.disabled = blind
+	add_button.disabled = disable_tree
 
 	for node in _items:
 		_items[node].set_selectable(0, not disable_tree)
@@ -387,22 +388,23 @@ enum {
 func _on_add_pressed() -> void:
 	popup_menu.clear()
 
+	_heading("Geometry")
 	popup_menu.add_item("Sphere", ADD_SPHERE)
 	popup_menu.add_item("Cube", ADD_CUBE)
 	popup_menu.add_item("Triangle", ADD_TRIANGLE)
 	popup_menu.add_item("Mesh", ADD_MESH)
 
-	popup_menu.add_separator()
-	popup_menu.add_item("Point light", ADD_POINT_LIGHT)
-	popup_menu.add_item("Directional light", ADD_DIRECTIONAL_LIGHT)
-	popup_menu.add_item("Spot light", ADD_SPOT_LIGHT)
-	popup_menu.add_item("Environment light", ADD_ENVIRONMENT_LIGHT)
+	_heading("Light")
+	popup_menu.add_item("Point", ADD_POINT_LIGHT)
+	popup_menu.add_item("Directional", ADD_DIRECTIONAL_LIGHT)
+	popup_menu.add_item("Spot", ADD_SPOT_LIGHT)
+	popup_menu.add_item("Environment", ADD_ENVIRONMENT_LIGHT)
 
-	popup_menu.add_separator()
-	popup_menu.add_item("Perspective camera", ADD_PERSPECTIVE_CAMERA)
-	popup_menu.add_item("Orthographic camera", ADD_ORTHOGRAPHIC_CAMERA)
+	_heading("Camera")
+	popup_menu.add_item("Perspective", ADD_PERSPECTIVE_CAMERA)
+	popup_menu.add_item("Orthographic", ADD_ORTHOGRAPHIC_CAMERA)
 
-	popup_menu.add_separator()
+	_heading("Misc")
 	popup_menu.add_item("Group", ADD_GROUP)
 
 	popup_menu.reset_size()
@@ -412,8 +414,13 @@ func _on_add_pressed() -> void:
 	popup_menu.popup_on_parent(Rect2i(Vector2i(corner)
 		- Vector2i(int(popup_menu.size.x), 0), Vector2i(1, 1)))
 
+func _heading(title: String) -> void:
+	popup_menu.add_item(title, -2)
+	popup_menu.set_item_disabled(popup_menu.item_count - 1, true)
+
 func _on_popup_menu_id_pressed(id: int) -> void:
-	var target = hierarchy.get_selected().get_metadata(0)
+	var chosen := hierarchy.get_selected()
+	var target = chosen.get_metadata(0) if chosen != null else root
 
 	match id:
 		ADD_SPHERE:
@@ -439,42 +446,45 @@ func _on_popup_menu_id_pressed(id: int) -> void:
 		ADD_POINT_LIGHT:
 			var light := Tcc2Light.new()
 			light.kind = Tcc2Light.Kind.POINT
-			_add(target, light, "PointLight")
+			_add(target, light, "Point")
 
 		ADD_DIRECTIONAL_LIGHT:
 			var light := Tcc2Light.new()
 			light.kind = Tcc2Light.Kind.DIRECTIONAL
-			_add(target, light, "DirectionalLight")
+			_add(target, light, "Directional")
 
 		ADD_SPOT_LIGHT:
 			var light := Tcc2Light.new()
 			light.kind = Tcc2Light.Kind.SPOT
-			_add(target, light, "SpotLight")
+			_add(target, light, "Spot")
 
 		ADD_ENVIRONMENT_LIGHT:
 			var light := Tcc2Light.new()
 			light.kind = Tcc2Light.Kind.ENVIRONMENT
-			_add(target, light, "EnvironmentLight")
+			_add(target, light, "Environment")
 
 		ADD_PERSPECTIVE_CAMERA:
 			var cam := Tcc2Camera.new()
 			cam.kind = Tcc2Camera.Kind.PERSPECTIVE
-			_add(target, cam, "PerspectiveCamera")
+			_add(target, cam, "Perspective")
 
 		ADD_ORTHOGRAPHIC_CAMERA:
 			var cam := Tcc2Camera.new()
 			cam.kind = Tcc2Camera.Kind.ORTHOGRAPHIC
-			_add(target, cam, "OrthographicCamera")
+			_add(target, cam, "Orthographic")
 
 		ADD_GROUP:
 			_add(target, Tcc2Node.new(), "Group")
 
-	rebuild_hierarchy()
-
 func _add(target: Tcc2Node, node: Tcc2Node, node_name: String) -> void:
 	node.name = node_name
-	target.add_child(node)
+	target.add_child(node, true)
 	_own(node)
+
+	rebuild_hierarchy()
+
+	_items[node].select(0)
+	_select(node)
 
 func _own(node: Node) -> void:
 	node.owner = root

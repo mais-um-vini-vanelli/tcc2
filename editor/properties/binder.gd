@@ -1,5 +1,7 @@
 class_name Tcc2Binder extends RefCounted
 
+const ELLIPSIS := "…"
+
 var _sync: Array[Callable] = []
 var _bound: Array = []
 
@@ -16,7 +18,6 @@ func bind(control: Node, object: Object, property: StringName) -> void:
 		var field := control as SpinBox
 		
 		field.select_all_on_focus = true
-		field.alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_elastic(field)
 
 		field.value = object.get(property)
@@ -56,9 +57,7 @@ func bind(control: Node, object: Object, property: StringName) -> void:
 		var button := control as Button
 		button.theme_type_variation = &"FieldButton"
 		button.alignment = HORIZONTAL_ALIGNMENT_RIGHT
-
-		var file_text = func(path: String) -> String:
-			return path.get_file() if not path.is_empty() else "(none)"
+		button.clip_text = true
 
 		var dialog: FileDialog = null
 
@@ -70,7 +69,24 @@ func bind(control: Node, object: Object, property: StringName) -> void:
 			push_error("%s cannot carry %s" % [control.name, property])
 			return
 
-		button.text = file_text.call(object.get(property))
+		var hold := func(path: String) -> void:
+			var file := path.get_file() if not path.is_empty() else "(none)"
+
+			button.tooltip_text = path
+			button.set_meta(&"file", file)
+			button.set_meta(&"wish", button.get_theme_stylebox(&"normal")
+				.get_minimum_size().x + _advance(button, file))
+
+			var rows := button.get_parent()
+
+			if rows is Container:
+				rows.queue_sort()
+
+			_fit(button)
+
+		hold.call(object.get(property))
+
+		button.resized.connect(func(): _fit(button))
 
 		button.pressed.connect(func():
 			# Reopening where it left off, which the old dialog could not do: it was
@@ -84,9 +100,9 @@ func bind(control: Node, object: Object, property: StringName) -> void:
 
 		dialog.file_selected.connect(func(path: String):
 			object.set(property, path)
-			button.text = file_text.call(path))
+			hold.call(path))
 
-		_sync.append(func(): button.text = file_text.call(object.get(property)))
+		_sync.append(func(): hold.call(object.get(property)))
 	else:
 		push_error("%s cannot carry %s" % [control.name, property])
 
@@ -103,7 +119,6 @@ func bind_axis(control: Node, object: Object, property: StringName, axis: int) -
 	var field := control as SpinBox
 	
 	field.select_all_on_focus = true
-	field.alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_elastic(field)
 
 	field.value = object.get(property)[axis]
@@ -124,10 +139,42 @@ func _elastic(field: SpinBox) -> void:
 	edit.add_theme_color_override(&"caret_color", Color.TRANSPARENT)
 	edit.add_theme_constant_override(&"minimum_character_width", 0)
 
+	edit.alignment = HORIZONTAL_ALIGNMENT_LEFT
+
 	edit.draw.connect(func() -> void:
-		field.custom_minimum_size.x = ceilf(edit.get_theme_stylebox(&"normal")
-			.get_minimum_size().x + _advance(edit, edit.text))
+		_want(field, edit)
+		_rewind(edit)
 		_caret(edit))
+
+	edit.focus_exited.connect(func():
+		if edit.text.strip_edges().is_empty():
+			field.set_deferred(&"value", 0.0))
+
+func _want(field: SpinBox, edit: LineEdit) -> void:
+	var wish := ceilf(edit.get_theme_stylebox(&"normal").get_minimum_size().x
+		+ _advance(edit, edit.text))
+
+	if field.get_meta(&"wish", -1.0) == wish:
+		return
+
+	field.set_meta(&"wish", wish)
+
+	var rows := field.get_parent()
+
+	if rows is Container:
+		rows.queue_sort()
+
+func _rewind(edit: LineEdit) -> void:
+	if edit.get_scroll_offset() == 0.0:
+		return
+
+	var whole := (edit.has_selection() and edit.get_selection_from_column() == 0
+		and edit.get_selection_to_column() == edit.text.length())
+
+	if edit.has_focus() and edit.is_editing() and not whole:
+		return
+
+	edit.caret_column = 0
 
 ## The block caret, drawn the way a terminal drew one: the cell under the
 ## caret fills, and the character standing in it is struck again in the
@@ -141,8 +188,7 @@ func _caret(edit: LineEdit) -> void:
 	var box := edit.get_theme_stylebox(&"normal")
 	var under := edit.text.substr(edit.caret_column, 1)
 
-	# Get the caret position.
-	var at := (edit.size.x - box.content_margin_right - _advance(edit, edit.text)
+	var at := (box.content_margin_left + edit.get_scroll_offset()
 		+ _advance(edit, edit.text.left(edit.caret_column)))
 
 	var height := font.get_height(size)
@@ -156,9 +202,25 @@ func _caret(edit: LineEdit) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Tcc2Theme.INK)
 
 ## The width a string takes in a field's own face.
-func _advance(edit: LineEdit, text: String) -> float:
-	return edit.get_theme_font(&"font").get_string_size(text,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, edit.get_theme_font_size(&"font_size")).x
+func _advance(control: Control, text: String) -> float:
+	return control.get_theme_font(&"font").get_string_size(text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, control.get_theme_font_size(&"font_size")).x
+
+func _fit(button: Button) -> void:
+	var file: String = button.get_meta(&"file", "")
+	var room := button.size.x - button.get_theme_stylebox(&"normal").get_minimum_size().x
+	var text := file
+
+	if room > 0.0 and _advance(button, file) > room:
+		var kept := file
+
+		while not kept.is_empty() and _advance(button, ELLIPSIS + kept) > room:
+			kept = kept.substr(1)
+
+		text = ELLIPSIS + kept
+
+	if button.text != text:
+		button.text = text
 
 func _holds(object: Object, property: StringName) -> bool:
 	if String(property) in object:

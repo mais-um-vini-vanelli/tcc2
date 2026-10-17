@@ -3,6 +3,7 @@ extends SubViewportContainer
 const LOOK_SENSITIVITY := 0.003 # radians per pixel
 const MOVE_SPEED := 5.0 # units per second
 const PAN_SPEED := 0.01 # units per pixel
+const WRAP_INSET := 2.0 # pixels
 
 const HANDLE_HALF := 0.15
 
@@ -26,8 +27,10 @@ var _pixels: PixelPicker
 var overlay: Control
 
 var _flying := false
-var _panning := false
+var _pan_mode := false
+var _pan_drag := false
 var _using_pan_cursor := false
+var _pan_mouse := Vector2.ZERO
 var _yaw := 0.0
 var _pitch := 0.0
 
@@ -70,6 +73,23 @@ func _input(event: InputEvent) -> void:
 		_on_input_event_mouse_button(event)
 	elif event is InputEventMouseMotion:
 		_on_input_event_mouse_motion(event)
+	elif event is InputEventKey:
+		_on_input_event_key(event)
+
+func _on_input_event_key(event: InputEventKey) -> void:
+	if event.keycode != KEY_SPACE or not event.pressed or event.echo:
+		return
+
+	if _pan_mode:
+		_pan_mode = false
+		_pan_drag = false
+	elif (_over_viewport() and not _flying and _dragging == null
+		and not _in_pov() and not _picker.is_active()):
+		_pan_mode = true
+	else:
+		return
+
+	get_viewport().set_input_as_handled()
 
 func _on_input_event_mouse_button(event: InputEventMouseButton) -> void:
 	# Otherwise W/A/S/D would also type into a focused SpinBox.
@@ -86,30 +106,31 @@ func _on_input_event_mouse_button(event: InputEventMouseButton) -> void:
 			_flying = false
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and _over_viewport():
+		if event.pressed and _pan_mode and _over_viewport():
+			_pan_drag = true
+			_pan_mouse = get_viewport().get_mouse_position()
+			get_viewport().set_input_as_handled()
+		elif event.pressed and _over_viewport():
 			var mouse_position := get_local_mouse_position()
 
 			if _picker.click(mouse_position):
 				get_viewport().set_input_as_handled()
 				return
 
-			if Input.is_key_pressed(KEY_SPACE):
-				_panning = true
-			else:
-				for giz in _gizmos:
-					var axis := giz.handle_at(mouse_position)
+			for giz in _gizmos:
+				var axis := giz.handle_at(mouse_position)
 
-					if axis >= 0:
-						_dragging = giz
-						giz.begin(axis, camera_3d.project_ray_origin(mouse_position), camera_3d.project_ray_normal(mouse_position))
-						break
+				if axis >= 0:
+					_dragging = giz
+					giz.begin(axis, camera_3d.project_ray_origin(mouse_position), camera_3d.project_ray_normal(mouse_position))
+					break
 
-				if _dragging == null:
-					tcc2_node_selected.emit(select_tcc2_node(mouse_position))
+			if _dragging == null:
+				tcc2_node_selected.emit(select_tcc2_node(mouse_position))
 
 			get_viewport().set_input_as_handled()
 		elif not event.pressed:
-			_panning = false
+			_pan_drag = false
 
 			if _dragging != null:
 				_dragging.end()
@@ -120,7 +141,8 @@ func _cancel_mouse() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 	_flying = false
-	_panning = false
+	_pan_mode = false
+	_pan_drag = false
 
 	if _picker != null:
 		_picker.leave()
@@ -236,10 +258,11 @@ func _on_input_event_mouse_motion(event: InputEventMouseMotion) -> void:
 		_yaw -= event.relative.x * LOOK_SENSITIVITY
 		_pitch = clamp(_pitch - event.relative.y * LOOK_SENSITIVITY, -1.55, 1.55)
 		camera_3d.rotation = Vector3(_pitch, _yaw, 0.0)
-	elif _panning:
+	elif _pan_drag:
 		# Drag the world: the camera moves opposite to the mouse.
-		camera_3d.global_position -= camera_3d.global_basis.x * event.relative.x * PAN_SPEED
-		camera_3d.global_position += camera_3d.global_basis.y * event.relative.y * PAN_SPEED
+		var motion := _pan_motion()
+		camera_3d.global_position -= camera_3d.global_basis.x * motion.x * PAN_SPEED
+		camera_3d.global_position += camera_3d.global_basis.y * motion.y * PAN_SPEED
 	elif _picker.is_active():
 		if _over_viewport():
 			_picker.hover(get_local_mouse_position())
@@ -248,9 +271,36 @@ func _on_input_event_mouse_motion(event: InputEventMouseMotion) -> void:
 	else:
 		_hover(get_local_mouse_position())
 		
+func _pan_motion() -> Vector2:
+	var mouse := get_viewport().get_mouse_position()
+	var motion := mouse - _pan_mouse
+	var wrapped := _wrapped_into_viewport(mouse)
+
+	_pan_mouse = wrapped
+
+	if wrapped != mouse:
+		Input.warp_mouse(wrapped)
+
+	return motion
+
+func _wrapped_into_viewport(mouse: Vector2) -> Vector2:
+	var rect := Rect2(get_global_transform_with_canvas().origin, size)
+	var wrapped := mouse
+
+	if mouse.x <= rect.position.x + WRAP_INSET:
+		wrapped.x = rect.end.x - WRAP_INSET * 2.0
+	elif mouse.x >= rect.end.x - WRAP_INSET:
+		wrapped.x = rect.position.x + WRAP_INSET * 2.0
+
+	if mouse.y <= rect.position.y + WRAP_INSET:
+		wrapped.y = rect.end.y - WRAP_INSET * 2.0
+	elif mouse.y >= rect.end.y - WRAP_INSET:
+		wrapped.y = rect.position.y + WRAP_INSET * 2.0
+
+	return wrapped
+
 func _update_cursor() -> void:
-	var pan := _panning or (_over_viewport() and Input.is_key_pressed(KEY_SPACE)
-		and not _in_pov() and not _picker.is_active())
+	var pan := _pan_drag or (_pan_mode and _over_viewport())
 
 	if pan == _using_pan_cursor:
 		return
@@ -268,7 +318,7 @@ func _hover(mouse: Vector2) -> void:
 		one.highlight(axis)
 
 func _over_viewport() -> bool:
-	if _flying or _panning:
+	if _flying or _pan_drag:
 		return true
 
 	var mouse := get_global_mouse_position()

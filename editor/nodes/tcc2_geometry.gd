@@ -5,7 +5,7 @@ enum Kind {SPHERE, CUBE, MESH, TRIANGLE}
 class Sphere:
 	var geometry: Tcc2Geometry
 
-	var radius: float = 1.0:
+	var radius: float = 0.5:
 		set(value):
 			radius = value
 			geometry._rebuild_preview()
@@ -133,6 +133,21 @@ func set_selected(value: bool) -> void:
 
 func preview() -> MeshInstance3D:
 	return _preview
+
+func sync_preview(scene: Tcc2Scene) -> void:
+	_preview_material.cull_mode = (BaseMaterial3D.CULL_DISABLED
+		if scene != null and not scene.backface_cull else BaseMaterial3D.CULL_BACK)
+	_preview_material.no_depth_test = scene != null and not scene.depth_test
+
+	const FILTERING := {
+		Tcc2Scene.Filtering.NEAREST: BaseMaterial3D.TEXTURE_FILTER_NEAREST,
+		Tcc2Scene.Filtering.BILINEAR: BaseMaterial3D.TEXTURE_FILTER_LINEAR,
+		Tcc2Scene.Filtering.MIPMAP_BILINEAR: BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS,
+		Tcc2Scene.Filtering.TRILINEAR: BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS,
+	}
+
+	_preview_material.texture_filter = FILTERING[scene.filtering if scene != null
+		else Tcc2Scene.Filtering.TRILINEAR]
 
 func _rebuild_preview() -> void:
 	if _preview == null:
