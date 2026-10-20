@@ -1,62 +1,51 @@
-//! `Parameters` ↔ JSON, para o preset opcional em `TCC2_extras.parameters`.
-//!
-//! Nada aqui tem a ver com glTF: os parâmetros não descrevem a cena, descrevem
-//! como renderizá-la, e o glTF não tem onde guardar isso. Por isso vão num
-//! objeto solto.
-
 use serde_json::{Value, json};
 
 use crate::parameters::*;
 
 use super::non_null_field;
 
-pub(super) fn encode(p: &Parameters) -> Value {
+pub(super) fn encode(parameters: &Parameters) -> Value {
     json!({
         "transform": {
-            "method": match p.transform.method {
+            "method": match parameters.transform.method {
                 TransformMethod::Stepwise => "stepwise",
             },
         },
         "rasterization": {
-            "backface_cull": p.rasterization.backface_cull,
-            "perspective_correct": p.rasterization.perspective_correct,
-            "depth_test": p.rasterization.depth_test,
+            "backface_cull": parameters.rasterization.backface_cull,
+            "perspective_correct": parameters.rasterization.perspective_correct,
+            "depth_test": parameters.rasterization.depth_test,
         },
         "shading": {
-            "frequency": match p.shading.frequency {
-                ShadingFrequency::Flat => "flat",
-                ShadingFrequency::Gouraud => "gouraud",
-                ShadingFrequency::Phong => "phong",
-            },
-            "reflectance": match p.shading.reflectance {
+            "reflectance_model": match parameters.shading.reflectance_model {
                 ReflectanceModel::BlinnPhong => "blinn_phong",
             },
-            "filtering": match p.shading.filtering {
-                Filtering::Nearest => "nearest",
-                Filtering::Bilinear => "bilinear",
-                Filtering::MipmapBilinear => "mipmap_bilinear",
-                Filtering::Trilinear => "trilinear",
+            "texture_filter": match parameters.shading.texture_filter {
+                TextureFilter::Nearest => "nearest",
+                TextureFilter::Bilinear => "bilinear",
+                TextureFilter::MipmapBilinear => "mipmap_bilinear",
+                TextureFilter::Trilinear => "trilinear",
             },
         },
         "ray_tracing": {
-            "max_depth": p.ray_tracing.max_depth,
-            "shadows": p.ray_tracing.shadows,
-            "reflections": p.ray_tracing.reflections,
-            "refractions": p.ray_tracing.refractions,
+            "max_depth": parameters.ray_tracing.max_depth,
+            "shadows": parameters.ray_tracing.shadows,
+            "reflections": parameters.ray_tracing.reflections,
+            "refractions": parameters.ray_tracing.refractions,
             "acceleration": {
-                "bvh": p.ray_tracing.acceleration.bvh,
-                "split": match p.ray_tracing.acceleration.split {
+                "enabled": parameters.ray_tracing.acceleration.enabled,
+                "bvh_split": match parameters.ray_tracing.acceleration.bvh_split {
                     BvhSplit::Median => "median",
                     BvhSplit::Sah => "sah",
                 },
-                "wireframe": p.ray_tracing.acceleration.wireframe,
+                "wireframe": parameters.ray_tracing.acceleration.wireframe,
             },
         },
         "output": {
-            "width": p.output.width,
-            "height": p.output.height,
-            "exposure": p.output.exposure,
-            "tonemap": match p.output.tonemap {
+            "width": parameters.output.width,
+            "height": parameters.output.height,
+            "exposure": parameters.output.exposure,
+            "tonemap": match parameters.output.tonemap {
                 Tonemap::None => "none",
                 Tonemap::Reinhard => "reinhard",
             },
@@ -64,20 +53,18 @@ pub(super) fn encode(p: &Parameters) -> Value {
     })
 }
 
-pub(super) fn decode(v: &Value) -> Parameters {
-    static VAZIO: Value = Value::Null;
+pub(super) fn decode(json: &Value) -> Parameters {
+    let transform = non_null_field(json, "transform").unwrap_or(&Value::Null);
+    let rasterization = non_null_field(json, "rasterization").unwrap_or(&Value::Null);
+    let shading = non_null_field(json, "shading").unwrap_or(&Value::Null);
+    let ray_tracing = non_null_field(json, "ray_tracing").unwrap_or(&Value::Null);
+    let aceleracao = non_null_field(ray_tracing, "acceleration").unwrap_or(&Value::Null);
+    let output = non_null_field(json, "output").unwrap_or(&Value::Null);
 
-    let transform = non_null_field(v, "transform").unwrap_or(&VAZIO);
-    let rasterization = non_null_field(v, "rasterization").unwrap_or(&VAZIO);
-    let shading = non_null_field(v, "shading").unwrap_or(&VAZIO);
-    let ray_tracing = non_null_field(v, "ray_tracing").unwrap_or(&VAZIO);
-    let aceleracao = non_null_field(ray_tracing, "acceleration").unwrap_or(&VAZIO);
-    let output = non_null_field(v, "output").unwrap_or(&VAZIO);
-
-    let raster = RasterizationOptions::default();
-    let tracado = RayTracingOptions::default();
-    let ac = AccelerationOptions::default();
-    let saida = OutputOptions::default();
+    let rasterization_options = RasterizationOptions::default();
+    let ray_tracing_options = RayTracingOptions::default();
+    let acceleration_options = AccelerationOptions::default();
+    let output_options = OutputOptions::default();
 
     fn to_str<'a>(objeto: &'a Value, nome: &str) -> Option<&'a str> {
         non_null_field(objeto, nome).and_then(Value::as_str)
@@ -103,63 +90,65 @@ pub(super) fn decode(v: &Value) -> Parameters {
             },
         },
         rasterization: RasterizationOptions {
-            backface_cull: to_bool(rasterization, "backface_cull", raster.backface_cull),
+            backface_cull: to_bool(
+                rasterization,
+                "backface_cull",
+                rasterization_options.backface_cull,
+            ),
             perspective_correct: to_bool(
                 rasterization,
                 "perspective_correct",
-                raster.perspective_correct,
+                rasterization_options.perspective_correct,
             ),
-            depth_test: to_bool(rasterization, "depth_test", raster.depth_test),
-            on_fragment: raster.on_fragment,
-            on_triangle: raster.on_triangle,
+            depth_test: to_bool(
+                rasterization,
+                "depth_test",
+                rasterization_options.depth_test,
+            ),
+            on_fragment: rasterization_options.on_fragment,
+            on_triangle: rasterization_options.on_triangle,
         },
         shading: ShadingOptions {
-            frequency: match to_str(shading, "frequency") {
-                Some("flat") => ShadingFrequency::Flat,
-                Some("gouraud") => ShadingFrequency::Gouraud,
-                Some("phong") => ShadingFrequency::Phong,
-                _ => ShadingFrequency::default(),
-            },
-            reflectance: match to_str(shading, "reflectance") {
+            reflectance_model: match to_str(shading, "reflectance_model") {
                 Some("blinn_phong") => ReflectanceModel::BlinnPhong,
                 _ => ReflectanceModel::default(),
             },
-            filtering: match to_str(shading, "filtering") {
-                Some("nearest") => Filtering::Nearest,
-                Some("bilinear") => Filtering::Bilinear,
-                Some("mipmap_bilinear") => Filtering::MipmapBilinear,
-                Some("trilinear") => Filtering::Trilinear,
-                _ => Filtering::default(),
+            texture_filter: match to_str(shading, "texture_filter") {
+                Some("nearest") => TextureFilter::Nearest,
+                Some("bilinear") => TextureFilter::Bilinear,
+                Some("mipmap_bilinear") => TextureFilter::MipmapBilinear,
+                Some("trilinear") => TextureFilter::Trilinear,
+                _ => TextureFilter::default(),
             },
         },
         ray_tracing: RayTracingOptions {
-            max_depth: to_u32(ray_tracing, "max_depth", tracado.max_depth),
-            shadows: to_bool(ray_tracing, "shadows", tracado.shadows),
-            reflections: to_bool(ray_tracing, "reflections", tracado.reflections),
-            refractions: to_bool(ray_tracing, "refractions", tracado.refractions),
+            max_depth: to_u32(ray_tracing, "max_depth", ray_tracing_options.max_depth),
+            shadows: to_bool(ray_tracing, "shadows", ray_tracing_options.shadows),
+            reflections: to_bool(ray_tracing, "reflections", ray_tracing_options.reflections),
+            refractions: to_bool(ray_tracing, "refractions", ray_tracing_options.refractions),
             acceleration: AccelerationOptions {
-                bvh: to_bool(aceleracao, "bvh", ac.bvh),
-                split: match to_str(aceleracao, "split") {
+                enabled: to_bool(aceleracao, "enabled", acceleration_options.enabled),
+                bvh_split: match to_str(aceleracao, "bvh_split") {
                     Some("median") => BvhSplit::Median,
                     Some("sah") => BvhSplit::Sah,
-                    _ => ac.split,
+                    _ => acceleration_options.bvh_split,
                 },
                 wireframe: non_null_field(aceleracao, "wireframe")
                     .and_then(Value::as_u64)
                     .map(|n| n as u32),
             },
-            on_ray: tracado.on_ray,
+            on_ray: ray_tracing_options.on_ray,
         },
         output: OutputOptions {
-            width: to_u32(output, "width", saida.width),
-            height: to_u32(output, "height", saida.height),
+            width: to_u32(output, "width", output_options.width),
+            height: to_u32(output, "height", output_options.height),
             exposure: non_null_field(output, "exposure")
                 .and_then(|e| e.as_f64().map(|e| e as f32))
-                .unwrap_or(saida.exposure),
+                .unwrap_or(output_options.exposure),
             tonemap: match to_str(output, "tonemap") {
                 Some("none") => Tonemap::None,
                 Some("reinhard") => Tonemap::Reinhard,
-                _ => saida.tonemap,
+                _ => output_options.tonemap,
             },
         },
     }

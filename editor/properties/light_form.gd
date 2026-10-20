@@ -1,11 +1,11 @@
-class_name Tcc2LightForm extends Tcc2Form
+class_name LightForm extends Form
 
 const TITLES := ["Point", "Directional", "Spot", "Environment"]
 
 func _build() -> void:
-	var light := node as Tcc2Light
+	var light := node as SceneLight
 	var model: Object = light.model()
-	var spot := light.kind == Tcc2Light.Kind.SPOT
+	var spot := light.kind == SceneLight.Kind.SPOT
 
 	%Light.title = TITLES[light.kind]
 

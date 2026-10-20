@@ -1,33 +1,33 @@
 use gltf::image::Format;
+use gltf::texture::WrappingMode;
 use serde_json::Value;
 
 use crate::color::Rgb;
+use crate::geometry::{Geometry, Mesh};
 use crate::math::{Tangent, Vec2, Vec3};
 use crate::parameters::Parameters;
-use crate::scene::{
-    Camera, Content, Geometry, Light, Material, Mesh, Object, Scene, Value as Canal,
-};
-use crate::texture::Texture;
+use crate::scene::{Camera, Channel, Light, Material, Object, ObjectKind, Primitive, Scene};
+use crate::texture::{Texture, TextureWrap};
 use crate::transform::Transform;
 
 use super::{EXTENSION, Error, LUMENS_PER_WATT, non_null_field};
 
 pub fn decode(bytes: &[u8]) -> Result<(Scene, Option<Parameters>), Error> {
-    let (documento, buffers, imagens) = gltf::import_slice(bytes)?;
+    let (document, buffers, images) = gltf::import_slice(bytes)?;
 
-    let extras = documento
+    let extras = document
         .extension_value(EXTENSION)
         .ok_or("o arquivo não é tcc2")?;
 
-    let cena_gltf = documento
+    let gltf_scene = document
         .default_scene()
         .ok_or("o arquivo não tem cena padrão")?;
 
     let mut objects = Vec::new();
-    let mut materiais = Vec::new();
+    let mut materials = Vec::new();
 
-    for no in cena_gltf.nodes() {
-        objects.push(decode_object(&no, &buffers, &imagens, &mut materiais)?);
+    for node in gltf_scene.nodes() {
+        objects.push(decode_object(&node, &buffers, &images, &mut materials)?);
     }
 
     let scene = Scene { objects };
@@ -37,8 +37,8 @@ pub fn decode(bytes: &[u8]) -> Result<(Scene, Option<Parameters>), Error> {
     Ok((scene, parameters))
 }
 
-fn decode_camera(projecao: &gltf::Camera) -> Camera {
-    match projecao.projection() {
+fn decode_camera(camera: &gltf::Camera) -> Camera {
+    match camera.projection() {
         gltf::camera::Projection::Perspective(p) => Camera::Perspective {
             fov: p.yfov().to_degrees(),
             aspect: p.aspect_ratio().unwrap_or(0.1),
@@ -55,11 +55,11 @@ fn decode_camera(projecao: &gltf::Camera) -> Camera {
     }
 }
 
-fn decode_light(luz: &gltf::khr_lights_punctual::Light) -> Light {
-    let color = Rgb::new(luz.color()[0], luz.color()[1], luz.color()[2]);
-    let intensity = luz.intensity() / LUMENS_PER_WATT;
+fn decode_light(light: &gltf::khr_lights_punctual::Light) -> Light {
+    let color = Rgb::new(light.color()[0], light.color()[1], light.color()[2]);
+    let intensity = light.intensity() / LUMENS_PER_WATT;
 
-    match luz.kind() {
+    match light.kind() {
         gltf::khr_lights_punctual::Kind::Point => Light::Point { color, intensity },
 
         gltf::khr_lights_punctual::Kind::Directional => Light::Directional { color, intensity },
@@ -77,20 +77,20 @@ fn decode_light(luz: &gltf::khr_lights_punctual::Light) -> Light {
 }
 
 fn decode_object(
-    no: &gltf::Node,
+    node: &gltf::Node,
     buffers: &[gltf::buffer::Data],
-    imagens: &[gltf::image::Data],
-    materiais: &mut Vec<(Option<usize>, Material)>,
+    images: &[gltf::image::Data],
+    materials: &mut Vec<(Option<usize>, Material)>,
 ) -> Result<Object, Error> {
-    let extras = no.extension_value(EXTENSION);
+    let extras = node.extension_value(EXTENSION);
 
-    let content = if let Some(projecao) = no.camera() {
-        Some(Content::Camera(decode_camera(&projecao)))
-    } else if let Some(luz) = no.light() {
-        Some(Content::Light(decode_light(&luz)))
-    } else if let Some(ambiente) = extras.and_then(|e| non_null_field(e, "environment")) {
-        Some(Content::Light(Light::Environment {
-            color: non_null_field(ambiente, "color")
+    let content = if let Some(projection) = node.camera() {
+        Some(ObjectKind::Camera(decode_camera(&projection)))
+    } else if let Some(light) = node.light() {
+        Some(ObjectKind::Light(decode_light(&light)))
+    } else if let Some(environment) = extras.and_then(|e| non_null_field(e, "environment")) {
+        Some(ObjectKind::Light(Light::Environment {
+            color: non_null_field(environment, "color")
                 .and_then(|c| {
                     Some(Rgb::new(
                         c.get(0)?.as_f64()? as f32,
@@ -99,31 +99,27 @@ fn decode_object(
                     ))
                 })
                 .unwrap_or(Rgb::WHITE),
-            intensity: non_null_field(ambiente, "intensity")
+            intensity: non_null_field(environment, "intensity")
                 .and_then(|i| i.as_f64().map(|i| i as f32))
                 .unwrap_or(1.0),
         }))
-    } else if let Some(malha) = no.mesh() {
-        let primitive = malha.primitives().next().ok_or("malha sem primitive")?;
+    } else if let Some(mesh) = node.mesh() {
+        let primitive = mesh.primitives().next().ok_or("mesh sem primitive")?;
 
-        Some(Content::Geometry {
-            geometry: decode_geometry(&malha, &primitive, buffers)?,
-            material: decode_material(&primitive.material(), imagens, materiais)?,
-            casts_shadows: extras
-                .and_then(|e| non_null_field(e, "casts_shadows"))
-                .and_then(Value::as_bool)
-                .unwrap_or(true),
-        })
+        Some(ObjectKind::Primitive(Primitive {
+            geometry: decode_geometry(&mesh, &primitive, buffers)?,
+            material: decode_material(&primitive.material(), images, materials)?,
+        }))
     } else {
         None
     };
 
-    let children = no
+    let children = node
         .children()
-        .map(|filho| decode_object(&filho, buffers, imagens, materiais))
+        .map(|child| decode_object(&child, buffers, images, materials))
         .collect::<Result<Vec<_>, Error>>()?;
 
-    let (translation, rotation, scale) = no.transform().decomposed();
+    let (translation, rotation, scale) = node.transform().decomposed();
 
     let transform = Transform {
         translation: Vec3::new(translation[0], translation[1], translation[2]),
@@ -133,35 +129,35 @@ fn decode_object(
 
     Ok(Object {
         transform,
-        content,
+        kind: content,
         children,
     })
 }
 
 fn decode_geometry(
-    malha: &gltf::Mesh,
+    mesh: &gltf::Mesh,
     primitive: &gltf::Primitive,
     buffers: &[gltf::buffer::Data],
 ) -> Result<Geometry, Error> {
-    let marca = malha
+    let tag = mesh
         .extension_value(EXTENSION)
         .and_then(|extras| non_null_field(extras, "geometry"));
 
-    match marca {
+    match tag {
         None => Ok(Geometry::Mesh(decode_mesh(primitive, buffers)?)),
 
-        Some(Value::String(nome)) if nome == "triangle" => {
-            let malha: &Mesh = &decode_mesh(primitive, buffers)?;
+        Some(Value::String(name)) if name == "triangle" => {
+            let mesh: &Mesh = &decode_mesh(primitive, buffers)?;
 
-            fn tres<T: Copy>(valores: &[T], trio: [usize; 3]) -> Option<[T; 3]> {
+            fn three<T: Copy>(values: &[T], trio: [usize; 3]) -> Option<[T; 3]> {
                 Some([
-                    *valores.get(trio[0])?,
-                    *valores.get(trio[1])?,
-                    *valores.get(trio[2])?,
+                    *values.get(trio[0])?,
+                    *values.get(trio[1])?,
+                    *values.get(trio[2])?,
                 ])
             }
 
-            let trio = malha
+            let trio = mesh
                 .indices
                 .get(..3)
                 .and_then(|i| <[u32; 3]>::try_from(i).ok())
@@ -169,23 +165,23 @@ fn decode_geometry(
                 .ok_or("triangle com menos de três índices")?;
 
             Ok(Geometry::Triangle {
-                points: tres(&malha.vertices, trio)
+                points: three(&mesh.vertices, trio)
                     .ok_or("triangle com índice fora da lista de vértices")?,
             })
         }
 
         Some(v) => {
             if non_null_field(v, "sphere").is_some() {
-                let esfera = &v["sphere"];
+                let sphere = &v["sphere"];
 
-                match non_null_field(esfera, "radius").and_then(|r| r.as_f64().map(|r| r as f32)) {
+                match non_null_field(sphere, "radius").and_then(|r| r.as_f64().map(|r| r as f32)) {
                     Some(radius) => Ok(Geometry::Sphere { radius }),
                     _ => Err("sphere sem radius".into()),
                 }
             } else if non_null_field(v, "cube").is_some() {
-                let cubo = &v["cube"];
+                let cube = &v["cube"];
 
-                match non_null_field(cubo, "half_edge").and_then(|h| h.as_f64().map(|h| h as f32)) {
+                match non_null_field(cube, "half_edge").and_then(|h| h.as_f64().map(|h| h as f32)) {
                     Some(half_edge) => Ok(Geometry::Cube { half_edge }),
                     _ => Err("cube sem half_edge".into()),
                 }
@@ -197,29 +193,29 @@ fn decode_geometry(
 }
 
 fn decode_mesh(primitive: &gltf::Primitive, buffers: &[gltf::buffer::Data]) -> Result<Mesh, Error> {
-    let leitor = primitive.reader(|b| Some(&buffers[b.index()][..]));
+    let reader = primitive.reader(|b| Some(&buffers[b.index()][..]));
 
-    let vertices: Vec<Vec3> = leitor
+    let vertices: Vec<Vec3> = reader
         .read_positions()
-        .ok_or("primitive sem POSITION")?
+        .ok_or("primitive without POSITION")?
         .map(|p| Vec3::new(p[0], p[1], p[2]))
         .collect();
 
-    let normals = leitor
+    let normals = reader
         .read_normals()
         .map(|n| n.map(|n| Vec3::new(n[0], n[1], n[2])).collect());
 
-    let tangents = leitor.read_tangents().map(|tangentes| {
-        tangentes
+    let tangents = reader.read_tangents().map(|tangents| {
+        tangents
             .map(|t| Tangent::new(Vec3::new(t[0], t[1], t[2]), t[3]))
             .collect()
     });
 
-    let uvs = leitor
+    let uvs = reader
         .read_tex_coords(0)
         .map(|uvs| uvs.into_f32().map(|uv| Vec2::new(uv[0], uv[1])).collect());
 
-    let indices = match leitor.read_indices() {
+    let indices = match reader.read_indices() {
         Some(indices) => indices.into_u32().collect(),
         None => (0..vertices.len() as u32).collect(),
     };
@@ -235,86 +231,91 @@ fn decode_mesh(primitive: &gltf::Primitive, buffers: &[gltf::buffer::Data]) -> R
 
 fn decode_material(
     material: &gltf::Material,
-    imagens: &[gltf::image::Data],
-    materiais: &mut Vec<(Option<usize>, Material)>,
+    images: &[gltf::image::Data],
+    materials: &mut Vec<(Option<usize>, Material)>,
 ) -> Result<Material, Error> {
-    if let Some((_, pronto)) = materiais.iter().find(|(i, _)| *i == material.index()) {
-        return Ok(pronto.clone());
+    if let Some((_, cached)) = materials.iter().find(|(i, _)| *i == material.index()) {
+        return Ok(cached.clone());
     }
 
     let pbr = material.pbr_metallic_roughness();
 
     let albedo = match pbr.base_color_texture() {
         Some(info) => {
-            let (largura, altura, texels) = pop_image(info.texture().source().index(), imagens)?;
+            let (width, height, texels) = pop_image(info.texture().source().index(), images)?;
             let texels = texels.into_iter().map(Rgb::from_srgb).collect();
 
-            Canal::Map(Texture::new(largura, altura, texels)?)
+            Channel::Map(decode_texture(width, height, texels, info.texture())?)
         }
         None => {
             let [r, g, b, _] = pbr.base_color_factor();
-            Canal::Constant(Rgb::new(r, g, b))
+            Channel::Constant(Rgb::new(r, g, b))
         }
     };
 
     let (metallic, roughness) = match pbr.metallic_roughness_texture() {
         None => (
-            Canal::Constant(pbr.metallic_factor()),
-            Canal::Constant(pbr.roughness_factor()),
+            Channel::Constant(pbr.metallic_factor()),
+            Channel::Constant(pbr.roughness_factor()),
         ),
         Some(info) => {
-            let (largura, altura, texels) = pop_image(info.texture().source().index(), imagens)?;
+            let (width, height, texels) = pop_image(info.texture().source().index(), images)?;
 
             // Roughness no verde, metallic no azul, como manda o glTF.
-            let canal = |i: usize, fator: f32| -> Result<Canal<f32>, Error> {
+            let channel = |i: usize, factor: f32| -> Result<Channel<f32>, Error> {
                 if texels.iter().all(|t| t[i] == u8::MAX) {
-                    return Ok(Canal::Constant(fator));
+                    return Ok(Channel::Constant(factor));
                 }
 
-                let cinzas = texels
+                let grays = texels
                     .iter()
-                    .map(|t| Rgb::gray(t[i] as f32 / 255.0 * fator))
+                    .map(|t| Rgb::gray(t[i] as f32 / 255.0 * factor))
                     .collect();
 
-                Ok(Canal::Map(Texture::new(largura, altura, cinzas)?))
+                Ok(Channel::Map(decode_texture(
+                    width,
+                    height,
+                    grays,
+                    info.texture(),
+                )?))
             };
 
             (
-                canal(2, pbr.metallic_factor())?,
-                canal(1, pbr.roughness_factor())?,
+                channel(2, pbr.metallic_factor())?,
+                channel(1, pbr.roughness_factor())?,
             )
         }
     };
 
     let [r, g, b] = material.emissive_factor();
-    let fator = Rgb::new(r, g, b) * material.emissive_strength().unwrap_or(1.0);
+    let factor = Rgb::new(r, g, b) * material.emissive_strength().unwrap_or(1.0);
 
     let emissive = match material.emissive_texture() {
         Some(info) => {
-            let (largura, altura, texels) = pop_image(info.texture().source().index(), imagens)?;
+            let (width, height, texels) = pop_image(info.texture().source().index(), images)?;
             let texels = texels
                 .into_iter()
-                .map(|t| Rgb::from_srgb(t) * fator)
+                .map(|t| Rgb::from_srgb(t) * factor)
                 .collect();
 
-            Canal::Map(Texture::new(largura, altura, texels)?)
+            Channel::Map(decode_texture(width, height, texels, info.texture())?)
         }
-        None => Canal::Constant(fator),
+        None => Channel::Constant(factor),
     };
 
     let normal = match material.normal_texture() {
         Some(info) => {
-            let (largura, altura, texels) = pop_image(info.texture().source().index(), imagens)?;
+            let (width, height, texels) = pop_image(info.texture().source().index(), images)?;
             // O normal map é dado, não cor: sem a curva sRGB, senão os vetores
             // saem todos torcidos.
             let texels = texels.into_iter().map(Rgb::from_linear).collect();
 
-            Some(Texture::new(largura, altura, texels)?)
+            Some(decode_texture(width, height, texels, info.texture())?)
         }
         None => None,
     };
 
-    let convertido = Material {
+    let converted = Material {
         albedo,
         metallic,
         roughness,
@@ -326,31 +327,47 @@ fn decode_material(
         refractive_index: material.ior().unwrap_or(1.5),
     };
 
-    materiais.push((material.index(), convertido.clone()));
+    materials.push((material.index(), converted.clone()));
 
-    Ok(convertido)
+    Ok(converted)
+}
+
+fn decode_texture(
+    width: u32,
+    height: u32,
+    texels: Vec<Rgb>,
+    texture: gltf::texture::Texture,
+) -> Result<Texture, Error> {
+    let mut decoded = Texture::new(width, height, texels)?;
+
+    decoded.wrap = match texture.sampler().wrap_s() {
+        WrappingMode::ClampToEdge => TextureWrap::Clamp,
+        WrappingMode::MirroredRepeat | WrappingMode::Repeat => TextureWrap::Repeat,
+    };
+
+    Ok(decoded)
 }
 
 fn pop_image(
-    indice: usize,
-    imagens: &[gltf::image::Data],
+    index: usize,
+    images: &[gltf::image::Data],
 ) -> Result<(u32, u32, Vec<[u8; 3]>), Error> {
-    let dados = &imagens[indice];
+    let data = &images[index];
 
-    match dados.format {
+    match data.format {
         Format::R8G8B8 => (),
         _ => {
-            return Err("imagem não está em RGB8".into());
+            return Err("image não está em RGB8".into());
         }
     }
 
-    let texels = dados
+    let texels = data
         .pixels
         .chunks_exact(3)
         .map(|t| [t[0], t[1], t[2]])
         .collect();
 
-    Ok((dados.width, dados.height, texels))
+    Ok((data.width, data.height, texels))
 }
 
 fn euler(quaternion: [f32; 4]) -> Vec3 {

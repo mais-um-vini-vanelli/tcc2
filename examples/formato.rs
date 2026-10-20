@@ -110,19 +110,27 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
                 },
                 Transform::IDENTITY,
             ),
-            Object::geometry(
-                Geometry::Mesh(chao),
-                Material {
-                    albedo: Value::Map(xadrez(64, Rgb::gray(0.72), Rgb::new(0.18, 0.2, 0.26))?),
-                    roughness: Value::Constant(0.85),
-                    normal: Some(ondulado(64)?),
-                    ..Material::default()
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::Mesh(chao),
+                    material: Material {
+                        albedo: Channel::Map(xadrez(
+                            64,
+                            Rgb::gray(0.72),
+                            Rgb::new(0.18, 0.2, 0.26),
+                        )?),
+                        roughness: Channel::Constant(0.85),
+                        normal: Some(ondulado(64)?),
+                        ..Material::default()
+                    },
                 },
                 Transform::IDENTITY,
             ),
-            Object::geometry(
-                Geometry::sphere(1.0),
-                Material::metal(Rgb::new(0.95, 0.78, 0.35), 0.12),
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::sphere(1.0),
+                    material: Material::metal(Rgb::new(0.95, 0.78, 0.35), 0.12),
+                },
                 Transform {
                     translation: Vec3::new(-1.9, 1.0, 0.0),
                     ..Transform::IDENTITY
@@ -134,16 +142,18 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
                 scale: Vec3::ONE,
             })
             .with_children(vec![
-                Object::geometry(
-                    Geometry::cube(0.8),
-                    Material {
-                        albedo: Value::Map(xadrez(
-                            32,
-                            Rgb::new(0.8, 0.25, 0.2),
-                            Rgb::new(0.95, 0.9, 0.8),
-                        )?),
-                        roughness: Value::Map(gradiente(32)?),
-                        ..Material::default()
+                Object::primitive(
+                    Primitive {
+                        geometry: Geometry::cube(0.8),
+                        material: Material {
+                            albedo: Channel::Map(xadrez(
+                                32,
+                                Rgb::new(0.8, 0.25, 0.2),
+                                Rgb::new(0.95, 0.9, 0.8),
+                            )?),
+                            roughness: Channel::Map(gradiente(32)?),
+                            ..Material::default()
+                        },
                     },
                     Transform {
                         translation: Vec3::new(1.4, 0.8, 0.6),
@@ -151,22 +161,26 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
                         scale: Vec3::new(1.0, 1.3, 1.0),
                     },
                 )
-                .with_children(vec![Object::geometry(
-                    Geometry::sphere(0.28),
-                    Material::emissive(Rgb::new(2.6, 1.7, 0.8)),
+                .with_children(vec![Object::primitive(
+                    Primitive {
+                        geometry: Geometry::sphere(0.28),
+                        material: Material::emissive(Rgb::new(2.6, 1.7, 0.8)),
+                    },
                     Transform {
                         translation: Vec3::new(1.0, 1.4, -1.6),
                         ..Transform::IDENTITY
                     },
                 )]),
-                Object::geometry(
-                    Geometry::sphere(0.7),
-                    Material {
-                        albedo: Value::Constant(Rgb::gray(0.06)),
-                        roughness: Value::Constant(0.03),
-                        transparency: 0.95,
-                        refractive_index: 1.52,
-                        ..Material::default()
+                Object::primitive(
+                    Primitive {
+                        geometry: Geometry::sphere(0.7),
+                        material: Material {
+                            albedo: Channel::Constant(Rgb::gray(0.06)),
+                            roughness: Channel::Constant(0.03),
+                            transparency: 0.95,
+                            refractive_index: 1.52,
+                            ..Material::default()
+                        },
                     },
                     Transform {
                         translation: Vec3::new(0.0, 0.7, 2.4),
@@ -174,13 +188,15 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
                     },
                 ),
             ]),
-            Object::geometry(
-                Geometry::triangle([
-                    Vec3::new(-4.2, 0.02, -1.0),
-                    Vec3::new(-2.6, 0.02, -2.2),
-                    Vec3::new(-3.4, 2.4, -1.6),
-                ]),
-                Material::diffuse(Rgb::new(0.35, 0.7, 0.45)),
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::triangle([
+                        Vec3::new(-4.2, 0.02, -1.0),
+                        Vec3::new(-2.6, 0.02, -2.2),
+                        Vec3::new(-3.4, 2.4, -1.6),
+                    ]),
+                    material: Material::diffuse(Rgb::new(0.35, 0.7, 0.45)),
+                },
                 Transform::IDENTITY,
             ),
         ],

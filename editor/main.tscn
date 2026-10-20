@@ -1,17 +1,19 @@
 [gd_scene format=3 uid="uid://cqi7qdnrdfwcf"]
 
-[ext_resource type="Theme" uid="uid://c2ey15w2vubp8" path="res://theme.tres" id="1_4c57u"]
+[ext_resource type="Theme" uid="uid://c2ey15w2vubp8" path="res://theme/palette.tres" id="1_4c57u"]
 [ext_resource type="Script" uid="uid://dah2h80rhe785" path="res://main.gd" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://cdrfivfqwl5dj" path="res://hierarchy/hierarchy.gd" id="13_hier"]
+[ext_resource type="Script" uid="uid://db37b4a5j6g64" path="res://hierarchy/add_menu.gd" id="14_addm"]
 [ext_resource type="Script" uid="uid://7r6yin2j4s2m" path="res://properties/properties.gd" id="2_0xm2m"]
-[ext_resource type="Script" uid="uid://c58uqcxu021pt" path="res://sub_viewport_container.gd" id="2_h2yge"]
-[ext_resource type="Material" uid="uid://kjr4lmkjwarq" path="res://grid.tres" id="3_lquwl"]
+[ext_resource type="Script" uid="uid://c58uqcxu021pt" path="res://viewport/sub_viewport_container.gd" id="2_h2yge"]
+[ext_resource type="Material" uid="uid://kjr4lmkjwarq" path="res://viewport/grid.tres" id="3_lquwl"]
 [ext_resource type="Texture2D" uid="uid://bpnn8q52yipuq" path="res://icons/Open.svg" id="5_open"]
 [ext_resource type="Texture2D" uid="uid://ctshpsj27tbhc" path="res://icons/Save.svg" id="6_save"]
 [ext_resource type="Texture2D" uid="uid://b2l7jbc35yr0l" path="res://icons/Preview.svg" id="8_5vw27"]
 [ext_resource type="Texture2D" uid="uid://bqk3f7x2pickt" path="res://icons/PickTriangle.svg" id="9_pick"]
 [ext_resource type="Texture2D" uid="uid://cwm5r8t3pixel" path="res://icons/PickPixel.svg" id="10_pixel"]
-[ext_resource type="Script" uid="uid://d8wcuot44any" path="res://selection_outline.gd" id="11_outline"]
-[ext_resource type="Shader" uid="uid://cawc737o78bm0" path="res://selection_outline.gdshader" id="12_outline"]
+[ext_resource type="Script" uid="uid://d8wcuot44any" path="res://viewport/selection_outline.gd" id="11_outline"]
+[ext_resource type="Shader" uid="uid://cawc737o78bm0" path="res://viewport/selection_outline.gdshader" id="12_outline"]
 
 [sub_resource type="Environment" id="Environment_7dm0k"]
 background_mode = 1
@@ -52,6 +54,7 @@ color = Color(0.003921569, 0.015686275, 0.03529412, 1)
 
 [node name="PopupMenu" type="PopupMenu" parent="." unique_id=1658015771]
 oversampling_override = 1.0
+script = ExtResource("14_addm")
 
 [node name="Layout" type="HSplitContainer" parent="." unique_id=1610175537]
 layout_mode = 1
@@ -71,6 +74,7 @@ split_offset = 340
 clip_children = 2
 custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
+script = ExtResource("13_hier")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Layout/Sidebar/Hierarchy" unique_id=939988678]
 layout_mode = 2
@@ -89,6 +93,7 @@ theme_type_variation = &"PanelTitle"
 text = "HIERARCHY"
 
 [node name="Add" type="Button" parent="Layout/Sidebar/Hierarchy/VBoxContainer/Title" unique_id=1252571398]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 8
 size_flags_vertical = 4
@@ -104,6 +109,7 @@ theme_override_constants/margin_left = 0
 theme_override_constants/margin_right = 0
 
 [node name="Tree" type="Tree" parent="Layout/Sidebar/Hierarchy/VBoxContainer/MarginContainer" unique_id=867400108]
+unique_name_in_owner = true
 layout_mode = 2
 select_mode = 1
 

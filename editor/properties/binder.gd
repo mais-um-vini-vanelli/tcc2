@@ -1,4 +1,4 @@
-class_name Tcc2Binder extends RefCounted
+class_name Binder extends RefCounted
 
 const ELLIPSIS := "…"
 
@@ -27,8 +27,8 @@ func bind(control: Node, object: Object, property: StringName) -> void:
 			if not field.get_line_edit().has_focus():
 				field.value = object.get(property))
 
-	elif control is Tcc2Check:
-		var box := control as Tcc2Check
+	elif control is Check:
+		var box := control as Check
 		box.value = object.get(property)
 		box.toggled.connect(func(on: bool): object.set(property, on))
 		_sync.append(func(): box.value = object.get(property))
@@ -195,11 +195,11 @@ func _caret(edit: LineEdit) -> void:
 	var top := box.content_margin_top
 
 	edit.draw_rect(Rect2(at, top, _advance(edit, under) if under != ""
-		else Tcc2Theme.CARET, height), Tcc2Theme.FG)
+		else Palette.CARET, height), Palette.FG)
 
 	if under != "":
 		edit.draw_string(font, Vector2(at, top + font.get_ascent(size)), under,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Tcc2Theme.INK)
+			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Palette.INK)
 
 ## The width a string takes in a field's own face.
 func _advance(control: Control, text: String) -> float:

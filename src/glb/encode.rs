@@ -7,10 +7,11 @@ use image::{ExtendedColorType, ImageEncoder};
 use serde_json::{Map, Value, json};
 
 use crate::color::Rgb;
+use crate::geometry::{Geometry, Mesh};
 use crate::math::{Aabb, Vec3};
 use crate::parameters::Parameters;
-use crate::scene::{self, Camera, Content, Geometry, Light, Material, Mesh, Object, Scene};
-use crate::texture::Texture;
+use crate::scene::{self, Camera, Light, Material, Object, ObjectKind, Primitive, Scene};
+use crate::texture::{Texture, TextureWrap};
 use crate::transform::Transform;
 
 use super::{EXTENSION, Error, LUMENS_PER_WATT, VERSION};
@@ -19,7 +20,7 @@ pub fn encode(scene: &Scene, parameters: Option<&Parameters>) -> Result<Vec<u8>,
     let mut json_gltf = json::Root::default();
 
     let mut bin = Vec::new();
-    let mut materiais = Vec::new();
+    let mut materials = Vec::new();
 
     json_gltf.asset.generator = Some(format!("tcc2 {}", env!("CARGO_PKG_VERSION")));
 
@@ -30,19 +31,24 @@ pub fn encode(scene: &Scene, parameters: Option<&Parameters>) -> Result<Vec<u8>,
         nodes: Vec::new(),
     }));
 
-    json_gltf.push(json::texture::Sampler {
-        mag_filter: Some(Valid(json::texture::MagFilter::Linear)),
-        min_filter: Some(Valid(json::texture::MinFilter::LinearMipmapLinear)),
-        wrap_s: Valid(json::texture::WrappingMode::Repeat),
-        wrap_t: Valid(json::texture::WrappingMode::Repeat),
-        name: None,
-        extensions: None,
-        extras: Default::default(),
-    });
+    for wrap in [
+        json::texture::WrappingMode::Repeat,
+        json::texture::WrappingMode::ClampToEdge,
+    ] {
+        json_gltf.push(json::texture::Sampler {
+            mag_filter: Some(Valid(json::texture::MagFilter::Linear)),
+            min_filter: Some(Valid(json::texture::MinFilter::LinearMipmapLinear)),
+            wrap_s: Valid(wrap),
+            wrap_t: Valid(wrap),
+            name: None,
+            extensions: None,
+            extras: Default::default(),
+        });
+    }
 
-    for objeto in &scene.objects {
-        let indice = encode_object(objeto, &mut json_gltf, &mut bin, &mut materiais)?;
-        json_gltf.scenes[0].nodes.push(indice);
+    for object in &scene.objects {
+        let index = encode_object(object, &mut json_gltf, &mut bin, &mut materials)?;
+        json_gltf.scenes[0].nodes.push(index);
     }
 
     let mut extras = Map::new();
@@ -144,10 +150,10 @@ fn encode_camera(camera: Camera, json_gltf: &mut json::Root) -> json::Node {
     }
 }
 
-fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
+fn encode_light(light: Light, json_gltf: &mut json::Root) -> json::Node {
     use json::extensions::scene::khr_lights_punctual as khr;
 
-    if let Light::Environment { color, intensity } = luz {
+    if let Light::Environment { color, intensity } = light {
         // O ambiente não tem equivalente no glTF: ele vai para uma extension.
         return json::Node {
             extensions: Some(json::extensions::scene::Node {
@@ -161,10 +167,10 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
         };
     }
 
-    let punctual = |tipo, spot| khr::Light {
-        type_: Valid(tipo),
-        color: [luz.color().r, luz.color().g, luz.color().b],
-        intensity: luz.intensity() * LUMENS_PER_WATT,
+    let punctual = |kind, spot| khr::Light {
+        type_: Valid(kind),
+        color: [light.color().r, light.color().g, light.color().b],
+        intensity: light.intensity() * LUMENS_PER_WATT,
         range: None,
         spot,
         extensions: None,
@@ -172,7 +178,7 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
         name: None,
     };
 
-    let light = match luz {
+    let encoded = match light {
         Light::Point { .. } => punctual(khr::Type::Point, None),
 
         Light::Directional { .. } => punctual(khr::Type::Directional, None),
@@ -192,7 +198,7 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
         Light::Environment { .. } => unreachable!(),
     };
 
-    let light_gltf = json_gltf.push(light);
+    let light_gltf = json_gltf.push(encoded);
 
     json::Node {
         extensions: Some(json::extensions::scene::Node {
@@ -204,45 +210,41 @@ fn encode_light(luz: Light, json_gltf: &mut json::Root) -> json::Node {
 }
 
 fn encode_object(
-    objeto: &Object,
+    object: &Object,
     json_gltf: &mut json::Root,
     bin: &mut Vec<u8>,
-    materiais: &mut Vec<(Material, json::Index<json::Material>)>,
+    materials: &mut Vec<(Material, json::Index<json::Material>)>,
 ) -> Result<json::Index<json::Node>, Error> {
-    let filhos = objeto
+    let children = object
         .children
         .iter()
-        .map(|filho| encode_object(filho, json_gltf, bin, materiais))
+        .map(|child| encode_object(child, json_gltf, bin, materials))
         .collect::<Result<Vec<_>, Error>>()?;
 
-    let filhos = (!filhos.is_empty()).then_some(filhos);
+    let children = (!children.is_empty()).then_some(children);
 
-    let mut no = match &objeto.content {
+    let mut node = match &object.kind {
         None => json::Node::default(),
 
-        Some(Content::Camera(camera)) => encode_camera(*camera, json_gltf),
+        Some(ObjectKind::Camera(camera)) => encode_camera(*camera, json_gltf),
 
-        Some(Content::Light(luz)) => encode_light(*luz, json_gltf),
+        Some(ObjectKind::Light(light)) => encode_light(*light, json_gltf),
 
-        Some(Content::Geometry {
-            geometry,
-            material,
-            casts_shadows,
-        }) => {
-            let material_gltf = encode_material(material, json_gltf, bin, materiais)?;
+        Some(ObjectKind::Primitive(Primitive { geometry, material })) => {
+            let material_gltf = encode_material(material, json_gltf, bin, materials)?;
 
-            let tesselada = geometry.tessellate();
+            let tessellated = geometry.tessellate();
 
-            if tesselada.vertices.is_empty() || tesselada.indices.is_empty() {
-                return Err("objeto sem nenhum triângulo".into());
+            if tessellated.vertices.is_empty() || tessellated.indices.is_empty() {
+                return Err("object sem nenhum triângulo".into());
             }
 
-            let malha_gltf = encode_mesh(&tesselada, material_gltf, json_gltf, bin);
+            let mesh_gltf = encode_mesh(&tessellated, material_gltf, json_gltf, bin);
 
             // Esfera e cubo vão com a malha tesselada **e** com os campos exatos: o
             // decoder daqui lê os campos e ignora a malha, e quem não conhece a
             // extensão fica com a malha.
-            let geometria = match geometry {
+            let geometry_tag = match geometry {
                 Geometry::Mesh(_) => None,
                 Geometry::Triangle { .. } => Some(json!("triangle")),
                 Geometry::Sphere { radius } => Some(json!({
@@ -253,17 +255,13 @@ fn encode_object(
                 })),
             };
 
-            json_gltf.meshes[malha_gltf.value()].extensions =
-                geometria.map(|geometria| json::extensions::mesh::Mesh {
-                    others: Map::from_iter([(EXTENSION.into(), json!({ "geometry": geometria }))]),
+            json_gltf.meshes[mesh_gltf.value()].extensions =
+                geometry_tag.map(|tag| json::extensions::mesh::Mesh {
+                    others: Map::from_iter([(EXTENSION.into(), json!({ "geometry": tag }))]),
                 });
 
             json::Node {
-                mesh: Some(malha_gltf),
-                extensions: (!casts_shadows).then(|| json::extensions::scene::Node {
-                    others: Map::from_iter([(EXTENSION.into(), json!({ "casts_shadows": false }))]),
-                    ..Default::default()
-                }),
+                mesh: Some(mesh_gltf),
                 ..Default::default()
             }
         }
@@ -273,94 +271,94 @@ fn encode_object(
         translation,
         rotation,
         scale,
-    } = objeto.transform;
+    } = object.transform;
 
-    no.translation = Some([translation.x, translation.y, translation.z]);
-    no.rotation = Some(json::scene::UnitQuaternion(quaternion(rotation)));
-    no.scale = Some([scale.x, scale.y, scale.z]);
+    node.translation = Some([translation.x, translation.y, translation.z]);
+    node.rotation = Some(json::scene::UnitQuaternion(quaternion(rotation)));
+    node.scale = Some([scale.x, scale.y, scale.z]);
 
-    no.children = filhos;
+    node.children = children;
 
-    Ok(json_gltf.push(no))
+    Ok(json_gltf.push(node))
 }
 
 fn encode_mesh(
-    malha: &Mesh,
+    mesh: &Mesh,
     material_gltf: json::Index<json::Material>,
     json_gltf: &mut json::Root,
     bin: &mut Vec<u8>,
 ) -> json::Index<json::Mesh> {
     use json::accessor::{ComponentType, Type};
 
-    let mut atributos = BTreeMap::new();
+    let mut attributes = BTreeMap::new();
 
-    let posicoes: Vec<[f32; 3]> = malha.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
-    let posicoes = push_acessor(
-        flatten(&posicoes),
-        posicoes.len(),
+    let positions: Vec<[f32; 3]> = mesh.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
+    let positions = push_accessor(
+        flatten(&positions),
+        positions.len(),
         Type::Vec3,
         ComponentType::F32,
         json_gltf,
         bin,
     );
 
-    let Aabb { min, max } = Aabb::around(malha.vertices.iter().copied());
-    json_gltf.accessors[posicoes.value()].min = Some(json!([min.x, min.y, min.z]));
-    json_gltf.accessors[posicoes.value()].max = Some(json!([max.x, max.y, max.z]));
+    let Aabb { min, max } = Aabb::around(mesh.vertices.iter().copied());
+    json_gltf.accessors[positions.value()].min = Some(json!([min.x, min.y, min.z]));
+    json_gltf.accessors[positions.value()].max = Some(json!([max.x, max.y, max.z]));
 
-    atributos.insert(Valid(json::mesh::Semantic::Positions), posicoes);
+    attributes.insert(Valid(json::mesh::Semantic::Positions), positions);
 
-    if let Some(normais) = &malha.normals {
-        let dados: Vec<[f32; 3]> = normais.iter().map(|n| [n.x, n.y, n.z]).collect();
-        let normais = push_acessor(
-            flatten(&dados),
-            dados.len(),
+    if let Some(normals) = &mesh.normals {
+        let data: Vec<[f32; 3]> = normals.iter().map(|n| [n.x, n.y, n.z]).collect();
+        let normals = push_accessor(
+            flatten(&data),
+            data.len(),
             Type::Vec3,
             ComponentType::F32,
             json_gltf,
             bin,
         );
-        atributos.insert(Valid(json::mesh::Semantic::Normals), normais);
+        attributes.insert(Valid(json::mesh::Semantic::Normals), normals);
     }
 
     // O TANGENT do glTF é vec4: xyz é a tangente, w é o lado da bitangente.
-    if let Some(tangentes) = &malha.tangents {
-        let dados: Vec<[f32; 4]> = tangentes
+    if let Some(tangents) = &mesh.tangents {
+        let data: Vec<[f32; 4]> = tangents
             .iter()
-            .map(|t| [t.vector.x, t.vector.y, t.vector.z, t.handedness])
+            .map(|t| [t.direction.x, t.direction.y, t.direction.z, t.handedness])
             .collect();
 
-        let tangentes = push_acessor(
-            flatten(&dados),
-            dados.len(),
+        let tangents = push_accessor(
+            flatten(&data),
+            data.len(),
             Type::Vec4,
             ComponentType::F32,
             json_gltf,
             bin,
         );
 
-        atributos.insert(Valid(json::mesh::Semantic::Tangents), tangentes);
+        attributes.insert(Valid(json::mesh::Semantic::Tangents), tangents);
     }
 
-    if let Some(uvs) = &malha.uvs {
-        let dados: Vec<[f32; 2]> = uvs.iter().map(|uv| [uv.x, uv.y]).collect();
+    if let Some(uvs) = &mesh.uvs {
+        let data: Vec<[f32; 2]> = uvs.iter().map(|uv| [uv.x, uv.y]).collect();
 
-        let uvs = push_acessor(
-            flatten(&dados),
-            dados.len(),
+        let uvs = push_accessor(
+            flatten(&data),
+            data.len(),
             Type::Vec2,
             ComponentType::F32,
             json_gltf,
             bin,
         );
 
-        atributos.insert(Valid(json::mesh::Semantic::TexCoords(0)), uvs);
+        attributes.insert(Valid(json::mesh::Semantic::TexCoords(0)), uvs);
     }
 
-    let bytes: Vec<u8> = malha.indices.iter().flat_map(|i| i.to_le_bytes()).collect();
-    let indices = push_acessor(
+    let bytes: Vec<u8> = mesh.indices.iter().flat_map(|i| i.to_le_bytes()).collect();
+    let indices = push_accessor(
         bytes,
-        malha.indices.len(),
+        mesh.indices.len(),
         Type::Scalar,
         ComponentType::U32,
         json_gltf,
@@ -368,7 +366,7 @@ fn encode_mesh(
     );
 
     let primitive = json::mesh::Primitive {
-        attributes: atributos,
+        attributes,
         indices: Some(indices),
         material: Some(material_gltf),
         mode: Valid(json::mesh::Mode::Triangles),
@@ -386,15 +384,15 @@ fn encode_mesh(
     })
 }
 
-fn push_acessor(
+fn push_accessor(
     bytes: Vec<u8>,
     count: usize,
-    tipo: json::accessor::Type,
-    componente: json::accessor::ComponentType,
+    kind: json::accessor::Type,
+    component: json::accessor::ComponentType,
     json_gltf: &mut json::Root,
     bin: &mut Vec<u8>,
 ) -> json::Index<json::accessor::Accessor> {
-    let target = match componente {
+    let target = match component {
         json::accessor::ComponentType::U32 => json::buffer::Target::ElementArrayBuffer,
         _ => json::buffer::Target::ArrayBuffer,
     };
@@ -405,8 +403,8 @@ fn push_acessor(
         buffer_view: Some(view),
         byte_offset: Some(USize64(0)),
         count: USize64::from(count),
-        component_type: Valid(json::accessor::GenericComponentType(componente)),
-        type_: Valid(tipo),
+        component_type: Valid(json::accessor::GenericComponentType(component)),
+        type_: Valid(kind),
         min: None,
         max: None,
         name: None,
@@ -446,25 +444,25 @@ fn encode_material(
     material: &Material,
     json_gltf: &mut json::Root,
     bin: &mut Vec<u8>,
-    materiais: &mut Vec<(Material, json::Index<json::Material>)>,
+    materials: &mut Vec<(Material, json::Index<json::Material>)>,
 ) -> Result<json::Index<json::Material>, Error> {
-    if let Some((_, indice)) = materiais.iter().find(|(j, _)| j == material) {
-        return Ok(*indice);
+    if let Some((_, index)) = materials.iter().find(|(j, _)| j == material) {
+        return Ok(*index);
     }
 
     let (base_color_factor, base_color_texture) = match &material.albedo {
-        scene::Value::Constant(cor) => ([cor.r, cor.g, cor.b, 1.0], None),
-        scene::Value::Map(mapa) => (
+        scene::Channel::Constant(color) => ([color.r, color.g, color.b, 1.0], None),
+        scene::Channel::Map(map) => (
             [1.0; 4],
             Some({
                 push_image(
-                    mapa.width(),
-                    mapa.height(),
-                    &mapa
-                        .texels()
+                    map.width(),
+                    map.height(),
+                    &map.texels()
                         .iter()
                         .flat_map(|c| c.to_srgb())
                         .collect::<Vec<u8>>(),
+                    map.wrap,
                     json_gltf,
                     bin,
                 )?
@@ -476,16 +474,16 @@ fn encode_material(
         encode_metallic_roughness(material, json_gltf, bin)?;
 
     let normal_texture = match &material.normal {
-        Some(mapa) => Some(json::material::NormalTexture {
+        Some(map) => Some(json::material::NormalTexture {
             index: {
                 push_image(
-                    mapa.width(),
-                    mapa.height(),
-                    &mapa
-                        .texels()
+                    map.width(),
+                    map.height(),
+                    &map.texels()
                         .iter()
                         .flat_map(|c| c.to_linear())
                         .collect::<Vec<u8>>(),
+                    map.wrap,
                     json_gltf,
                     bin,
                 )?
@@ -499,10 +497,10 @@ fn encode_material(
         None => None,
     };
 
-    let mut extensoes = json::extensions::material::Material::default();
+    let mut extensions = json::extensions::material::Material::default();
 
     if material.transparency > 0.0 {
-        extensoes.transmission = Some(json::extensions::material::Transmission {
+        extensions.transmission = Some(json::extensions::material::Transmission {
             transmission_factor: json::extensions::material::TransmissionFactor(
                 material.transparency,
             ),
@@ -511,21 +509,21 @@ fn encode_material(
         });
     }
 
-    extensoes.ior = Some(json::extensions::material::Ior {
+    extensions.ior = Some(json::extensions::material::Ior {
         ior: json::extensions::material::IndexOfRefraction(material.refractive_index),
         extras: Default::default(),
     });
 
-    let (emissive_factor, emissive_texture, forca) =
+    let (emissive_factor, emissive_texture, strength) =
         encode_emissive(&material.emissive, json_gltf, bin)?;
 
-    if forca > 1.0 {
-        extensoes.emissive_strength = Some(json::extensions::material::EmissiveStrength {
-            emissive_strength: json::extensions::material::EmissiveStrengthFactor(forca),
+    if strength > 1.0 {
+        extensions.emissive_strength = Some(json::extensions::material::EmissiveStrength {
+            emissive_strength: json::extensions::material::EmissiveStrengthFactor(strength),
         });
     }
 
-    let indice = json_gltf.push(json::Material {
+    let index = json_gltf.push(json::Material {
         pbr_metallic_roughness: json::material::PbrMetallicRoughness {
             base_color_factor: json::material::PbrBaseColorFactor(base_color_factor),
             base_color_texture,
@@ -544,13 +542,13 @@ fn encode_material(
         // O ray tracer acerta a face de trás.
         double_sided: true,
         name: None,
-        extensions: Some(extensoes),
+        extensions: Some(extensions),
         extras: Default::default(),
     });
 
-    materiais.push((material.clone(), indice));
+    materials.push((material.clone(), index));
 
-    Ok(indice)
+    Ok(index)
 }
 
 fn encode_metallic_roughness(
@@ -560,15 +558,16 @@ fn encode_metallic_roughness(
 ) -> Result<(f32, f32, Option<json::texture::Info>), Error> {
     let (metallic, roughness) = (&material.metallic, &material.roughness);
 
-    if let (scene::Value::Constant(m), scene::Value::Constant(r)) = (metallic, roughness) {
+    if let (scene::Channel::Constant(m), scene::Channel::Constant(r)) = (metallic, roughness) {
         return Ok((*m, *r, None));
     }
 
-    let tamanho = match (metallic, roughness) {
-        (scene::Value::Map(m), scene::Value::Map(r)) => {
+    let (width, height, wrap) = match (metallic, roughness) {
+        (scene::Channel::Map(m), scene::Channel::Map(r)) => {
             if (m.width(), m.height()) != (r.width(), r.height()) {
                 return Err(format!(
-                    "metallic é {}x{} e roughness é {}x{}: os dois viram uma textura só no                      glTF, então precisam do mesmo tamanho",
+                    "metallic é {}x{} e roughness é {}x{}: os dois viram uma textura só no \
+                    glTF, então precisam do mesmo tamanho",
                     m.width(),
                     m.height(),
                     r.width(),
@@ -576,109 +575,118 @@ fn encode_metallic_roughness(
                 )
                 .into());
             }
-            (m.width(), m.height())
+            (m.width(), m.height(), m.wrap)
         }
 
-        (scene::Value::Map(t), _) | (_, scene::Value::Map(t)) => (t.width(), t.height()),
+        (scene::Channel::Map(t), _) | (_, scene::Channel::Map(t)) => {
+            (t.width(), t.height(), t.wrap)
+        }
 
         _ => unreachable!(),
     };
 
     let info = push_image(
-        tamanho.0,
-        tamanho.1,
-        &(0..tamanho.0 as usize * tamanho.1 as usize)
+        width,
+        height,
+        &(0..width as usize * height as usize)
             .flat_map(|i| {
                 let g = match roughness {
-                    scene::Value::Constant(_) => 1.0,
-                    scene::Value::Map(mapa) => mapa.texels()[i].r,
+                    scene::Channel::Constant(_) => 1.0,
+                    scene::Channel::Map(map) => map.texels()[i].r,
                 };
 
                 let b = match metallic {
-                    scene::Value::Constant(_) => 1.0,
-                    scene::Value::Map(mapa) => mapa.texels()[i].r,
+                    scene::Channel::Constant(_) => 1.0,
+                    scene::Channel::Map(map) => map.texels()[i].r,
                 };
 
                 Rgb::new(0.0, g, b).to_linear()
             })
             .collect::<Vec<u8>>(),
+        wrap,
         json_gltf,
         bin,
     )?;
 
     let metallic_factor = match metallic {
-        scene::Value::Constant(v) => *v,
-        scene::Value::Map(_) => 1.0,
+        scene::Channel::Constant(v) => *v,
+        scene::Channel::Map(_) => 1.0,
     };
 
     let roughness_factor = match roughness {
-        scene::Value::Constant(v) => *v,
-        scene::Value::Map(_) => 1.0,
+        scene::Channel::Constant(v) => *v,
+        scene::Channel::Map(_) => 1.0,
     };
 
     Ok((metallic_factor, roughness_factor, Some(info)))
 }
 
 fn encode_emissive(
-    emissive: &scene::Value<Rgb>,
+    emissive: &scene::Channel<Rgb>,
     json_gltf: &mut json::Root,
     bin: &mut Vec<u8>,
 ) -> Result<([f32; 3], Option<json::texture::Info>, f32), Error> {
     match emissive {
-        scene::Value::Constant(cor) => {
-            let forca = cor.r.max(cor.g).max(cor.b).max(1.0);
-            Ok(([cor.r / forca, cor.g / forca, cor.b / forca], None, forca))
+        scene::Channel::Constant(color) => {
+            let strength = color.r.max(color.g).max(color.b).max(1.0);
+            Ok((
+                [color.r / strength, color.g / strength, color.b / strength],
+                None,
+                strength,
+            ))
         }
 
-        scene::Value::Map(mapa) => {
-            let forca = mapa
+        scene::Channel::Map(map) => {
+            let strength = map
                 .texels()
                 .iter()
                 .map(|c| c.r.max(c.g).max(c.b))
                 .fold(1.0f32, f32::max);
 
-            let normalizada = Texture::new(
-                mapa.width(),
-                mapa.height(),
-                mapa.texels().iter().map(|c| *c / forca).collect(),
+            let normalized = Texture::new(
+                map.width(),
+                map.height(),
+                map.texels().iter().map(|c| *c / strength).collect(),
             )?;
 
             Ok((
                 [1.0; 3],
                 Some({
                     push_image(
-                        normalizada.width(),
-                        normalizada.height(),
-                        &normalizada
+                        normalized.width(),
+                        normalized.height(),
+                        &normalized
                             .texels()
                             .iter()
                             .flat_map(|c| c.to_srgb())
                             .collect::<Vec<u8>>(),
+                        map.wrap,
                         json_gltf,
                         bin,
                     )?
                 }),
-                forca,
+                strength,
             ))
         }
     }
 }
 
 fn push_image(
-    largura: u32,
-    altura: u32,
+    width: u32,
+    height: u32,
     bytes: &[u8],
+    wrap: TextureWrap,
     json_gltf: &mut json::Root,
     bin: &mut Vec<u8>,
 ) -> Result<json::texture::Info, Error> {
     let mut png = Vec::new();
 
     PngEncoder::new_with_quality(&mut png, CompressionType::Default, FilterType::Adaptive)
-        .write_image(bytes, largura, altura, ExtendedColorType::Rgb8)?;
+        .write_image(bytes, width, height, ExtendedColorType::Rgb8)?;
 
     let view = push_buffer_view(&png, None, json_gltf, bin);
 
-    let imagem_gltf = json_gltf.push(json::Image {
+    let image_gltf = json_gltf.push(json::Image {
         buffer_view: Some(view),
         mime_type: Some(json::image::MimeType("image/png".into())),
         uri: None,
@@ -687,26 +695,28 @@ fn push_image(
         extras: Default::default(),
     });
 
-    let textura_gltf = json_gltf.push(json::Texture {
-        sampler: Some(json::Index::new(0)),
-        source: imagem_gltf,
+    let texture_gltf = json_gltf.push(json::Texture {
+        sampler: Some(json::Index::new(match wrap {
+            TextureWrap::Repeat => 0,
+            TextureWrap::Clamp => 1,
+        })),
+        source: image_gltf,
         name: None,
         extensions: None,
         extras: Default::default(),
     });
 
     Ok(json::texture::Info {
-        index: textura_gltf,
+        index: texture_gltf,
         tex_coord: 0,
         extensions: None,
         extras: Default::default(),
     })
 }
 
-fn flatten<const N: usize>(dados: &[[f32; N]]) -> Vec<u8> {
-    dados
-        .iter()
-        .flat_map(|linha| linha.iter().flat_map(|v| v.to_le_bytes()))
+fn flatten<const N: usize>(data: &[[f32; N]]) -> Vec<u8> {
+    data.iter()
+        .flat_map(|row| row.iter().flat_map(|v| v.to_le_bytes()))
         .collect()
 }
 

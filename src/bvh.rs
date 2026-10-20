@@ -1,110 +1,83 @@
-//! BVH (*bounding volume hierarchy*): uma árvore de caixas em que o raio
-//! descarta de uma vez tudo o que está dentro de uma caixa que ele não cruza.
-//!
-//! Teoria: bvh.md
-//!
-//! São dois níveis com a mesma construção: uma BLAS sobre os triângulos de
-//! cada `Mesh`, em espaço local, e a TLAS sobre os objetos da cena, em espaço
-//! de mundo. As duas são construídas no começo de cada `render()`, cortando
-//! cada nó pela mediana ou pelo SAH, conforme `AccelerationOptions.split`.
-
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::time::Instant;
 
 use crate::color::Rgb;
+use crate::geometry::{Geometry, Hit};
 use crate::math::{Aabb, Ray, Vec3};
+use crate::overlay;
 use crate::parameters::{BvhSplit, TransformMethod};
-use crate::render::{ColorBuffer, Contador};
-use crate::scene::{CameraInstance, Geometry, GeometryInstance, Hit};
-use crate::{overlay, scene};
+use crate::render::{ColorBuffer, RayTracingResult};
+use crate::scene::{CameraInstance, GeometryInstance};
 
-// Teoria: bvh.md#quando-parar-de-dividir
-/// Na mediana, a folha fecha com até este número de itens.
-const ITENS_POR_FOLHA: usize = 2;
+const BOX_COST: f32 = 0.5;
+const PRIMITIVE_COST: f32 = 1.0;
+const BUCKETS: usize = 12;
 
-// Teoria: bvh.md#o-custo-esperado
-/// O custo de testar o raio contra uma caixa, na mesma unidade do `CUSTO_PRIMITIVO`.
-const CUSTO_CAIXA: f32 = 0.5;
-/// O custo de testar o raio contra um triângulo, uma esfera ou um cubo.
-const CUSTO_PRIMITIVO: f32 = 1.0;
-
-// Teoria: bvh.md#os-baldes
-const BALDES: usize = 12;
-
-/// No SAH, acima disto o nó é dividido mesmo que a folha pareça mais barata.
-const MAX_ITENS_POR_FOLHA: usize = 8;
-
-// Teoria: bvh.md#dois-niveis
-/// As duas árvores da cena.
-pub struct Aceleracao {
-    pub tlas: Bvh,
-    /// Uma por instância, na ordem de `Scene::flatten`. Só malha tem.
-    pub blas: Vec<Option<Bvh>>,
+pub struct AccelerationStructures {
+    tlas: Bvh,
+    blas: Vec<Option<Bvh>>,
 }
 
-impl Aceleracao {
+impl AccelerationStructures {
     pub fn build(
-        instancias: &[GeometryInstance],
-        split: BvhSplit,
-        method: TransformMethod,
-        contador: &Contador,
-    ) -> Aceleracao {
-        let inicio = Instant::now();
+        geometry_instances: &[GeometryInstance],
+        bvh_split: BvhSplit,
+        transform_method: TransformMethod,
+        stats: &RefCell<RayTracingResult>,
+    ) -> AccelerationStructures {
+        let start = Instant::now();
 
-        let blas: Vec<Option<Bvh>> = instancias
+        let blas: Vec<Option<Bvh>> = geometry_instances
             .iter()
-            .map(|instancia| match instancia.geometry {
-                Geometry::Mesh(malha) => Some(Bvh::build(
-                    (0..malha.face_count())
+            .map(|instance| match &instance.primitive.geometry {
+                Geometry::Mesh(mesh) => Some(Bvh::build(
+                    (0..mesh.face_count())
                         .filter_map(|i| {
-                            Some(Item {
-                                indice: i,
-                                caixa: Aabb::around(malha.face(i)?.map(|v| v.position)),
-                                custo: CUSTO_PRIMITIVO,
+                            Some(BvhNodeItem {
+                                index: i,
+                                bounds: Aabb::around(mesh.face(i)?.map(|v| v.position)),
+                                cost: PRIMITIVE_COST,
                             })
                         })
                         .collect(),
-                    split,
+                    bvh_split,
                 )),
                 _ => None,
             })
             .collect();
 
-        let itens = instancias
+        let items = geometry_instances
             .iter()
             .zip(&blas)
             .enumerate()
-            .map(|(i, (instancia, blas))| Item {
-                indice: i,
-                // A caixa local girada deixa de ser alinhada aos eixos; o que vai pra TLAS é a caixa alinhada em volta dos oito cantos dela.
-                caixa: Aabb::around(
-                    instancia
-                        .geometry
-                        .bounds()
-                        .corners()
-                        .map(|canto| instancia.chain.apply_point(canto, method)),
-                ),
-                // Teoria: bvh.md#o-custo-de-um-objeto
-                custo: blas.as_ref().map_or(CUSTO_PRIMITIVO, Bvh::custo_esperado),
+            .map(|(i, (instance, blas))| BvhNodeItem {
+                index: i,
+                // Precisa recalcular a AABB com os pontos em espaço de mundo.
+                bounds: Aabb::around(instance.primitive.geometry.bounds().corners().map(
+                    |corner| {
+                        instance
+                            .transform_chain
+                            .apply_point(corner, transform_method)
+                    },
+                )),
+                cost: blas.as_ref().map_or(PRIMITIVE_COST, Bvh::expected_cost),
             })
             .collect();
 
-        let aceleracao = Aceleracao {
-            tlas: Bvh::build(itens, split),
+        let acceleration_structures = AccelerationStructures {
+            tlas: Bvh::build(items, bvh_split),
             blas,
         };
 
-        contador.atualiza(|s| {
-            s.bvh_build_time = inicio.elapsed();
-            (s.tlas_depth, s.blas_depth) = aceleracao.depth();
-        });
+        let mut stats = stats.borrow_mut();
+        stats.bvh_build_time = start.elapsed();
+        (stats.tlas_depth, stats.blas_depth) = acceleration_structures.depth();
 
-        aceleracao
+        acceleration_structures
     }
 
-    // Teoria: bvh.md#as-duas-profundidades
-    /// A profundidade de cada nível, separada: a da TLAS e a da BLAS mais
-    /// funda. Fundidas num número só elas viram uma cota, não a profundidade.
+    /// A profundidade da TLAS e a da BLAS mais funda.
     pub fn depth(&self) -> (u32, u32) {
         let blas = self
             .blas
@@ -120,13 +93,13 @@ impl Aceleracao {
     /// Desenha as caixas da TLAS e das BLAS até `profundidade`, uma cor por nível.
     pub fn wireframe(
         &self,
-        destino: &mut ColorBuffer,
-        camera: &CameraInstance,
-        instancias: &[GeometryInstance],
-        method: TransformMethod,
-        profundidade: u32,
+        camera_instance: &CameraInstance,
+        geometry_instances: &[GeometryInstance],
+        transform_method: TransformMethod,
+        max_depth: u32,
+        buffer: &mut ColorBuffer,
     ) {
-        const CORES: [Rgb; 6] = [
+        const COLORS: [Rgb; 6] = [
             Rgb::new(1.0, 1.00, 1.0),
             Rgb::new(1.0, 0.85, 0.2),
             Rgb::new(0.3, 1.00, 0.4),
@@ -135,56 +108,55 @@ impl Aceleracao {
             Rgb::new(1.0, 0.40, 0.4),
         ];
 
-        for (nivel, cantos) in self.aabbs(instancias, method, profundidade) {
-            overlay::caixa(
-                destino,
-                camera,
-                cantos,
-                CORES[(nivel.max(1) - 1) as usize % CORES.len()],
+        for (level, corners) in self.aabbs(geometry_instances, transform_method, max_depth) {
+            overlay::draw_box(
+                camera_instance,
+                corners,
+                COLORS[(level.max(1) - 1) as usize % COLORS.len()],
+                buffer,
             );
         }
     }
 
-    pub fn mais_proximo(
+    pub fn closest_hit(
         &self,
-        instancias: &[GeometryInstance],
-        raio: Ray,
-        is_shadow: bool,
+        geometry_instances: &[GeometryInstance],
+        ray: Ray,
+        in_shadow_ray: bool,
         t_min: f32,
         t_max: f32,
-        method: TransformMethod,
-        contador: &Contador,
+        transform_method: TransformMethod,
+        stats: &RefCell<RayTracingResult>,
     ) -> Option<(usize, Hit)> {
         let intersect_geometry = |i: usize, t_max: f32| -> Option<(f32, Hit)> {
-            let inst = &instancias[i];
+            let geometry_instance = &geometry_instances[i];
 
-            if is_shadow && !inst.casts_shadows {
+            if in_shadow_ray && geometry_instance.primitive.material.is_emissive() {
                 return None;
             }
 
-            // Teoria: transform.md#o-raio-vai-para-o-espaco-local
-            // O rasterizador leva a geometria pro mundo; aqui é o raio que vem pro
-            // espaço local do objeto. Isso permite usar equações arbitrárias tipo a
-            // da esfera pro teste de interseção. O `t` é igual nos dois espaços.
-            let ray_local = inst.chain.undo_ray(raio, method);
+            // Leva o raio pro espaço local do objeto.
+            let ray_local = geometry_instance
+                .transform_chain
+                .undo_ray(ray, transform_method);
 
-            let hit = match inst.geometry {
+            let hit = match &geometry_instance.primitive.geometry {
                 Geometry::Mesh(mesh) => {
                     let intersect_face = |i, _| {
-                        let hit = scene::intersecao_triangulo(ray_local, mesh.face(i).unwrap());
-                        contador.teste();
+                        let hit = Geometry::intersect_triangle(ray_local, mesh.face(i).unwrap());
+                        stats.borrow_mut().primitive_tests += 1;
 
                         hit.map(|hit| (hit.t, hit))
                     };
 
                     let blas = self.blas[i].as_ref().unwrap();
-                    blas.percorre(ray_local, t_min, t_max, &contador, intersect_face)
+                    blas.traverse(ray_local, t_min, t_max, stats, intersect_face)
                         .map(|(_, hit)| hit)
                 }
 
                 _ => {
-                    let hit = inst.geometry.intersect(ray_local);
-                    contador.teste();
+                    let hit = geometry_instance.primitive.geometry.intersect(ray_local);
+                    stats.borrow_mut().primitive_tests += 1;
                     hit
                 }
             };
@@ -193,34 +165,36 @@ impl Aceleracao {
         };
 
         self.tlas
-            .percorre(raio, t_min, t_max, &contador, intersect_geometry)
+            .traverse(ray, t_min, t_max, stats, intersect_geometry)
     }
 
     /// As AABBs dos nós da TLAS e da BLAS até `profundidade`.
     fn aabbs(
         &self,
-        instancias: &[GeometryInstance],
-        method: TransformMethod,
-        profundidade: u32,
+        geometry_instances: &[GeometryInstance],
+        transform_method: TransformMethod,
+        max_depth: u32,
     ) -> Vec<(u32, [Vec3; 8])> {
         let tlas = self
             .tlas
-            .aabbs(profundidade)
+            .aabbs(max_depth)
             .into_iter()
-            .map(|(nivel, caixa)| (nivel, caixa.corners()));
+            .map(|(depth, aabb)| (depth, aabb.corners()));
 
         let blas = self
             .blas
             .iter()
-            .zip(instancias)
-            .filter_map(|(blas, instancia)| Some((blas.as_ref()?, instancia)))
-            .flat_map(|(blas, instancia)| {
-                blas.aabbs(profundidade).into_iter().map(|(nivel, caixa)| {
+            .zip(geometry_instances)
+            .filter_map(|(blas, geometry_instance)| Some((blas.as_ref()?, geometry_instance)))
+            .flat_map(|(blas, geometry_instance)| {
+                blas.aabbs(max_depth).into_iter().map(|(depth, aabb)| {
                     (
-                        nivel,
-                        caixa
-                            .corners()
-                            .map(|canto| instancia.chain.apply_point(canto, method)),
+                        depth,
+                        aabb.corners().map(|corner| {
+                            geometry_instance
+                                .transform_chain
+                                .apply_point(corner, transform_method)
+                        }),
                     )
                 })
             });
@@ -229,371 +203,362 @@ impl Aceleracao {
     }
 }
 
-/// O que uma árvore organiza: um triângulo na BLAS, um objeto na TLAS.
-#[derive(Debug, Clone, Copy)]
-struct Item {
-    indice: usize,
-    caixa: Aabb,
-    /// Quanto custa testar o raio contra ele. Só o SAH olha.
-    custo: f32,
-}
-
-pub(crate) struct Bvh {
+struct Bvh {
     /// Cada nó vem depois dos seus filhos, então a raiz é o último.
-    nos: Vec<No>,
+    nodes: Vec<BvhNode>,
 }
 
-enum No {
-    Folha { caixa: Aabb, itens: Vec<usize> },
-    Interno { caixa: Aabb, filhos: [usize; 2] },
+enum BvhNode {
+    Leaf { bounds: Aabb, items: Vec<usize> },
+    Internal { bounds: Aabb, children: [usize; 2] },
 }
 
-impl No {
-    /// A caixa é o que os dois têm; a travessia testa o nó sem olhar qual é.
-    fn caixa(&self) -> Aabb {
+impl BvhNode {
+    fn bounds(&self) -> Aabb {
         match *self {
-            No::Folha { caixa, .. } | No::Interno { caixa, .. } => caixa,
+            BvhNode::Leaf { bounds, .. } | BvhNode::Internal { bounds, .. } => bounds,
+        }
+    }
+}
+
+/// O que o node da BVH guarda: um triângulo na BLAS ou um objeto na TLAS.
+#[derive(Debug, Clone, Copy)]
+struct BvhNodeItem {
+    index: usize,
+    bounds: Aabb,
+    cost: f32,
+}
+
+#[derive(Clone, Copy)]
+struct Bucket {
+    bounds: Aabb,
+    cost: f32,
+    count: usize,
+}
+
+impl Bucket {
+    const EMPTY: Bucket = Bucket {
+        bounds: Aabb::EMPTY,
+        cost: 0.0,
+        count: 0,
+    };
+
+    fn merge(self, other: Bucket) -> Bucket {
+        Bucket {
+            bounds: self.bounds.union(other.bounds),
+            cost: self.cost + other.cost,
+            count: self.count + other.count,
         }
     }
 }
 
 impl Bvh {
-    fn build(mut itens: Vec<Item>, split: BvhSplit) -> Bvh {
-        let mut nos = Vec::new();
+    fn build(mut items: Vec<BvhNodeItem>, split: BvhSplit) -> Bvh {
+        let mut nodes = Vec::new();
 
-        if !itens.is_empty() {
-            divide(&mut nos, &mut itens, split);
+        if !items.is_empty() {
+            Self::subdivide(&mut nodes, &mut items, split);
         }
 
-        Bvh { nos }
+        Bvh { nodes }
     }
 
-    fn raiz(&self) -> Option<usize> {
-        self.nos.len().checked_sub(1)
+    fn subdivide(nodes: &mut Vec<BvhNode>, items: &mut [BvhNodeItem], split: BvhSplit) -> usize {
+        let bounds = items
+            .iter()
+            .fold(Aabb::EMPTY, |bounds, item| bounds.union(item.bounds));
+
+        let split_index = match split {
+            BvhSplit::Median => Self::median_split(items),
+            BvhSplit::Sah => Self::sah_split(items, bounds),
+        };
+
+        let node = match split_index {
+            Some(split_index) => {
+                let (left, right) = items.split_at_mut(split_index);
+
+                BvhNode::Internal {
+                    bounds,
+                    children: [
+                        Self::subdivide(nodes, left, split),
+                        Self::subdivide(nodes, right, split),
+                    ],
+                }
+            }
+
+            None => BvhNode::Leaf {
+                bounds,
+                items: items.iter().map(|item| item.index).collect(),
+            },
+        };
+
+        nodes.push(node);
+        nodes.len() - 1
     }
 
-    /// Nós no caminho mais longo da raiz até uma folha.
-    pub fn depth(&self) -> u32 {
-        fn desce(bvh: &Bvh, i: usize) -> u32 {
-            match &bvh.nos[i] {
-                No::Folha { .. } => 1,
-                &No::Interno { filhos: [a, b], .. } => 1 + desce(bvh, a).max(desce(bvh, b)),
+    fn median_split(items: &mut [BvhNodeItem]) -> Option<usize> {
+        const ITEMS_PER_LEAF: usize = 2;
+
+        if items.len() <= ITEMS_PER_LEAF {
+            return None;
+        }
+
+        // Escolher o eixo em que os centros estão mais espalhados (o lado da AABB dos centros é maior).
+        let longest_axis = {
+            let centroids = Aabb::around(items.iter().map(|item| item.bounds.center()));
+            let extent = centroids.max - centroids.min;
+
+            if extent.x >= extent.y && extent.x >= extent.z {
+                0
+            } else if extent.y >= extent.z {
+                1
+            } else {
+                2
+            }
+        };
+
+        let split_index = items.len() / 2;
+
+        items.select_nth_unstable_by(split_index, |a, b| {
+            a.bounds.center()[longest_axis].total_cmp(&b.bounds.center()[longest_axis])
+        });
+
+        Some(split_index)
+    }
+
+    fn sah_split(items: &mut [BvhNodeItem], bounds: Aabb) -> Option<usize> {
+        if items.len() <= 1 {
+            return None;
+        }
+
+        const MAX_ITEMS_PER_LEAF: usize = 8;
+
+        let centroids = Aabb::around(items.iter().map(|item| item.bounds.center()));
+
+        let bucket_index = |axis: usize, item: &BvhNodeItem| -> usize {
+            let (min, max) = (centroids.min[axis], centroids.max[axis]);
+            let i = (item.bounds.center()[axis] - min) / (max - min);
+
+            ((i * BUCKETS as f32) as usize).min(BUCKETS - 1)
+        };
+
+        let mut best_split: Option<(f32, usize, usize)> = None;
+
+        for axis in 0..3 {
+            // Todos os centros no mesmo plano: nada a separar neste eixo.
+            if centroids.max[axis] <= centroids.min[axis] {
+                continue;
+            }
+
+            let buckets = {
+                let mut result = [Bucket::EMPTY; BUCKETS];
+
+                for item in items.iter() {
+                    let i = bucket_index(axis, item);
+
+                    result[i] = result[i].merge(Bucket {
+                        bounds: item.bounds,
+                        cost: item.cost,
+                        count: 1,
+                    });
+                }
+
+                result
+            };
+
+            let buckets_after = {
+                let mut result = [Bucket::EMPTY; BUCKETS + 1];
+
+                for i in (0..BUCKETS).rev() {
+                    result[i] = buckets[i].merge(result[i + 1]);
+                }
+
+                result
+            };
+
+            let mut buckets_until = Bucket::EMPTY;
+
+            for i in 1..BUCKETS {
+                buckets_until = buckets_until.merge(buckets[i - 1]);
+
+                if buckets_until.count == 0 || buckets_after[i].count == 0 {
+                    // Se um lado corte está vazio.
+                    continue;
+                }
+
+                let cost = buckets_until.bounds.surface_area() * buckets_until.cost
+                    + buckets_after[i].bounds.surface_area() * buckets_after[i].cost;
+
+                if best_split.is_none_or(|(lowest, ..)| cost < lowest) {
+                    best_split = Some((cost, axis, i));
+                }
             }
         }
 
-        match self.raiz() {
-            Some(raiz) => desce(self, raiz),
+        if best_split.is_none() {
+            return if items.len() > MAX_ITEMS_PER_LEAF {
+                Some(items.len() / 2)
+            } else {
+                None
+            };
+        }
+
+        let (cost, axis, i) = best_split.unwrap();
+
+        // leaf_cost  = soma dos custos dos itens
+        // split_cost = 2·BOX_COST + (area_filho_esq / area_pai)·custo_esq + (area_filho_dir / area_pai)·custo_dir
+        //            = 2·BOX_COST + (area_filho_esq·custo_filho_esq + area_filho_dir·custo_filho_dir) / area_pai
+        //            = 2·BOX_COST + cost / area_pai
+        //
+        // Pra evitar dividir por 0, multiplicamos os dois lados por area_pai:
+        //  split_cost · area_pai = 2·BOX_COST·area_pai + cost
+        //  leaf_cost  · area_pai = soma(custos) · area_pai
+        let split_cost = 2.0 * BOX_COST * bounds.surface_area() + cost;
+        let leaf_cost = items.iter().map(|item| item.cost).sum::<f32>() * bounds.surface_area();
+
+        if split_cost >= leaf_cost && items.len() <= MAX_ITEMS_PER_LEAF {
+            return None;
+        }
+
+        items.sort_unstable_by_key(|it| bucket_index(axis, it) >= i);
+        let split_index = items.partition_point(|it| bucket_index(axis, it) < i);
+
+        Some(split_index)
+    }
+
+    fn expected_cost(&self) -> f32 {
+        let root = self.root().expect("the BVH shouldn't be empty");
+        let root_surface_area = self.nodes[root].bounds().surface_area();
+
+        let hit_chance = |bounds: Aabb| {
+            if root_surface_area > 0.0 {
+                bounds.surface_area() / root_surface_area
+            } else {
+                1.0
+            }
+        };
+
+        let nodes: f32 = self
+            .nodes
+            .iter()
+            .map(|node| match node {
+                BvhNode::Leaf { bounds, items } => {
+                    hit_chance(*bounds) * items.len() as f32 * PRIMITIVE_COST
+                }
+                BvhNode::Internal { bounds, .. } => hit_chance(*bounds) * 2.0 * BOX_COST,
+            })
+            .sum();
+
+        BOX_COST + nodes
+    }
+}
+
+impl Bvh {
+    fn root(&self) -> Option<usize> {
+        self.nodes.len().checked_sub(1)
+    }
+
+    pub fn depth(&self) -> u32 {
+        fn descend(bvh: &Bvh, i: usize) -> u32 {
+            match &bvh.nodes[i] {
+                BvhNode::Leaf { .. } => 1,
+                &BvhNode::Internal {
+                    children: [a, b], ..
+                } => 1 + descend(bvh, a).max(descend(bvh, b)),
+            }
+        }
+
+        match self.root() {
+            Some(root) => descend(self, root),
             None => 0,
         }
     }
 
-    /// As AABBs dos nós até `profundidade`.
-    fn aabbs(&self, profundidade: u32) -> Vec<(u32, Aabb)> {
-        let Some(raiz) = self.raiz() else {
+    /// As AABBs dos nodes até `depth`.
+    fn aabbs(&self, depth: u32) -> Vec<(u32, Aabb)> {
+        let Some(root) = self.root() else {
             return Vec::new();
         };
 
         let mut aabbs = Vec::new();
-        let mut pendentes = VecDeque::from([(1, raiz)]);
+        let mut queue = VecDeque::from([(1, root)]);
 
-        while let Some((nivel, i)) = pendentes.pop_front() {
-            if nivel > profundidade {
+        while let Some((level, i)) = queue.pop_front() {
+            if level > depth {
                 break;
             }
 
-            aabbs.push((nivel, self.nos[i].caixa()));
+            aabbs.push((level, self.nodes[i].bounds()));
 
-            if let &No::Interno { filhos, .. } = &self.nos[i] {
-                pendentes.extend(filhos.map(|filho| (nivel + 1, filho)));
+            if let &BvhNode::Internal { children, .. } = &self.nodes[i] {
+                queue.extend(children.map(|child| (level + 1, child)));
             }
         }
 
         aabbs
     }
 
-    // Teoria: bvh.md#o-custo-de-um-objeto
-    /// O custo esperado de um raio que cruza a caixa da raiz, com todo item
-    /// custando `CUSTO_PRIMITIVO`: o teste da raiz, mais o de cada nó pesado
-    /// pela chance de o raio chegar nele.
-    fn custo_esperado(&self) -> f32 {
-        let Some(raiz) = self.raiz() else {
-            return 0.0;
-        };
-
-        let area_raiz = self.nos[raiz].caixa().area();
-        let chance = |caixa: Aabb| {
-            if area_raiz > 0.0 {
-                caixa.area() / area_raiz
-            } else {
-                1.0
-            }
-        };
-
-        let nos: f32 = self
-            .nos
-            .iter()
-            .map(|no| match no {
-                No::Folha { caixa, itens } => chance(*caixa) * itens.len() as f32 * CUSTO_PRIMITIVO,
-                No::Interno { caixa, .. } => chance(*caixa) * 2.0 * CUSTO_CAIXA,
-            })
-            .sum();
-
-        CUSTO_CAIXA + nos
-    }
-
-    // Teoria: bvh.md#a-travessia
-    /// O item mais próximo entre `t_min` e `t_max`, com o que `testa` devolveu
-    /// sobre ele. `testa` recebe o item e o limite atual — que só encolhe — e
-    /// responde `(t, acerto)` se o raio o acerta; guardar o melhor até agora e
-    /// encolher o limite é da travessia, não dela.
-    pub fn percorre<H>(
+    /// Encontra o item mais próximo entre `t_min` e `t_max`, com o que `intersect`
+    /// retornou para ele.
+    pub fn traverse(
         &self,
-        raio: Ray,
+        ray: Ray,
         t_min: f32,
         t_max: f32,
-        contador: &Contador,
-        mut testa: impl FnMut(usize, f32) -> Option<(f32, H)>,
-    ) -> Option<(usize, H)> {
-        let raiz = self.raiz()?;
+        stats: &RefCell<RayTracingResult>,
+        mut intersect: impl FnMut(usize, f32) -> Option<(f32, Hit)>,
+    ) -> Option<(usize, Hit)> {
+        let node = self.root()?;
+        let t_node = self.nodes[node].bounds().intersect(ray, t_min, t_max)?;
 
-        contador.no();
+        stats.borrow_mut().bvh_nodes_visited += 1;
 
-        let entrada = self.nos[raiz].caixa().hit(raio, t_min, t_max)?;
+        let mut closest = None;
+        let mut t_max = t_max;
 
-        let mut melhor = None;
-        let mut limite = t_max;
+        // Os nodes a visitar, com o `t` em que o raio entra em cada um.
+        let mut stack = vec![(node, t_node)];
 
-        // Os nós que falta visitar, com o `t` em que o raio entra em cada um.
-        let mut pendentes = vec![(raiz, entrada)];
-
-        while let Some((i, entrada)) = pendentes.pop() {
-            // O limite pode ter encolhido desde que o nó entrou na pilha.
-            if entrada >= limite {
+        while let Some((node, t_node)) = stack.pop() {
+            if t_node >= t_max {
                 continue;
             }
 
-            match &self.nos[i] {
-                No::Folha { itens, .. } => {
-                    for &item in itens {
-                        let Some((t, acerto)) = testa(item, limite) else {
+            match &self.nodes[node] {
+                BvhNode::Leaf { items, .. } => {
+                    for &item in items {
+                        let Some((t, hit)) = intersect(item, t_max) else {
                             continue;
                         };
 
-                        if t >= t_min && t < limite {
-                            limite = t;
-                            melhor = Some((item, acerto));
+                        if t >= t_min && t < t_max {
+                            t_max = t;
+                            closest = Some((item, hit));
                         }
                     }
                 }
 
-                &No::Interno { filhos, .. } => {
-                    let [a, b] = filhos.map(|filho| {
-                        contador.no();
+                BvhNode::Internal { children, .. } => {
+                    let [a, b] = children.map(|child| {
+                        stats.borrow_mut().bvh_nodes_visited += 1;
 
-                        let entrada = self.nos[filho].caixa().hit(raio, t_min, limite)?;
-                        Some((filho, entrada))
+                        let t = self.nodes[child].bounds().intersect(ray, t_min, t_max)?;
+                        Some((child, t))
                     });
 
-                    // Teoria: bvh.md#o-filho-mais-perto-primeiro
                     match (a, b) {
                         (Some(a), Some(b)) => {
-                            let (perto, longe) = if a.1 <= b.1 { (a, b) } else { (b, a) };
-                            pendentes.push(longe);
-                            pendentes.push(perto);
+                            let (near, far) = if a.1 <= b.1 { (a, b) } else { (b, a) };
+                            stack.push(far);
+                            stack.push(near);
                         }
-                        (Some(um), None) | (None, Some(um)) => pendentes.push(um),
+                        (Some(child), None) | (None, Some(child)) => stack.push(child),
                         (None, None) => {}
                     }
                 }
             }
         }
 
-        melhor
-    }
-}
-
-/// Empilha o nó que cobre `itens` — folha, ou interno sobre as duas partes do
-/// corte que `split` escolher — e devolve o índice dele.
-fn divide(nos: &mut Vec<No>, itens: &mut [Item], split: BvhSplit) -> usize {
-    let caixa = itens
-        .iter()
-        .fold(Aabb::EMPTY, |caixa, item| caixa.union(item.caixa));
-
-    let corte = match split {
-        BvhSplit::Median => corte_na_mediana(itens),
-        BvhSplit::Sah => corte_pelo_sah(itens, caixa),
-    };
-
-    let no = match corte {
-        Some(meio) => {
-            let (esquerda, direita) = itens.split_at_mut(meio);
-
-            No::Interno {
-                caixa,
-                filhos: [divide(nos, esquerda, split), divide(nos, direita, split)],
-            }
-        }
-        None => No::Folha {
-            caixa,
-            itens: itens.iter().map(|item| item.indice).collect(),
-        },
-    };
-
-    nos.push(no);
-    nos.len() - 1
-}
-
-// Teoria: bvh.md#construcao-pela-mediana
-/// Reordena `itens` com os menores centros na metade de baixo e devolve onde
-/// ela termina, ou `None` se eles cabem numa folha.
-fn corte_na_mediana(itens: &mut [Item]) -> Option<usize> {
-    if itens.len() <= ITENS_POR_FOLHA {
-        return None;
-    }
-
-    let centros = Aabb::around(itens.iter().map(|item| item.caixa.center()));
-    let eixo = eixo_mais_comprido(centros.max - centros.min);
-    let meio = itens.len() / 2;
-
-    itens.select_nth_unstable_by(meio, |a, b| {
-        componente(a.caixa.center(), eixo).total_cmp(&componente(b.caixa.center(), eixo))
-    });
-
-    Some(meio)
-}
-
-// Teoria: bvh.md#construcao-pelo-sah
-/// Reordena `itens` pelo corte de menor custo esperado entre os planos dos
-/// baldes, nos três eixos, e devolve onde a parte de baixo termina — ou `None`
-/// se a folha sai mais barata que o melhor corte.
-fn corte_pelo_sah(itens: &mut [Item], caixa: Aabb) -> Option<usize> {
-    if itens.len() <= 1 {
-        return None;
-    }
-
-    let centros = Aabb::around(itens.iter().map(|item| item.caixa.center()));
-    let balde = |eixo: usize, item: &Item| -> usize {
-        let (min, max) = (componente(centros.min, eixo), componente(centros.max, eixo));
-        let x = (componente(item.caixa.center(), eixo) - min) / (max - min);
-
-        ((x * BALDES as f32) as usize).min(BALDES - 1)
-    };
-
-    // Teoria: bvh.md#os-baldes
-    // Os custos ficam multiplicados pela área do pai: ela é a mesma pra todo
-    // corte, e pode ser zero. `(custo, eixo, plano)`; o plano `p` passa entre
-    // os baldes `p - 1` e `p`.
-    let mut melhor: Option<(f32, usize, usize)> = None;
-
-    for eixo in 0..3 {
-        // Todos os centros no mesmo plano: nada a separar neste eixo.
-        if componente(centros.max, eixo) <= componente(centros.min, eixo) {
-            continue;
-        }
-
-        let mut baldes = [Grupo::VAZIO; BALDES];
-        for item in itens.iter() {
-            let b = balde(eixo, item);
-            baldes[b] = baldes[b].junta(Grupo {
-                caixa: item.caixa,
-                custo: item.custo,
-                itens: 1,
-            });
-        }
-
-        // `acima[p]` junta os baldes de `p` em diante.
-        let mut acima = [Grupo::VAZIO; BALDES + 1];
-        for p in (0..BALDES).rev() {
-            acima[p] = baldes[p].junta(acima[p + 1]);
-        }
-
-        let mut abaixo = Grupo::VAZIO;
-        for p in 1..BALDES {
-            abaixo = abaixo.junta(baldes[p - 1]);
-
-            // Um lado vazio não é corte (e a área da caixa vazia é infinita).
-            if abaixo.itens == 0 || acima[p].itens == 0 {
-                continue;
-            }
-
-            let custo = abaixo.caixa.area() * abaixo.custo + acima[p].caixa.area() * acima[p].custo;
-
-            if melhor.is_none_or(|(menor, ..)| custo < menor) {
-                melhor = Some((custo, eixo, p));
-            }
-        }
-    }
-
-    if melhor.is_none() {
-        return if itens.len() > MAX_ITENS_POR_FOLHA {
-            Some(itens.len() / 2)
-        } else {
-            None
-        };
-    }
-
-    let (custo, eixo, plano) = melhor.unwrap();
-
-    // custo_folha = soma dos custos dos itens
-    // custo_corte = 2·CUSTO_CAIXA + (área_esq / área_pai)·custo_esq + (área_dir / área_pai)·custo_dir
-    //             = 2·CUSTO_CAIXA + (área_esq·custo_esq + área_dir·custo_dir) / área_pai
-    //             = 2·CUSTO_CAIXA + custo / área_pai
-    //
-    // Pra evitar dividir por 0, multiplicamos os dois lados por área_pai:
-    //
-    // custo_corte · area = 2·CUSTO_CAIXA·area + custo
-    // custo_folha · area = soma(custos) · area
-    let custo_corte = 2.0 * CUSTO_CAIXA * caixa.area() + custo;
-    let custo_folha = itens.iter().map(|item| item.custo).sum::<f32>() * caixa.area();
-
-    if custo_corte >= custo_folha && itens.len() <= MAX_ITENS_POR_FOLHA {
-        return None;
-    }
-
-    itens.sort_unstable_by_key(|it| balde(eixo, it) >= plano);
-    let meio = itens.partition_point(|it| balde(eixo, it) < plano);
-
-    Some(meio)
-}
-
-/// Os itens de um balde, ou de vários baldes juntos.
-#[derive(Clone, Copy)]
-struct Grupo {
-    caixa: Aabb,
-    custo: f32,
-    itens: usize,
-}
-
-impl Grupo {
-    const VAZIO: Grupo = Grupo {
-        caixa: Aabb::EMPTY,
-        custo: 0.0,
-        itens: 0,
-    };
-
-    fn junta(self, outro: Grupo) -> Grupo {
-        Grupo {
-            caixa: self.caixa.union(outro.caixa),
-            custo: self.custo + outro.custo,
-            itens: self.itens + outro.itens,
-        }
-    }
-}
-
-fn eixo_mais_comprido(extensao: Vec3) -> usize {
-    if extensao.x >= extensao.y && extensao.x >= extensao.z {
-        0
-    } else if extensao.y >= extensao.z {
-        1
-    } else {
-        2
-    }
-}
-
-fn componente(v: Vec3, eixo: usize) -> f32 {
-    match eixo {
-        0 => v.x,
-        1 => v.y,
-        _ => v.z,
+        closest
     }
 }

@@ -1,9 +1,9 @@
-class_name Tcc2Form extends VBoxContainer
+class_name Form extends VBoxContainer
 
-var node: Tcc2Node
-var binder := Tcc2Binder.new()
+var node: SceneObject
+var binder := Binder.new()
 
-func build(for_node: Tcc2Node) -> void:
+func build(for_node: SceneObject) -> void:
 	node = for_node
 
 	binder.unbind()

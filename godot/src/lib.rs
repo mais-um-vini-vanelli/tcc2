@@ -2,7 +2,7 @@ use godot::classes::ArrayMesh;
 use godot::classes::mesh::{ArrayType, PrimitiveType};
 use godot::prelude::*;
 
-use tcc2::prelude::{Geometry, Mesh as Malha, Vec3};
+use tcc2::prelude::{Geometry, Mesh as Tcc2Mesh, Vec3};
 
 struct Tcc2Godot;
 
@@ -32,32 +32,33 @@ impl Tcc2Tessellate {
     }
 }
 
-/// A face `i` da tesselação vira o triângulo `i` da superfície, pra que o índice
-/// que o editor escolhe seja o que o `on_triangle` recebe. Os atributos saem de
-/// `Malha::face`, o mesmo que o rasterizador chama, então normal e tangente
-/// faltando são preenchidas aqui igual lá.
-///
-/// A face da frente no Godot é o contrário da nossa, então cada face sai como
-/// v0, v2, v1 — a troca fica dentro da face, ou a numeração escorrega.
-fn surface(malha: &Malha) -> Gd<ArrayMesh> {
+fn surface(mesh: &Tcc2Mesh) -> Gd<ArrayMesh> {
     let mut vertices = PackedVector3Array::new();
     let mut normals = PackedVector3Array::new();
     let mut tangents = PackedFloat32Array::new();
     let mut uvs = PackedVector2Array::new();
 
-    for i in 0..malha.face_count() {
-        let Some(face) = malha.face(i) else {
+    for i in 0..mesh.face_count() {
+        let Some(face) = mesh.face(i) else {
             continue;
         };
 
-        for v in [face[0], face[2], face[1]] {
-            vertices.push(Vector3::new(v.position.x, v.position.y, v.position.z));
-            normals.push(Vector3::new(v.normal.x, v.normal.y, v.normal.z));
-            tangents.push(v.tangent.vector.x);
-            tangents.push(v.tangent.vector.y);
-            tangents.push(v.tangent.vector.z);
-            tangents.push(v.tangent.handedness);
-            uvs.push(Vector2::new(v.uv.x, v.uv.y));
+        for vertex in [face[0], face[2], face[1]] {
+            vertices.push(Vector3::new(
+                vertex.position.x,
+                vertex.position.y,
+                vertex.position.z,
+            ));
+            normals.push(Vector3::new(
+                vertex.normal.x,
+                vertex.normal.y,
+                vertex.normal.z,
+            ));
+            tangents.push(vertex.tangent.direction.x);
+            tangents.push(vertex.tangent.direction.y);
+            tangents.push(vertex.tangent.direction.z);
+            tangents.push(vertex.tangent.handedness);
+            uvs.push(Vector2::new(vertex.uv.x, vertex.uv.y));
         }
     }
 

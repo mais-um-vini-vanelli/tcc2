@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useData } from 'vitepress'
-import { palette, eixosIguais, alfa, vec2, xy } from './geometry.js'
+import { palette, cena2d, linha2d, pontos2d, rotulos2d, alfa, vec2 } from './geometry.js'
 
 const { isDark } = useData()
 
@@ -15,21 +15,21 @@ const casos = [
     titulo: 'P em um vértice',
     P: A,
     pesosBC: ["0", "0"],
-    rotuloA: (a) => [a.nudged_up(-0.30), 'A = P (1)', 'bottom center'],
+    rotuloA: (a) => ({ text: 'A = P (1)', position: a.nudge(0, -0.30), textposition: 'bottom center' }),
     rotuloP: false,
   },
   {
     titulo: 'P no meio de AB',
-    P: vec2(5, 3), 
+    P: vec2(5, 3),
     pesosBC: ["½", "0"],
-    rotuloA: (a) => [a.nudged_right(-0.42), 'A (½)', 'middle left'],
+    rotuloA: (a) => ({ text: 'A (½)', position: a.nudge(-0.42, 0), textposition: 'middle left' }),
     rotuloP: true,
   },
   {
     titulo: 'P no centro',
-    P: vec2(14 / 3, 13 / 3), 
+    P: vec2(14 / 3, 13 / 3),
     pesosBC: ["⅓", "⅓"],
-    rotuloA: (a) => [a.nudged_right(-0.42), 'A (⅓)', 'middle left'],
+    rotuloA: (a) => ({ text: 'A (⅓)', position: a.nudge(-0.42, 0), textposition: 'middle left' }),
     rotuloP: true,
   },
 ]
@@ -37,62 +37,38 @@ const casos = [
 const fig = computed(() => {
   const cores = palette(isDark.value)
 
-  const linha = (pontos, extra) => ({
-    ...xy(pontos), type: 'scatter', mode: 'lines',
-    hoverinfo: 'skip', showlegend: false, ...extra,
-  })
-
   const painel = (caso, index) => {
     const offset = vec2(index * 8.6, 0)
     const [a, b, c, p] = [A, B, C, caso.P].map((v) => v.add(offset))
 
     const rotulos = [
       caso.rotuloA(a),
-      [b.nudged_right(0.42), `B (${caso.pesosBC[0]})`, 'middle right'],
-      [c.nudged_up(0.3), `C (${caso.pesosBC[1]})`, 'top center'],
-      ...(caso.rotuloP ? [[p.nudged_right(-0.38).nudged_up(0.3), 'P', 'top center']] : []),
+      { text: `B (${caso.pesosBC[0]})`, position: b.nudge(0.42, 0), textposition: 'middle right' },
+      { text: `C (${caso.pesosBC[1]})`, position: c.nudge(0, 0.3), textposition: 'top center' },
+      ...(caso.rotuloP ? [{ text: 'P', position: p.nudge(-0.38, 0.3), textposition: 'top center' }] : []),
     ]
 
     return [
-      ...regioes(caso.P).map((pontos, i) => linha(
+      ...regioes(caso.P).map((pontos, i) => linha2d(
         [...pontos, pontos[0]].map((v) => v.add(offset)),
         { fill: 'toself', fillcolor: alfa(cores.serie[i], 0.25), mode: 'none' }
       )),
-      linha([a, b, c, a], { line: { color: cores.fraca, width: 1.4 } }),
+      linha2d([a, b, c, a], { line: { color: cores.fraca, width: 1.4 } }),
       ...[a, b, c].map((vertice) =>
-        linha([vertice, p], { line: { color: cores.fraca, width: 1 } })
+        linha2d([vertice, p], { line: { color: cores.fraca, width: 1 } })
       ),
-      {
-        ...xy([a, b, c, p]),
-        type: 'scatter', mode: 'markers',
-        marker: { size: 8, color: cores.tinta },
-        hoverinfo: 'skip', showlegend: false,
-      },
-      {
-        ...xy(rotulos.map((r) => r[0])),
-        text: rotulos.map((r) => r[1]),
-        textposition: rotulos.map((r) => r[2]),
-        type: 'scatter', mode: 'text',
-        textfont: { color: cores.tinta, size: 14 },
-        hoverinfo: 'skip', showlegend: false,
-      },
-      {
-        ...xy([vec2(5, 8.2).add(offset)]),
-        text: [caso.titulo],
-        type: 'scatter', mode: 'text', textposition: 'top center',
-        textfont: { color: cores.tinta, size: 13 },
-        hoverinfo: 'skip', showlegend: false,
-      },
+      pontos2d([a, b, c, p], cores.tinta, 8),
+      rotulos2d(rotulos, cores.tinta, 14),
+      rotulos2d(
+        [{ text: caso.titulo, position: vec2(5, 8.2).add(offset), textposition: 'top center' }],
+        cores.tinta,
+      ),
     ]
   }
 
   return {
     data: casos.flatMap(painel),
-    layout: {
-      ...eixosIguais([0.8, 26.5], [0.8, 10.0]),
-      margin: { t: 8, r: 8, b: 8, l: 8 },
-      hovermode: false,
-    },
+    layout: cena2d([0.8, 26.5], [0.8, 10.0]),
   }
 })
 </script>

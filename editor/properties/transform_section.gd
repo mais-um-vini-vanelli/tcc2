@@ -1,7 +1,7 @@
 @tool
-class_name Tcc2TransformSection extends Tcc2Section
+class_name TransformSection extends Section
 
-func bind(binder: Tcc2Binder, node: Tcc2Node) -> void:
+func bind(binder: Binder, node: SceneObject) -> void:
 	binder.bind_axis(%position_x, node, &"position", Vector3.AXIS_X)
 	binder.bind_axis(%position_y, node, &"position", Vector3.AXIS_Y)
 	binder.bind_axis(%position_z, node, &"position", Vector3.AXIS_Z)

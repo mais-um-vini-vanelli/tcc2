@@ -180,21 +180,6 @@ pesos é andar em passo constante pelo triângulo **no mundo**, não pela tela.
 
 ### Por que `1/z` é linear na tela
 
-## Onde a cor é avaliada
-
-Com os pesos na mão, falta decidir em que ponto do triângulo a cor é calculada —
-por face, por vértice ou por fragmento. Isso não diz nada sobre *como* ela é
-calculada; isso é o modelo de reflectância ([Shading](/fundamentos/shading)).
-
-| frequência | o que faz                                                                                                  |
-|------------|------------------------------------------------------------------------------------------------------------|
-| `Flat`     | Uma cor por triângulo, da normal geométrica da face. As faces da malha ficam visíveis. |
-| `Gouraud`  | Uma cor por vértice, interpolada no interior. Barato, mas o brilho especular só existe se cair em cima de um vértice. |
-| `Phong`    | A normal é interpolada e a cor calculada por pixel. É o padrão.                                            |
-
-A escolha só existe no rasterizador: o ray tracer calcula a cor no ponto do
-acerto.
-
 ### A normal interpolada não é unitária
 
 A normal interpolada entre três normais unitárias não sai unitária, então precisa

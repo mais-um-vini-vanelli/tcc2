@@ -1,10 +1,7 @@
-//! Tipos geométricos básicos.
+use std::ops::{Add, Div, Index, Mul, Neg, Sub};
 
 use crate::color::Rgb;
-use std::ops::{Add, Div, Mul, Neg, Sub};
 
-/// Vetor de duas dimensões. Usado para coordenadas de textura (uv) e para
-/// posições em espaço de tela.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vec2 {
     pub x: f32,
@@ -18,17 +15,14 @@ impl Vec2 {
         Vec2 { x, y }
     }
 
-    // Teoria: vetores.md#produto-escalar
-    // Produto escalar: mede o quanto dois vetores estão alinhados, e é a projeção
+    // Produto escalar: diz o quanto dois vetores estão alinhados, e é a projeção
     // de um no outro quando um deles é unitário.
     pub fn dot(self, other: Vec2) -> f32 {
         self.x * other.x + self.y * other.y
     }
 
-    // Teoria: vetores.md#produto-vetorial-ou-cruzado
     // Produto vetorial em 2D: simulado estendendo os dois vetores pra 3D com
-    // z = 0. O resultado é a área com sinal do paralelogramo, positiva quando
-    // self -> other gira em anti-horário.
+    // z = 0.
     pub fn cross(self, other: Vec2) -> f32 {
         Vec3::new(self.x, self.y, 0.0)
             .cross(Vec3::new(other.x, other.y, 0.0))
@@ -42,33 +36,43 @@ impl Vec2 {
 
 impl Add for Vec2 {
     type Output = Vec2;
-    fn add(self, o: Vec2) -> Vec2 {
-        Vec2::new(self.x + o.x, self.y + o.y)
+    fn add(self, other: Vec2) -> Vec2 {
+        Vec2::new(self.x + other.x, self.y + other.y)
     }
 }
 
 impl Sub for Vec2 {
     type Output = Vec2;
-    fn sub(self, o: Vec2) -> Vec2 {
-        Vec2::new(self.x - o.x, self.y - o.y)
+    fn sub(self, other: Vec2) -> Vec2 {
+        Vec2::new(self.x - other.x, self.y - other.y)
     }
 }
 
 impl Mul<f32> for Vec2 {
     type Output = Vec2;
-    fn mul(self, s: f32) -> Vec2 {
-        Vec2::new(self.x * s, self.y * s)
+    fn mul(self, scalar: f32) -> Vec2 {
+        Vec2::new(self.x * scalar, self.y * scalar)
     }
 }
 
 impl Div<f32> for Vec2 {
     type Output = Vec2;
-    fn div(self, s: f32) -> Vec2 {
-        Vec2::new(self.x / s, self.y / s)
+    fn div(self, scalar: f32) -> Vec2 {
+        Vec2::new(self.x / scalar, self.y / scalar)
     }
 }
 
-/// Vetor de três dimensões. Pode ser ponto, direção ou normal.
+impl Index<usize> for Vec2 {
+    type Output = f32;
+    fn index(&self, axis: usize) -> &f32 {
+        match axis {
+            0 => &self.x,
+            1 => &self.y,
+            _ => panic!("axis out of bounds: {axis}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vec3 {
     pub x: f32,
@@ -82,6 +86,7 @@ impl Vec3 {
         y: 0.0,
         z: 0.0,
     };
+
     pub const ONE: Vec3 = Vec3 {
         x: 1.0,
         y: 1.0,
@@ -92,15 +97,13 @@ impl Vec3 {
         Vec3 { x, y, z }
     }
 
-    // Teoria: vetores.md#produto-escalar
-    // Produto escalar: mede o quanto dois vetores estão alinhados, e é a projeção
+    // Produto escalar: diz o quanto dois vetores estão alinhados, e é a projeção
     // de um no outro quando um deles é unitário.
     pub fn dot(self, other: Vec3) -> f32 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
-    // Teoria: vetores.md#produto-vetorial-ou-cruzado
-    // Produto vetorial: um vetor perpendicular aos dois, de comprimento igual à
+    // Produto vetorial: retorna um vetor perpendicular aos dois, de comprimento igual à
     // área do paralelogramo. O sentido sai da ordem, pela regra da mão direita.
     pub fn cross(self, other: Vec3) -> Vec3 {
         Vec3::new(
@@ -114,23 +117,31 @@ impl Vec3 {
         self.dot(self).sqrt()
     }
 
-    /// Vetor de mesma direção e comprimento 1.
     pub fn normalized(self) -> Vec3 {
-        let len = self.length();
-        if len == 0.0 { Vec3::ZERO } else { self / len }
+        let length = self.length();
+        if length == 0.0 {
+            Vec3::ZERO
+        } else {
+            self / length
+        }
     }
 
-    /// Menor valor em cada eixo.
-    pub fn min(self, o: Vec3) -> Vec3 {
-        Vec3::new(self.x.min(o.x), self.y.min(o.y), self.z.min(o.z))
+    pub fn min(self, other: Vec3) -> Vec3 {
+        Vec3::new(
+            self.x.min(other.x),
+            self.y.min(other.y),
+            self.z.min(other.z),
+        )
     }
 
-    /// Maior valor em cada eixo.
-    pub fn max(self, o: Vec3) -> Vec3 {
-        Vec3::new(self.x.max(o.x), self.y.max(o.y), self.z.max(o.z))
+    pub fn max(self, other: Vec3) -> Vec3 {
+        Vec3::new(
+            self.x.max(other.x),
+            self.y.max(other.y),
+            self.z.max(other.z),
+        )
     }
 
-    /// Converte pra Vec2, descartando o z.
     pub fn xy(self) -> Vec2 {
         Vec2::new(self.x, self.y)
     }
@@ -138,36 +149,36 @@ impl Vec3 {
 
 impl Add for Vec3 {
     type Output = Vec3;
-    fn add(self, o: Vec3) -> Vec3 {
-        Vec3::new(self.x + o.x, self.y + o.y, self.z + o.z)
+    fn add(self, other: Vec3) -> Vec3 {
+        Vec3::new(self.x + other.x, self.y + other.y, self.z + other.z)
     }
 }
 
 impl Sub for Vec3 {
     type Output = Vec3;
-    fn sub(self, o: Vec3) -> Vec3 {
-        Vec3::new(self.x - o.x, self.y - o.y, self.z - o.z)
+    fn sub(self, other: Vec3) -> Vec3 {
+        Vec3::new(self.x - other.x, self.y - other.y, self.z - other.z)
     }
 }
 
 impl Mul<f32> for Vec3 {
     type Output = Vec3;
-    fn mul(self, s: f32) -> Vec3 {
-        Vec3::new(self.x * s, self.y * s, self.z * s)
+    fn mul(self, scalar: f32) -> Vec3 {
+        Vec3::new(self.x * scalar, self.y * scalar, self.z * scalar)
     }
 }
 
 impl Mul<Vec3> for f32 {
     type Output = Vec3;
-    fn mul(self, v: Vec3) -> Vec3 {
-        v * self
+    fn mul(self, other: Vec3) -> Vec3 {
+        other * self
     }
 }
 
 impl Div<f32> for Vec3 {
     type Output = Vec3;
-    fn div(self, s: f32) -> Vec3 {
-        Vec3::new(self.x / s, self.y / s, self.z / s)
+    fn div(self, scalar: f32) -> Vec3 {
+        Vec3::new(self.x / scalar, self.y / scalar, self.z / scalar)
     }
 }
 
@@ -178,7 +189,18 @@ impl Neg for Vec3 {
     }
 }
 
-/// Raio: origem e direção
+impl Index<usize> for Vec3 {
+    type Output = f32;
+    fn index(&self, axis: usize) -> &f32 {
+        match axis {
+            0 => &self.x,
+            1 => &self.y,
+            2 => &self.z,
+            _ => panic!("axis out of bounds: {axis}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Ray {
     pub origin: Vec3,
@@ -186,7 +208,6 @@ pub struct Ray {
 }
 
 impl Ray {
-    /// A direção é normalizada na construção.
     pub fn new(origin: Vec3, direction: Vec3) -> Self {
         Ray {
             origin,
@@ -200,9 +221,7 @@ impl Ray {
     }
 }
 
-// Teoria: bvh.md#a-caixa-envolvente
-/// Caixa alinhada aos eixos (*axis-aligned bounding box*): o menor e o maior
-/// valor em cada eixo.
+/// Axis-aligned bounding box: o menor e o maior valor em cada eixo.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Aabb {
     pub min: Vec3,
@@ -210,14 +229,12 @@ pub struct Aabb {
 }
 
 impl Aabb {
-    /// A caixa que não contém nada: qualquer ponto incluído nela vira a caixa
-    /// inteira.
+    /// Uma AABB que não contém nada.
     pub const EMPTY: Aabb = Aabb {
         min: Vec3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY),
         max: Vec3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
     };
 
-    /// A menor caixa que contém todos os pontos.
     pub fn around(points: impl IntoIterator<Item = Vec3>) -> Aabb {
         points.into_iter().fold(Aabb::EMPTY, |caixa, p| Aabb {
             min: caixa.min.min(p),
@@ -236,9 +253,8 @@ impl Aabb {
         (self.min + self.max) * 0.5
     }
 
-    // Teoria: bvh.md#o-custo-esperado
-    /// Área da superfície. Infinita na `EMPTY`.
-    pub fn area(self) -> f32 {
+    /// Área de superfície. Infinita na `EMPTY`.
+    pub fn surface_area(self) -> f32 {
         let d = self.max - self.min;
         2.0 * (d.x * d.y + d.y * d.z + d.z * d.x)
     }
@@ -258,41 +274,31 @@ impl Aabb {
         ]
     }
 
-    // Teoria: bvh.md#o-teste-dos-slabs
-    /// O `t` em que o raio entra na caixa, se ele passa por ela em algum ponto
+    /// Calcula `t` em que o raio entra na caixa, se ele passa por ela em algum ponto
     /// entre `t_min` e `t_max`.
-    pub fn hit(self, ray: Ray, t_min: f32, t_max: f32) -> Option<f32> {
-        // O intervalo de `t` em que o raio está entre os dois planos de um eixo.
-        let slab = |origem: f32, direcao: f32, min: f32, max: f32| {
-            let t0 = (min - origem) / direcao;
-            let t1 = (max - origem) / direcao;
+    pub fn intersect(self, ray: Ray, t_min: f32, t_max: f32) -> Option<f32> {
+        // Calcula o intervalo de `t` em que o raio está entre os dois planos de um eixo.
+        let slab = |origin: f32, direction: f32, min: f32, max: f32| {
+            let t0 = (min - origin) / direction;
+            let t1 = (max - origin) / direction;
 
-            // Quando a direção do raio é negativa em um eixo, o raio cruza o `max` antes do `min`, então ordenamos aqui.
+            // Quando a direção do raio é negativa em um eixo, o raio cruza o `max` antes do `min`.
             (t0.min(t1), t0.max(t1))
         };
 
-        let (o, d) = (ray.origin, ray.direction);
-        let (x0, x1) = slab(o.x, d.x, self.min.x, self.max.x);
-        let (y0, y1) = slab(o.y, d.y, self.min.y, self.max.y);
-        let (z0, z1) = slab(o.z, d.z, self.min.z, self.max.z);
+        let (x0, x1) = slab(ray.origin.x, ray.direction.x, self.min.x, self.max.x);
+        let (y0, y1) = slab(ray.origin.y, ray.direction.y, self.min.y, self.max.y);
+        let (z0, z1) = slab(ray.origin.z, ray.direction.z, self.min.z, self.max.z);
 
-        // O ponto O + t·D está dentro da caixa quando as três coordenadas estão nos seus limites ao mesmo tempo, e t está entre
-        // t_min e t_max:
-        // > dentro(t) ⟺ min.x ≤ x(t) ≤ max.x E min.y ≤ y(t) ≤ max.y E min.z ≤ z(t) ≤ max.z E t_min ≤ t ≤ t_max
-        // Então calculamos a interseção desses intervalos; t precisa se maior que todos os limites mínimos e menor que todos os limites
-        // máximos.
-        // Se o limite mínimo da interseção dos intervalos é maior que o limite máximo, não há valor de t válido; o raio
-        // não tem nenhum trecho passando por dentro da caixa E respeitando t_min e t_max.
-        let entrada = t_min.max(x0).max(y0).max(z0);
-        let saida = t_max.min(x1).min(y1).min(z1);
+        let entry = t_min.max(x0).max(y0).max(z0);
+        let exit = t_max.min(x1).min(y1).min(z1);
 
-        (entrada <= saida).then_some(entrada)
+        (entry <= exit).then_some(entry)
     }
 }
 
-// Teoria: rasterizer.md#o-plano
-/// Plano em 3D pela forma `n · p + deslocamento = 0`, com `deslocamento` sendo
-/// `-(n · p0)` para um ponto `p0` qualquer do plano.
+/// Plano em 3D. Tem a forma `n · p + deslocamento = 0`, com `deslocamento` = `-(n · p0)`
+/// para todo ponto `p0` do plano.
 #[derive(Debug, Clone, Copy)]
 pub struct Plane {
     pub normal: Vec3,
@@ -307,82 +313,66 @@ impl Plane {
         }
     }
 
-    /// Distância com sinal: zero em cima do plano, positivo do lado da normal,
+    /// Calcula a distância com sinal: zero no plano, positivo do lado da normal,
     /// negativo do lado oposto.
-    pub fn distance(&self, p: Vec3) -> f32 {
-        self.normal.dot(p) + self.displacement
+    pub fn distance(&self, point: Vec3) -> f32 {
+        self.normal.dot(point) + self.displacement
     }
 }
 
-// Teoria: tangentes.md#a-base-tbn
 /// A tangente por vértice: pra onde a superfície anda quando o `u` da uv
 /// cresce.
-///
-/// `B` não é guardado porque sai de `N × T`, com o handedness definindo a
-/// direção.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tangent {
-    /// Unitário e perpendicular à normal do vértice.
-    pub vector: Vec3,
-    /// +1 ou -1: o sinal da bitangente.
+    pub direction: Vec3,
+    /// +1 ou -1. Indica a direção da bitangente.
     pub handedness: f32,
 }
 
 impl Default for Tangent {
     fn default() -> Self {
         Tangent {
-            vector: Vec3::new(1.0, 0.0, 0.0),
+            direction: Vec3::new(1.0, 0.0, 0.0),
             handedness: 1.0,
         }
     }
 }
 
 impl Tangent {
-    pub fn new(vector: Vec3, handedness: f32) -> Self {
+    pub fn new(direction: Vec3, handedness: f32) -> Self {
         Tangent {
-            vector,
-            // O `handedness` só existe em +1 e -1.
+            direction,
             handedness: if handedness < 0.0 { -1.0 } else { 1.0 },
         }
     }
 
-    // Teoria: tangentes.md#a-tangente-por-vértice
-    /// A tangente de uma superfície de parametrização conhecida: `du` e `dv`
-    /// são as direções em que a uv cresce ali.
+    /// Calcula a tangente a partir das direções `du` e `dv` da superfície.
     pub fn from_uv_axes(normal: Vec3, du: Vec3, dv: Vec3) -> Self {
-        let vector = (du - normal * normal.dot(du)).normalized();
+        let tangent_direction = (du - normal * normal.dot(du)).normalized();
 
-        if vector == Vec3::ZERO {
+        if tangent_direction == Vec3::ZERO {
             return Tangent::any_perpendicular(normal);
         }
 
-        Tangent::new(vector, normal.cross(vector).dot(dv))
+        Tangent::new(tangent_direction, normal.cross(tangent_direction).dot(dv))
     }
 
-    // Teoria: tangentes.md#quando-não-há-uv
-    /// Uma tangente qualquer perpendicular à normal, pra quando não há uv de
-    /// onde tirar a de verdade. O relevo sai girado, mas a base fecha.
+    /// Calcula uma tangente qualquer perpendicular à normal.
     pub fn any_perpendicular(normal: Vec3) -> Self {
-        // Cruzar com o eixo menos alinhado à normal evita o produto vetorial
-        // quase nulo de dois vetores paralelos.
-        let eixo = if normal.x.abs() < 0.9 {
+        // Escolher um eixo que não é paralelo à normal.
+        let axis = if normal.x.abs() < 0.9 {
             Vec3::new(1.0, 0.0, 0.0)
         } else {
             Vec3::new(0.0, 1.0, 0.0)
         };
 
         Tangent {
-            vector: eixo.cross(normal).normalized(),
+            direction: axis.cross(normal).normalized(),
             handedness: 1.0,
         }
     }
 }
 
-/// Um vértice e os atributos que viajam junto com ele pelo pipeline.
-///
-/// `position` troca de espaço no caminho (mundo -> câmera -> tela); `normal`,
-/// `tangent` e `uv` ficam como estão (só são ajustados na interpolação do
-/// triângulo).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vertex {
     pub position: Vec3,
@@ -392,72 +382,64 @@ pub struct Vertex {
 }
 
 impl Vertex {
-    /// O vértice a `t` do caminho entre os dois, com todo atributo andando pelo
-    /// mesmo `t`.
-    pub fn lerp(self, outro: Vertex, t: f32) -> Vertex {
+    /// O vértice a `t` do caminho entre os dois, com os atributos interpolados também.
+    pub fn lerp(self, other: Vertex, t: f32) -> Vertex {
         Vertex {
-            position: self.position + (outro.position - self.position) * t,
-            normal: self.normal + (outro.normal - self.normal) * t,
+            position: self.position + (other.position - self.position) * t,
+            normal: self.normal + (other.normal - self.normal) * t,
             tangent: Tangent {
-                vector: self.tangent.vector + (outro.tangent.vector - self.tangent.vector) * t,
+                direction: self.tangent.direction
+                    + (other.tangent.direction - self.tangent.direction) * t,
                 handedness: self.tangent.handedness,
             },
-            uv: self.uv + (outro.uv - self.uv) * t,
+            uv: self.uv + (other.uv - self.uv) * t,
         }
     }
 }
 
-// Teoria: rasterizer.md#pesos-sob-perspectiva
-/// Os pesos de interpolação de um ponto de dentro de um triângulo. Somam 1.
-///
-/// A construção diz sob qual projeção os pesos foram medidos: sob perspectiva
-/// eles precisam ser corrigidos antes de interpolar qualquer coisa.
+/// Os pesos de interpolação de um ponto de dentro de um triângulo; somam 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Baricentrics {
     weights: [f32; 3],
 }
 
 impl Baricentrics {
-    /// `screen` são as edge functions divididas pela área do triângulo. Sob
-    /// projeção afim eles já são os pesos no mundo.
-    pub fn new(screen: [f32; 3]) -> Self {
-        Baricentrics { weights: screen }
+    pub fn new(weights: [f32; 3]) -> Self {
+        Baricentrics { weights }
     }
 
-    /// `screen` são as edge functions divididas pela área do triângulo;
-    /// `depths`, o z de cada vértice em espaço de câmera.
-    pub fn perspective_corrected(screen: [f32; 3], depths: [f32; 3]) -> Self {
-        let [l0, l1, l2] = screen;
+    pub fn perspective_corrected(screen_weights: [f32; 3], depths: [f32; 3]) -> Self {
+        let [l0, l1, l2] = screen_weights;
         let [z0, z1, z2] = depths;
 
-        let inversos = [l0 / z0, l1 / z1, l2 / z2];
-        let z = 1.0 / (inversos[0] + inversos[1] + inversos[2]);
+        let inverted = [l0 / z0, l1 / z1, l2 / z2];
+        let z = 1.0 / (inverted[0] + inverted[1] + inverted[2]);
 
         Baricentrics {
-            weights: inversos.map(|inverso| inverso * z),
+            weights: inverted.map(|inverso| inverso * z),
         }
     }
 
-    pub fn interpolate_f32(&self, valores: [f32; 3]) -> f32 {
-        valores[0] * self.weights[0] + valores[1] * self.weights[1] + valores[2] * self.weights[2]
+    pub fn interpolate_f32(&self, values: [f32; 3]) -> f32 {
+        values[0] * self.weights[0] + values[1] * self.weights[1] + values[2] * self.weights[2]
     }
 
-    pub fn interpolate_vec2(&self, valores: [Vec2; 3]) -> Vec2 {
-        valores[0] * self.weights[0] + valores[1] * self.weights[1] + valores[2] * self.weights[2]
+    pub fn interpolate_vec2(&self, values: [Vec2; 3]) -> Vec2 {
+        values[0] * self.weights[0] + values[1] * self.weights[1] + values[2] * self.weights[2]
     }
 
-    pub fn interpolate_vec3(&self, valores: [Vec3; 3]) -> Vec3 {
-        valores[0] * self.weights[0] + valores[1] * self.weights[1] + valores[2] * self.weights[2]
+    pub fn interpolate_vec3(&self, values: [Vec3; 3]) -> Vec3 {
+        values[0] * self.weights[0] + values[1] * self.weights[1] + values[2] * self.weights[2]
     }
 
-    pub fn interpolate_tangent(&self, valores: [Tangent; 3]) -> Tangent {
+    pub fn interpolate_tangent(&self, values: [Tangent; 3]) -> Tangent {
         Tangent {
-            vector: self.interpolate_vec3(valores.map(|t| t.vector)),
-            handedness: valores[0].handedness,
+            direction: self.interpolate_vec3(values.map(|t| t.direction)),
+            handedness: values[0].handedness,
         }
     }
 
-    pub fn interpolate_rgb(&self, valores: [Rgb; 3]) -> Rgb {
-        valores[0] * self.weights[0] + valores[1] * self.weights[1] + valores[2] * self.weights[2]
+    pub fn interpolate_rgb(&self, values: [Rgb; 3]) -> Rgb {
+        values[0] * self.weights[0] + values[1] * self.weights[1] + values[2] * self.weights[2]
     }
 }

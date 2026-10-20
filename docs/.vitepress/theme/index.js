@@ -25,6 +25,25 @@ import TelaVirtual from './TelaVirtual.vue'
 
 import './style.css'
 
+function marcarItemAtivo() {
+    const links = document.querySelectorAll('.VPLocalNavOutlineDropdown .outline-link')
+    if (!links.length) return
+
+    let ativo = null
+    for (const link of links) {
+        link.classList.remove('active')
+        const alvo = document.getElementById(decodeURIComponent(link.hash.slice(1)))
+        if (alvo && alvo.getBoundingClientRect().top <= 100) ativo = link
+    }
+    ativo?.classList.add('active')
+}
+
+if (typeof window !== 'undefined') {
+    const agendar = () => requestAnimationFrame(marcarItemAtivo)
+    document.addEventListener('click', agendar, true)
+    window.addEventListener('scroll', agendar, { passive: true })
+}
+
 export default {
     extends: DefaultTheme,
     enhanceApp({ app }) {

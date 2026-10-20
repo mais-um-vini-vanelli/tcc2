@@ -1,6 +1,3 @@
-//! A interface comum aos dois pipelines.
-
-use std::cell::Cell;
 use std::time::Duration;
 
 use crate::color::Rgb;
@@ -80,22 +77,20 @@ impl<T: Copy + Default> Buffer<T> {
 
 impl ScalarBuffer {
     /// Converte para grayscale, normalizando linearmente o intervalo dos
-    /// valores finitos para `[0, 1]`. Cuidado ao comparar duas imagens, porque
-    /// um intervalo diferente vai gerar intensidades diferentes pro mesmo valor
-    /// bruto de pixel.
+    /// valores finitos para `[0, 1]`.
     pub fn to_color(&self) -> ColorBuffer {
-        let mut intervalo: Option<(f32, f32)> = None;
+        let mut range: Option<(f32, f32)> = None;
 
         for &val in &self.pixels {
             if val.is_finite() {
-                intervalo = Some(match intervalo {
+                range = Some(match range {
                     None => (val, val),
                     Some((lo, hi)) => (lo.min(val), hi.max(val)),
                 });
             }
         }
 
-        let (lo, hi) = intervalo.unwrap_or((0.0, 1.0));
+        let (lo, hi) = range.unwrap_or((0.0, 1.0));
         let span = hi - lo;
 
         let pixels = self
@@ -123,11 +118,11 @@ impl ScalarBuffer {
 pub struct RasterizationResult {
     /// Profundidade do fragmento mais próximo em cada pixel.
     pub depth: ScalarBuffer,
-    /// Normal de sombreamento, remapeada de `[-1, 1]` para `[0, 1]`.
+    /// Normais de shading, entre `[0, 1]`.
     pub normal: ColorBuffer,
-    /// Coordenada de textura interpolada, no canal rg.
+    /// Coordenadas de textura, nos canais RG.
     pub uv: ColorBuffer,
-    /// Testes de cobertura pixel-triângulo.
+    /// Testes de cobertura entre pixel e triângulo.
     pub primitive_tests: u64,
     /// Triângulos descartados pelo backface culling.
     pub backfaces_culled: u64,
@@ -145,57 +140,29 @@ pub struct RayTracingResult {
     pub primitive_tests: u64,
     /// Raios lançados no total (primários + sombra + secundários).
     pub rays: u64,
-    /// Caixas de nó de BVH testadas contra um raio.
+    /// Caixas de BVH testadas.
     pub bvh_nodes_visited: u64,
     /// Nós no caminho mais longo da TLAS, da raiz até a folha mais funda.
     pub tlas_depth: u32,
-    /// O mesmo na mais funda das BLAS. Separado da TLAS de propósito: a soma
-    /// dos dois é uma cota do caminho mais longo da árvore inteira, não o
-    /// caminho — ver `teoria/bvh.md#as-duas-profundidades`.
+    /// Nós no caminho mais longo da BLAS, da raiz até a folha mais funda. Feito na
+    /// BLAS mais funda.
     pub blas_depth: u32,
-    /// Tempo de construção das BVHs, que acontece dentro do `render()`.
+    /// Tempo de construção das BVHs.
     pub bvh_build_time: Duration,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct Contagem {
-    pub primitive_tests: u64,
-    pub rays: u64,
-    pub bvh_nodes_visited: u64,
-    pub tlas_depth: u32,
-    pub blas_depth: u32,
-    pub bvh_build_time: Duration,
-}
-
-/// Contadores do render.
-///
-/// `Cell` porque o callback de visibilidade que `shade` recebe é `Fn`, não
-/// `FnMut`, e mesmo assim precisa contabilizar o raio de sombra que dispara.
-/// `Contagem` é `Copy`, então a célula sai barata.
-#[derive(Debug, Default)]
-pub(crate) struct Contador(Cell<Contagem>);
-
-impl Contador {
-    pub(crate) fn raio(&self) {
-        self.atualiza(|s| s.rays += 1);
-    }
-
-    pub(crate) fn teste(&self) {
-        self.atualiza(|s| s.primitive_tests += 1);
-    }
-
-    pub(crate) fn no(&self) {
-        self.atualiza(|s| s.bvh_nodes_visited += 1);
-    }
-
-    pub(crate) fn stats(&self) -> Contagem {
-        self.0.get()
-    }
-
-    pub(crate) fn atualiza(&self, f: impl FnOnce(&mut Contagem)) {
-        let mut stats = self.0.get();
-        f(&mut stats);
-        self.0.set(stats);
+impl RayTracingResult {
+    pub fn new(width: u32, height: u32) -> Self {
+        RayTracingResult {
+            ray_count: ScalarBuffer::new(width, height),
+            bvh_heatmap: ScalarBuffer::new(width, height),
+            primitive_tests: 0,
+            rays: 0,
+            bvh_nodes_visited: 0,
+            tlas_depth: 0,
+            blas_depth: 0,
+            bvh_build_time: Duration::ZERO,
+        }
     }
 }
 
@@ -218,24 +185,22 @@ impl RenderResult {
                 backfaces_culled: 0,
                 polygons_clipped: 0,
             },
-            ray_tracing: RayTracingResult {
-                ray_count: ScalarBuffer::new(width, height),
-                bvh_heatmap: ScalarBuffer::new(width, height),
-                primitive_tests: 0,
-                rays: 0,
-                bvh_nodes_visited: 0,
-                tlas_depth: 0,
-                blas_depth: 0,
-                bvh_build_time: Duration::ZERO,
-            },
+            ray_tracing: RayTracingResult::new(width, height),
         }
     }
+}
 
-    /// Aplica a exposure e tonemap.
-    pub fn apply_output(&mut self, output: &OutputOptions) {
+/// A interface comum, que `Rasterizer` e `RayTracer` implementam.
+pub trait Renderer {
+    /// Renderiza `scene` com `params` e retorna a imagem final e as informações
+    /// de debug.
+    fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult;
+
+    /// Aplica a exposure e o tonemap na imagem final.
+    fn apply_output(&self, result: &mut RenderResult, output: &OutputOptions) {
         let exposure = 2.0f32.powf(output.exposure);
 
-        for pixel in &mut self.color.pixels {
+        for pixel in &mut result.color.pixels {
             *pixel = {
                 let c = *pixel * exposure;
                 match output.tonemap {
@@ -245,13 +210,4 @@ impl RenderResult {
             };
         }
     }
-}
-
-/// A interface comum, que `Rasterizer` e `RayTracer` implementam, pra poder
-/// escrever código genérico sobre `R: Renderer` e comparar o resultado dos dois
-/// modos sobre a mesma cena.
-pub trait Renderer {
-    /// Renderiza `scene` com `params` e retorna a imagem final e as informações
-    /// de debug.
-    fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult;
 }

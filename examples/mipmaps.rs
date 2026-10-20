@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!(
         "pirâmide: {} níveis, de {}x{} a 1x1",
-        textura.miplevels(),
+        textura.mipmaps(),
         textura.width(),
         textura.height(),
     );
@@ -59,9 +59,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                 },
                 Transform::IDENTITY,
             ),
-            Object::geometry(
-                chao(500.0),
-                Material::textured(textura),
+            Object::primitive(
+                Primitive {
+                    geometry: chao(500.0),
+                    material: Material {
+                        albedo: Channel::Map(textura),
+                        roughness: Channel::Constant(1.0),
+                        ..Material::default()
+                    },
+                },
                 Transform::IDENTITY,
             ),
         ],
@@ -77,14 +83,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     for (filtering, nome) in [
-        (Filtering::Nearest, "nearest"),
-        (Filtering::Bilinear, "bilinear"),
-        (Filtering::MipmapBilinear, "mipmap_bilinear"),
-        (Filtering::Trilinear, "trilinear"),
+        (TextureFilter::Nearest, "nearest"),
+        (TextureFilter::Bilinear, "bilinear"),
+        (TextureFilter::MipmapBilinear, "mipmap_bilinear"),
+        (TextureFilter::Trilinear, "trilinear"),
     ] {
         let params = Parameters {
             shading: ShadingOptions {
-                filtering,
+                texture_filter: filtering,
                 ..base.shading
             },
             ..base.clone()

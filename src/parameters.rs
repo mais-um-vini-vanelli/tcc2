@@ -1,9 +1,3 @@
-//! Parâmetros de renderização, agrupados por **estágio do pipeline**.
-//!
-//! Não é uma lista solta de bools: cada grupo corresponde a uma etapa do
-//! pipeline, então a própria struct documenta o pipeline para quem está
-//! aprendendo.
-
 #[derive(Debug, Clone, Default)]
 pub struct Parameters {
     pub transform: TransformOptions,
@@ -14,7 +8,7 @@ pub struct Parameters {
 }
 
 impl Parameters {
-    /// Parâmetros padrão com a resolução de saída dada.
+    /// Parâmetros padrão com a resolução informada.
     pub fn with_resolution(width: u32, height: u32) -> Self {
         Parameters {
             output: OutputOptions {
@@ -34,24 +28,21 @@ pub struct TransformOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TransformMethod {
-    /// Escala, depois uma rotação por eixo (Euler X, Y, Z), depois translação,
-    /// cada etapa aplicada separadamente.
+    /// Escala, depois uma rotação por eixo (Euler X, Y, Z), depois translação.
     #[default]
     Stepwise,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct RasterizationOptions {
-    /// Descarta triângulos de face oposta à câmera.
+    /// Descarta triângulos de costas para câmera.
     pub backface_cull: bool,
-    /// Correção de perspectiva na interpolação das baricêntricas. Desligar
-    /// mostra a distorção clássica em triângulos inclinados.
+    /// Correção de perspectiva na interpolação das baricêntricas.
     pub perspective_correct: bool,
-    /// Teste de profundidade (z-buffer). Desligar mostra objetos distantes
-    /// desenhados por cima dos próximos, conforme a ordem da cena.
+    /// Teste de profundidade (z-buffer).
     pub depth_test: bool,
     /// Chamado pra cada fragmento, antes do depth test. Não faz nada no
-    /// render: existe só como lugar para pôr um breakpoint.
+    /// render: existe só como lugar pra colocar um breakpoint.
     pub on_fragment: Option<fn(u32, u32)>,
     /// Chamado pra cada triângulo dos objetos com geometria, no começo da pipeline. A
     /// função recebe (index da instância conforme `Scene::flatten`, index da
@@ -71,10 +62,8 @@ impl Default for RasterizationOptions {
     }
 }
 
-// Teoria: texturas.md#os-filtros
-/// Filtro de texture sampling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Filtering {
+pub enum TextureFilter {
     /// Texel mais próximo, no miplevel 0. Barato, visivelmente serrilhado.
     Nearest,
     /// Interpolação entre os quatro texels vizinhos, no miplevel 0.
@@ -90,31 +79,11 @@ pub enum Filtering {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ShadingOptions {
-    // Com que frequência a cor é avaliada
-    pub frequency: ShadingFrequency,
-    // Qual modelo de reflectância a avalia a cor
-    pub reflectance: ReflectanceModel,
-    // Como as texturas do material são lidas
-    pub filtering: Filtering,
+    pub reflectance_model: ReflectanceModel,
+    pub texture_filter: TextureFilter,
 }
 
-// Teoria: triangulo.md#onde-a-cor-é-avaliada
-/// Onde a cor é avaliada — por face, por vértice ou por fragmento. Não diz nada
-/// sobre *como* ela é calculada; isso é o `ReflectanceModel`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ShadingFrequency {
-    /// Uma cor por triângulo, da normal geométrica da face. A malha aparece
-    /// facetada, e cada face da tesselação fica visível.
-    Flat,
-    /// Uma cor por vértice, interpolada no interior. Barato, mas o brilho
-    /// especular só existe se cair em cima de um vértice.
-    Gouraud,
-    /// A normal é interpolada e a cor calculada por pixel. É o padrão.
-    #[default]
-    Phong,
-}
-
-/// Qual BRDF converte a luz que chega em luz que sai.
+/// Qual BRDF usar. Uma BRDF converte a luz que chega em luz que sai.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ReflectanceModel {
     #[default]
@@ -123,10 +92,10 @@ pub enum ReflectanceModel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AccelerationOptions {
-    /// Desligar cai para força bruta (todo raio testa todo primitivo).
-    pub bvh: bool,
-    /// Onde a construção corta cada nó da BVH.
-    pub split: BvhSplit,
+    /// Usar BVHs para economizar testes de interseção dos raios com a geometria.
+    pub enabled: bool,
+    /// Como dividir os itens entre os nós da BVH.
+    pub bvh_split: BvhSplit,
     /// Desenhar as caixas dos nós da BVH até esta profundidade. `None` = não desenha nada.
     pub wireframe: Option<u32>,
 }
@@ -134,8 +103,8 @@ pub struct AccelerationOptions {
 impl Default for AccelerationOptions {
     fn default() -> Self {
         AccelerationOptions {
-            bvh: true,
-            split: BvhSplit::default(),
+            enabled: true,
+            bvh_split: BvhSplit::default(),
             wireframe: None,
         }
     }
@@ -143,11 +112,10 @@ impl Default for AccelerationOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BvhSplit {
-    /// Metade dos itens pra cada lado, no eixo mais comprido. A árvore sai
-    /// balanceada, mas cega ao tamanho das caixas.
+    /// Metade dos itens pra cada lado, no eixo mais comprido.
     Median,
     /// O corte de menor custo esperado pela *Surface Area Heuristic*
-    /// (MacDonald e Booth, 1990), que também decide quando parar de dividir.
+    /// (MacDonald e Booth, 1990).
     #[default]
     Sah,
 }
@@ -156,15 +124,15 @@ pub enum BvhSplit {
 pub struct RayTracingOptions {
     /// Profundidade máxima da recursão de reflexão/refração.
     pub max_depth: u32,
-    /// Raios de sombra em direção às luzes.
+    /// Lançar raios de sombra.
     pub shadows: bool,
-    /// Raios secundários de reflexão.
+    /// Lançar raios secundários de reflexão.
     pub reflections: bool,
-    /// Raios secundários de refração.
+    /// Lançar raios secundários de refração.
     pub refractions: bool,
     pub acceleration: AccelerationOptions,
     /// Chamado uma vez por pixel, antes do raio primário. Não faz nada no
-    /// render: existe só como lugar para pôr um breakpoint.
+    /// render: existe só como lugar pra colocar um breakpoint.
     pub on_ray: Option<fn(u32, u32)>,
 }
 
@@ -181,13 +149,11 @@ impl Default for RayTracingOptions {
     }
 }
 
-/// Saída da imagem: dimensões, cor de fundo e como a radiância calculada, que
-/// não tem teto, vira uma cor entre 0 e 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OutputOptions {
     pub width: u32,
     pub height: u32,
-    /// Multiplica a radiância antes do tone mapping, como a exposição de uma
+    /// Multiplica a radiância antes do tonemap, como a exposição de uma
     /// câmera: clareia ou escurece a imagem sem mexer nas luzes.
     pub exposure: f32,
     pub tonemap: Tonemap,
@@ -206,11 +172,9 @@ impl Default for OutputOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tonemap {
-    /// Nada: o que passa de 1 é cortado canal por canal na gravação. Estoura
-    /// os claros e desvia a cor
+    /// Nada: o que passa de 1 é cortado canal por canal na gravação.
     #[default]
     None,
-    /// `c / (1 + c)` em cada canal (Reinhard et al., 2002). Quase a identidade
-    /// nos escuros, e os claros se aproximam de 1 sem chegar.
+    /// `c / (1 + c)` em cada canal (Reinhard et al., 2002).
     Reinhard,
 }

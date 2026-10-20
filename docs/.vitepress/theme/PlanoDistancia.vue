@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useData } from 'vitepress'
-import { palette, eixosIguais, seta, vec2, xy } from './geometry.js'
+import { palette, cena2d, seta2d, linha2d, pontos2d, rotulos2d, vec2 } from './geometry.js'
 
 const { isDark } = useData()
 
@@ -21,18 +21,13 @@ const noPlano = ({ u }) => P0.add(U.mul(u))
 const fig = computed(() => {
   const cores = palette(isDark.value)
 
-  const linha = (pontos, extra) => ({
-    ...xy(pontos), type: 'scatter', mode: 'lines',
-    hoverinfo: 'skip', showlegend: false, ...extra,
-  })
-
   const rotulos = [
     { text: 'p0', position: P0.add(N.mul(-0.12)).add(U.mul(-0.12)), textposition: 'bottom center' },
     { text: 'n', position: P0.add(N.mul(1.55)), textposition: 'top center' },
     { text: 'plano', position: P0.add(U.mul(-1.9)).add(N.mul(0.12)), textposition: 'top center' },
     ...PONTOS.map((ponto) => ({
       text: ponto.nome,
-      position: posicaoV(ponto).nudged_right(0.12),
+      position: posicaoV(ponto).nudge(0.12, 0),
       textposition: 'middle right',
     })),
     ...PONTOS.map((ponto) => ({
@@ -50,37 +45,22 @@ const fig = computed(() => {
   return {
     data: [
       // a reta do plano
-      linha([P0.add(U.mul(-2.2)), P0.add(U.mul(2.6))], {
+      linha2d([P0.add(U.mul(-2.2)), P0.add(U.mul(2.6))], {
         line: { color: cores.tinta, width: 2 },
       }),
       // as linhas pontilhadas horizontais
-      ...PONTOS.map((ponto, i) => linha([noPlano(ponto), posicaoV(ponto)], {
+      ...PONTOS.map((ponto, i) => linha2d([noPlano(ponto), posicaoV(ponto)], {
         line: { color: cores.serie[i], width: 1.4, dash: 'dot' },
       })),
-      {
-        ...xy([P0, ...PONTOS.map(posicaoV)]),
-        type: 'scatter', mode: 'markers',
-        marker: { size: 9, color: cores.tinta },
-        hoverinfo: 'skip', showlegend: false,
-      },
-      {
-        ...xy(rotulos.map((r) => r.position)),
-        text: rotulos.map((r) => r.text),
-        textposition: rotulos.map((r) => r.textposition),
-        type: 'scatter', mode: 'text',
-        textfont: { color: cores.tinta, size: 13 },
-        hoverinfo: 'skip', showlegend: false,
-      },
+      pontos2d([P0, ...PONTOS.map(posicaoV)], cores.tinta),
+      rotulos2d(rotulos, cores.tinta),
     ],
-    layout: {
-      ...eixosIguais([-2.5, 3.0], [-1.6, 2.0]),
+    layout: cena2d([-2.5, 3.0], [-1.6, 2.0], {
       annotations: [
-        seta(P0, P0.add(N.mul(1.5)), cores.tinta),
-        ...PONTOS.map((ponto, i) => seta(P0, posicaoV(ponto), cores.serie[i])),
+        seta2d(P0, P0.add(N.mul(1.5)), cores.tinta),
+        ...PONTOS.map((ponto, i) => seta2d(P0, posicaoV(ponto), cores.serie[i])),
       ],
-      margin: { t: 8, r: 8, b: 8, l: 8 },
-      hovermode: false,
-    },
+    }),
   }
 })
 </script>

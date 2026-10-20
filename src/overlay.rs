@@ -3,75 +3,77 @@ use crate::math::{Vec2, Vec3};
 use crate::render::ColorBuffer;
 use crate::scene::CameraInstance;
 
-/// Desenha as arestas da caixa a partir dos oito cantos em espaço de mundo.
-pub fn caixa(destino: &mut ColorBuffer, camera: &CameraInstance, cantos: [Vec3; 8], cor: Rgb) {
-    const ARESTAS: [(usize, usize); 12] = [
-        // ao longo de x
+pub fn draw_box(
+    camera_instance: &CameraInstance,
+    corners: [Vec3; 8],
+    color: Rgb,
+    buffer: &mut ColorBuffer,
+) {
+    const EDGES: [(usize, usize); 12] = [
+        // Ao longo de x
         (0, 1),
         (2, 3),
         (4, 5),
         (6, 7),
-        // ao longo de y
+        // Ao longo de y
         (0, 2),
         (1, 3),
         (4, 6),
         (5, 7),
-        // ao longo de z
+        // Ao longo de z
         (0, 4),
         (1, 5),
         (2, 6),
         (3, 7),
     ];
 
-    for (a, b) in ARESTAS {
-        linha(destino, camera, cantos[a], cantos[b], cor);
+    for (a, b) in EDGES {
+        draw_line(camera_instance, corners[a], corners[b], color, buffer);
     }
 }
 
-/// Desenha o segmento de `a` a `b`, os dois em espaço de mundo, sem teste de profundidade.
-pub fn linha(
-    destino: &mut ColorBuffer,
+pub fn draw_line(
     camera_instance: &CameraInstance,
     a: Vec3,
     b: Vec3,
-    cor: Rgb,
+    color: Rgb,
+    buffer: &mut ColorBuffer,
 ) {
-    let (largura, altura) = (destino.width(), destino.height());
+    let (width, height) = (buffer.width(), buffer.height());
 
     let (a, b) = (
         camera_instance.to_camera_space(a),
         camera_instance.to_camera_space(b),
     );
 
-    let Some((a, b)) = recorta_no_near(camera_instance, a, b) else {
+    let Some((a, b)) = clip_near(camera_instance, a, b) else {
         return;
     };
 
     let (Some(a), Some(b)) = (
-        camera_instance.camera.to_screen_space(a, largura, altura),
-        camera_instance.camera.to_screen_space(b, largura, altura),
+        camera_instance.local.to_screen_space(a, width, height),
+        camera_instance.local.to_screen_space(b, width, height),
     ) else {
         return;
     };
 
-    let Some((a, b)) = recorta_na_tela(a.xy(), b.xy(), largura, altura) else {
+    let Some((a, b)) = clip_screen(a.xy(), b.xy(), width, height) else {
         return;
     };
 
     let d = b - a;
-    let passos = d.x.abs().max(d.y.abs()).ceil().max(1.0);
+    let steps = d.x.abs().max(d.y.abs()).ceil().max(1.0);
 
-    for i in 0..=(passos as u32) {
-        let p = a + d * (i as f32 / passos);
+    for i in 0..=(steps as u32) {
+        let p = a + d * (i as f32 / steps);
 
-        destino.set(p.x as u32, p.y as u32, cor);
+        buffer.set(p.x as u32, p.y as u32, color);
     }
 }
 
-/// O trecho do segmento com `z >= near`, em espaço de câmera, ou `None` se ele
-/// está todo antes do plano.
-fn recorta_no_near(camera_instance: &CameraInstance, a: Vec3, b: Vec3) -> Option<(Vec3, Vec3)> {
-    let (near, _far) = camera_instance.camera.clip_planes();
+/// Encontra o trecho do segmento com `z >= near` em espaço de câmera.
+fn clip_near(camera_instance: &CameraInstance, a: Vec3, b: Vec3) -> Option<(Vec3, Vec3)> {
+    let (near, _far) = camera_instance.local.clip_planes();
 
     match (a.z >= near, b.z >= near) {
         (true, true) => Some((a, b)),
@@ -90,27 +92,30 @@ fn recorta_no_near(camera_instance: &CameraInstance, a: Vec3, b: Vec3) -> Option
     }
 }
 
-/// O trecho do segmento que cai dentro da imagem, em pixels. É a mesma ideia de `Aabb::hit`, aplicada em slabs 2D.
-fn recorta_na_tela(a: Vec2, b: Vec2, largura: u32, altura: u32) -> Option<(Vec2, Vec2)> {
+/// Encontra o trecho do segmento que cai dentro da imagem, em pixels. É a mesma ideia de `Aabb::hit` aplicada em slabs 2D.
+fn clip_screen(a: Vec2, b: Vec2, width: u32, height: u32) -> Option<(Vec2, Vec2)> {
     let d = b - a;
 
-    let (mut t_entrada, mut t_saida) = (0.0f32, 1.0f32);
+    let (mut t_entry, mut t_exit) = (0.0f32, 1.0f32);
 
-    for (origem, direcao, limite) in [(a.x, d.x, largura as f32), (a.y, d.y, altura as f32)] {
-        if direcao == 0.0 {
-            if origem < 0.0 || origem > limite {
-                // Paralelo a esta slab, a origem define se está dentro ou fora.
+    for (origin, direction, limit) in [
+        (a.x, d.x, width as f32 - 1.0),
+        (a.y, d.y, height as f32 - 1.0),
+    ] {
+        if direction == 0.0 {
+            if origin < 0.0 || origin > limit {
+                // Raio é paralelo a esta slab; a origem define se está dentro ou fora.
                 return None;
             }
         } else {
             // origem + t·direcao = 0      → t = -origem / direcao
             // origem + t·direcao = limite → t = (limite - origem) / direcao
-            let (t0, t1) = (-origem / direcao, (limite - origem) / direcao);
+            let (t0, t1) = (-origin / direction, (limit - origin) / direction);
 
-            t_entrada = t_entrada.max(t0.min(t1));
-            t_saida = t_saida.min(t0.max(t1));
+            t_entry = t_entry.max(t0.min(t1));
+            t_exit = t_exit.min(t0.max(t1));
         }
     }
 
-    (t_entrada <= t_saida).then(|| (a + d * t_entrada, a + d * t_saida))
+    (t_entry <= t_exit).then(|| (a + d * t_entry, a + d * t_exit))
 }

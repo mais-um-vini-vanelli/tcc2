@@ -101,7 +101,9 @@ Primeira leva — **implementada**:
 - [x] **(antecipado)** a subseção "Cor de saída" acima, na parte que entrou (o
   sRGB dos dois lados; o estágio de exposição/tonemap ficou de fora por decisão)
 - [x] os tipos de `Light`: `Point` (com atenuação), `Directional`, `Ambient`
-- [x] `ShadingOptions { model: Flat | Gouraud | Phong }`
+- [x] ~~`ShadingOptions { model: Flat | Gouraud | Phong }`~~ — removido
+  depois: sobrou só o shading por pixel, e por face / por vértice virou
+  parágrafo em "Onde a cor é avaliada"
 - [x] amostragem de textura *nearest*, com a uv já interpolada e `Texture::texel`
   que já existem. Mipmap e filtros ficam em M4; o que se ganha
   aqui é a cena de xadrez, que é a imagem que melhor mostra
@@ -158,7 +160,7 @@ M3".
   depois **removido**: o modo de busca a mais atravessava a travessia e a força
   bruta por ~1% dos testes desta cena; ver
   `teoria/bvh.md#a-sombra-so-precisaria-de-um`
-- [x] toggle `RayTracingOptions.acceleration.bvh` (ligado/desligado) pra
+- [x] toggle `RayTracingOptions.acceleration.enabled` (ligado/desligado) pra
   comparar tempo de render — o exemplo `dois_modos` imprime os dois
 - [x] `RenderPass::RayCount` e `RenderPass::BvhHeatmap`
 
@@ -184,7 +186,7 @@ Decisões e o que ficou de fora em [design_api.md](design_api.md), seção
 - [x] usar equações de plano pra ray-tracing de cubo; adicionar uvs
 
 - [x] SAH (*Surface Area Heuristic*) com baldes na construção da BVH, ao lado da
-  mediana, escolhido por `AccelerationOptions.split`; na TLAS, o custo de uma
+  mediana, escolhido por `AccelerationOptions.bvh_split`; na TLAS, o custo de uma
   malha é o custo esperado da BLAS dela — ver `teoria/bvh.md#construcao-pelo-sah`
 
 - [x] `OutputOptions { exposure, tonemap: None | Reinhard }`
@@ -316,7 +318,7 @@ Teoria em [teoria/transform.md](../teoria/transform.md), seção "A cadeia da
   o conteúdo (geometria + material). O achatamento de M6 ("objetos como lista
   plana de nós, sem `children`") fica substituído por isto
 - [x] **(a mais)** `Object.geometry` vira `Option<Primitive>`: o nó sem
-  geometria só agrupa, e é o `Tcc2Node` do editor e o nó sem `mesh` do glTF.
+  geometria só agrupa, e é o `SceneObject` do editor e o nó sem `mesh` do glTF.
   Nada de tipo novo — `Object::group()` monta um, e `Scene::flatten` não emite
   instância pra ele
 - [x] `flatten()` percorre a árvore uma vez e devolve o que os dois
@@ -366,7 +368,7 @@ Teoria em [teoria/transform.md](../teoria/transform.md), seção "A cadeia da
 
 ### M7.3 — Persistência da cena em `.tcc2.glb`
 
-A gravação mora em `editor/tcc2_export.gd`, e a decisão que abre o marco é onde
+A gravação mora em `editor/io/export.gd`, e a decisão que abre o marco é onde
 ela mora: no editor, e não numa GDExtension que chamasse o `encode.rs` daqui.
 Uma GDExtension **não** evitaria a duplicação, só a mudaria de lugar — a árvore
 do editor não é uma `Scene`, ela guarda *referências* (`{source, mesh, surface}`
@@ -423,18 +425,18 @@ na entrada.
     crus —, então não há conversão de cor na passagem
   - [x] malha com mais de um `primitive`: cada um vira um `Object`, que é o
     contorno previsto em M5 para "1 material per face". Já vinha do
-    `Tcc2Import._mesh()` de M7.1
+    `Import._mesh()` de M7.1
   - [x] atributos que faltam ou sobram: `NORMAL`/`TEXCOORD_0`/`TANGENT` só são
     gravados quando existem, e `TEXCOORD_1`, cor por vértice e skin saem com um
     aviso nomeando o nó — descartados de forma explícita, não silenciosa. Os
     avisos voltam numa lista para quem chamou, em vez de morrerem no log
   - [x] material fora do subconjunto: normalizado por construção, porque a
-    gravação monta o material do zero a partir do `Tcc2Material` — `alphaMode`
+    gravação monta o material do zero a partir do `SceneMaterial` — `alphaMode`
     sempre opaco, `doubleSided` sempre ligado (o ray tracer acerta a face de
     trás), sem oclusão, sem `KHR_texture_transform` e com o sampler padrão. O
     que o Godot tinha a mais já havia sido avisado e largado na importação
 
-- [x] **a volta pelo editor**: o `tcc2_import.gd` lê o `TCC2_extras` junto com o
+- [x] **a volta pelo editor**: o `io/import.gd` lê o `TCC2_extras` junto com o
   resto, então um `.tcc2.glb` reabre como a cena que era — esfera e cubo voltam
   dos campos exatos, `Ambient` vira nó de luz de novo, `casts_shadows` volta, e
   o preset de `Parameters` volta para a raiz. O Godot entrega o documento cru em

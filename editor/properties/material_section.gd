@@ -1,7 +1,7 @@
 @tool
-class_name Tcc2MaterialSection extends Tcc2Section
+class_name MaterialSection extends Section
 
-func bind(binder: Tcc2Binder, mat: Tcc2Material) -> void:
+func bind(binder: Binder, mat: SceneMaterial) -> void:
 	_channel(
 		binder,
 		mat.albedo,
@@ -50,8 +50,8 @@ func bind(binder: Tcc2Binder, mat: Tcc2Material) -> void:
 	binder.bind(%refractive_index, mat, &"refractive_index")
 
 func _channel(
-	binder: Tcc2Binder,
-	value: Tcc2MaterialValue,
+	binder: Binder,
+	value: SceneChannel,
 	holder: Object,
 	kind: Control,
 	constant: Control,
@@ -67,7 +67,7 @@ func _channel(
 		binder.bind(channel, holder, &"channel")
 
 	binder.follow(value.changed, func():
-		var textured := value.kind == Tcc2MaterialValue.Kind.TEXTURE
+		var textured := value.kind == SceneChannel.Kind.TEXTURE
 
 		show_row(constant, not textured)
 		show_row(source, textured)

@@ -1,5 +1,5 @@
 @tool
-class_name Tcc2Rows extends Container
+class_name Rows extends Container
 
 const DOT := 1
 const STEP := 3

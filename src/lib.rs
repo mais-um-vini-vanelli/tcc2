@@ -1,8 +1,3 @@
-//! Software renderer didático: uma API única que alterna entre **rasterização**
-//! e **ray tracing** sobre a mesma descrição da cena.
-//!
-//! `render()` é função pura, sem estado escondido. A mesma cena vale pros dois modos.
-
 mod bvh;
 mod overlay;
 
@@ -10,6 +5,7 @@ mod overlay;
 pub mod glb;
 
 pub mod color;
+pub mod geometry;
 pub mod math;
 pub mod parameters;
 pub mod rasterizer;
@@ -22,10 +18,11 @@ pub mod transform;
 
 pub mod prelude {
     pub use crate::color::Rgb;
+    pub use crate::geometry::{Geometry, Mesh};
     pub use crate::math::{Aabb, Baricentrics, Plane, Ray, Tangent, Vec2, Vec3, Vertex};
     pub use crate::parameters::{
-        AccelerationOptions, BvhSplit, Filtering, OutputOptions, Parameters, RasterizationOptions,
-        RayTracingOptions, ReflectanceModel, ShadingFrequency, ShadingOptions, Tonemap,
+        AccelerationOptions, BvhSplit, OutputOptions, Parameters, RasterizationOptions,
+        RayTracingOptions, ReflectanceModel, ShadingOptions, TextureFilter, Tonemap,
         TransformMethod, TransformOptions,
     };
     pub use crate::rasterizer::Rasterizer;
@@ -34,10 +31,10 @@ pub mod prelude {
         ColorBuffer, RasterizationResult, RayTracingResult, RenderResult, Renderer, ScalarBuffer,
     };
     pub use crate::scene::{
-        Camera, CameraInstance, Content, Geometry, GeometryInstance, Light, LightInstance,
-        Material, MaterialSample, Mesh, Object, Scene, Value, eixos_da_uv,
+        Camera, CameraInstance, Channel, GeometryInstance, Light, LightInstance, Material,
+        MaterialSample, Object, ObjectKind, Primitive, Scene,
     };
     pub use crate::shading::{Surface, shade};
-    pub use crate::texture::{Footprint, Mipmaps, Texture, TextureError};
-    pub use crate::transform::{Chain, Transform};
+    pub use crate::texture::{Footprint, Mipmaps, Texture, TextureError, TextureWrap};
+    pub use crate::transform::{Transform, TransformChain};
 }

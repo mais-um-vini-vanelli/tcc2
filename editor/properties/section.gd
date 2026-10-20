@@ -1,5 +1,5 @@
 @tool
-class_name Tcc2Section extends PanelContainer
+class_name Section extends PanelContainer
 
 var title: String:
 	get:
@@ -42,7 +42,7 @@ func _nested() -> bool:
 	var parent := get_parent()
 
 	while parent != null:
-		if parent is Tcc2Section:
+		if parent is Section:
 			return true
 
 		parent = parent.get_parent()

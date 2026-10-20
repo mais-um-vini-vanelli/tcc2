@@ -1,11 +1,11 @@
-class_name Tcc2CameraForm extends Tcc2Form
+class_name CameraForm extends Form
 
 const TITLES := ["Perspective", "Orthographic"]
 
 func _build() -> void:
-	var camera := node as Tcc2Camera
+	var camera := node as SceneCamera
 	var model: Object = camera.model()
-	var orthographic := camera.kind == Tcc2Camera.Kind.ORTHOGRAPHIC
+	var orthographic := camera.kind == SceneCamera.Kind.ORTHOGRAPHIC
 
 	%Camera.title = TITLES[camera.kind]
 

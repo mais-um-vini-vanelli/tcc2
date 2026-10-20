@@ -1,12 +1,3 @@
-//! Posição, orientação e tamanho de um objeto no mundo.
-//!
-//! Teoria: transform.md#o-transform
-//!
-//! A `Geometry` de um objeto está em **espaço local**; o `Transform` dele é o
-//! que a leva pro mundo. Os dois pipelines usam esta struct em sentidos
-//! opostos: o rasterizador transforma a geometria (`apply_*`), o ray tracer
-//! transforma o raio com a inversa (`undo_*`).
-
 use crate::math::{Ray, Tangent, Vec3};
 use crate::parameters::TransformMethod;
 
@@ -33,199 +24,203 @@ impl Transform {
     };
 
     /// Monta um transform que leva o objeto pra `position` e olhando pra `target`.
-    /// O transform de quem está em `position` e olha para `target`, sem roll.
     pub fn looking_at(position: Vec3, target: Vec3) -> Transform {
-        let frente = (target - position).normalized();
+        let forward = (target - position).normalized();
 
         Transform {
             translation: position,
+            // Transforma os deslocamentos de forward em ângulos de rotação com asin() e atan2()
             rotation: Vec3::new(
-                // frente.y é o deslocamento vertical, então o asin() dele devolve a rotação
-                // em x
-                frente.y.asin().to_degrees(),
-                // pra rotação em y, olhamos pro deslocamento de frente.xz; atan() dele
-                // devolve a rotação
-                (-frente.x).atan2(-frente.z).to_degrees(),
+                forward.y.asin().to_degrees(),
+                (-forward.x).atan2(-forward.z).to_degrees(),
                 0.0,
             ),
             scale: Vec3::ONE,
         }
     }
 
-    // Teoria: transform.md#a-ordem-das-tres-etapas
-    /// Local -> mundo: escala, rotaciona, translada.
-    pub fn apply_point(&self, p: Vec3, method: TransformMethod) -> Vec3 {
-        Self::gira(Self::escala(p, self.scale), self.rotation, method) + self.translation
+    pub fn apply_point(&self, point: Vec3, transform_method: TransformMethod) -> Vec3 {
+        Self::rotate(
+            Self::scale(point, self.scale),
+            self.rotation,
+            transform_method,
+        ) + self.translation
     }
 
     /// Como `apply_point`, sem a translação: direção não tem posição.
-    pub fn apply_direction(&self, d: Vec3, method: TransformMethod) -> Vec3 {
-        Self::gira(Self::escala(d, self.scale), self.rotation, method)
+    pub fn apply_direction(&self, direction: Vec3, transform_method: TransformMethod) -> Vec3 {
+        Self::rotate(
+            Self::scale(direction, self.scale),
+            self.rotation,
+            transform_method,
+        )
     }
 
-    // Teoria: transform.md#a-normal-usa-o-transform-inverso
-    /// A normal não acompanha a escala: ela usa o recíproco dela. É a forma
-    /// legível do que a inversa transposta faz.
-    pub fn apply_normal(&self, n: Vec3, method: TransformMethod) -> Vec3 {
-        Self::gira(
-            Self::escala(n, Self::reciproco(self.scale)),
+    /// Como `apply_direction`, mas usando a escala inversa.
+    pub fn apply_normal(&self, normal: Vec3, transform_method: TransformMethod) -> Vec3 {
+        Self::rotate(
+            Self::inverted_scale(normal, self.scale),
             self.rotation,
-            method,
+            transform_method,
         )
         .normalized()
     }
 
-    pub fn apply_tangent(&self, t: Tangent, method: TransformMethod) -> Tangent {
-        // Teoria: tangentes.md#a-bitangente-sob-espelhamento
-        // A transformação pode mexer no *lado* da bitangente: uma escala
-        // com um número ímpar de eixos negativos espelha o espaço.
-        let espelha = self.scale.x * self.scale.y * self.scale.z < 0.0;
+    pub fn apply_tangent(&self, tangent: Tangent, transform_method: TransformMethod) -> Tangent {
+        // Uma escala com número ímpar de eixos negativos espelha o espaço, então precisa
+        // inverter a tangente.
+        let invert_handedness = self.scale.x * self.scale.y * self.scale.z < 0.0;
 
         Tangent::new(
-            self.apply_direction(t.vector, method).normalized(),
-            if espelha { -t.handedness } else { t.handedness },
+            self.apply_direction(tangent.direction, transform_method)
+                .normalized(),
+            if invert_handedness {
+                -tangent.handedness
+            } else {
+                tangent.handedness
+            },
         )
     }
 
-    // Teoria: transform.md#desfazendo
-    /// Mundo -> local: desfaz as três etapas na ordem contrária.
-    pub fn undo_point(&self, p: Vec3, method: TransformMethod) -> Vec3 {
-        Self::escala(
-            Self::desgira(p - self.translation, self.rotation, method),
-            Self::reciproco(self.scale),
+    /// O inverso de `apply_point`.
+    pub fn undo_point(&self, point: Vec3, transform_method: TransformMethod) -> Vec3 {
+        Self::inverted_scale(
+            Self::inverted_rotate(point - self.translation, self.rotation, transform_method),
+            self.scale,
         )
     }
 
     /// Como `undo_point`, sem a translação.
-    pub fn undo_direction(&self, d: Vec3, method: TransformMethod) -> Vec3 {
-        Self::escala(
-            Self::desgira(d, self.rotation, method),
-            Self::reciproco(self.scale),
+    pub fn undo_direction(&self, direction: Vec3, transform_method: TransformMethod) -> Vec3 {
+        Self::inverted_scale(
+            Self::inverted_rotate(direction, self.rotation, transform_method),
+            self.scale,
         )
     }
 
-    // Teoria: transform.md#o-raio-vai-para-o-espaco-local
-    /// O raio em espaço local, para intersectar com a geometria não
-    /// transformada.
-    ///
-    /// A direção sai **sem normalizar** de propósito: é isso que faz o `t` do
-    /// acerto valer também no mundo, sem conversão de volta.
-    pub fn undo_ray(&self, r: Ray, method: TransformMethod) -> Ray {
+    // Leva o raio pro espaço local do objeto.
+    pub fn undo_ray(&self, ray: Ray, transform_method: TransformMethod) -> Ray {
         Ray {
-            origin: self.undo_point(r.origin, method),
-            direction: self.undo_direction(r.direction, method),
+            origin: self.undo_point(ray.origin, transform_method),
+            direction: self.undo_direction(ray.direction, transform_method),
         }
     }
 
-    fn escala(v: Vec3, s: Vec3) -> Vec3 {
-        Vec3::new(v.x * s.x, v.y * s.y, v.z * s.z)
+    fn scale(vec: Vec3, scale: Vec3) -> Vec3 {
+        let scale = Self::clamp_scale(scale);
+        Vec3::new(vec.x * scale.x, vec.y * scale.y, vec.z * scale.z)
     }
 
-    fn reciproco(s: Vec3) -> Vec3 {
-        let inverte = |v: f32| {
-            if v == 0.0 {
-                panic!("scale não pode ser 0.0 em nenhum eixo")
+    fn inverted_scale(vec: Vec3, scale: Vec3) -> Vec3 {
+        let scale = Self::clamp_scale(scale);
+        Vec3::new(vec.x / scale.x, vec.y / scale.y, vec.z / scale.z)
+    }
+
+    fn clamp_scale(scale: Vec3) -> Vec3 {
+        let clamp = |value: f32| {
+            const EPSILON: f32 = 1e-6;
+
+            if value.abs() < EPSILON {
+                // Uma escala 0.0 em um eixo achata o espaço em um plano, e não tem como descobrir
+                // o inverso, então limitamos a um epsilon.
+                EPSILON.copysign(value)
             } else {
-                1.0 / v
+                value
             }
         };
-        Vec3::new(inverte(s.x), inverte(s.y), inverte(s.z))
+
+        Vec3::new(clamp(scale.x), clamp(scale.y), clamp(scale.z))
     }
 
-    fn gira(v: Vec3, graus: Vec3, method: TransformMethod) -> Vec3 {
-        match method {
+    fn rotate(vec: Vec3, angle: Vec3, trasnform_method: TransformMethod) -> Vec3 {
+        match trasnform_method {
+            TransformMethod::Stepwise => Self::rotate_z(
+                Self::rotate_y(
+                    Self::rotate_x(vec, angle.x.to_radians()),
+                    angle.y.to_radians(),
+                ),
+                angle.z.to_radians(),
+            ),
+        }
+    }
+
+    fn inverted_rotate(vec: Vec3, angle: Vec3, transform_method: TransformMethod) -> Vec3 {
+        match transform_method {
             TransformMethod::Stepwise => {
-                let v = Self::gira_x(v, graus.x.to_radians());
-                let v = Self::gira_y(v, graus.y.to_radians());
-                Self::gira_z(v, graus.z.to_radians())
+                let vec = Self::rotate_z(vec, -angle.z.to_radians());
+                let vec = Self::rotate_y(vec, -angle.y.to_radians());
+                Self::rotate_x(vec, -angle.x.to_radians())
             }
         }
     }
 
-    fn desgira(v: Vec3, graus: Vec3, method: TransformMethod) -> Vec3 {
-        match method {
-            TransformMethod::Stepwise => {
-                let v = Self::gira_z(v, -graus.z.to_radians());
-                let v = Self::gira_y(v, -graus.y.to_radians());
-                Self::gira_x(v, -graus.x.to_radians())
-            }
-        }
+    fn rotate_x(vec: Vec3, angle: f32) -> Vec3 {
+        let (sin, cos) = angle.sin_cos();
+        Vec3::new(vec.x, vec.y * cos - vec.z * sin, vec.y * sin + vec.z * cos)
     }
 
-    // Teoria: transform.md#girar-em-torno-de-um-eixo
-    fn gira_x(v: Vec3, a: f32) -> Vec3 {
-        let (sin, cos) = a.sin_cos();
-        Vec3::new(v.x, v.y * cos - v.z * sin, v.y * sin + v.z * cos)
+    fn rotate_y(vec: Vec3, angle: f32) -> Vec3 {
+        let (sin, cos) = angle.sin_cos();
+        Vec3::new(vec.x * cos + vec.z * sin, vec.y, -vec.x * sin + vec.z * cos)
     }
 
-    fn gira_y(v: Vec3, a: f32) -> Vec3 {
-        let (sin, cos) = a.sin_cos();
-        Vec3::new(v.x * cos + v.z * sin, v.y, -v.x * sin + v.z * cos)
-    }
-
-    fn gira_z(v: Vec3, a: f32) -> Vec3 {
-        let (sin, cos) = a.sin_cos();
-        Vec3::new(v.x * cos - v.y * sin, v.x * sin + v.y * cos, v.z)
+    fn rotate_z(vec: Vec3, angle: f32) -> Vec3 {
+        let (sin, cos) = angle.sin_cos();
+        Vec3::new(vec.x * cos - vec.y * sin, vec.x * sin + vec.y * cos, vec.z)
     }
 }
 
-/// Os transforms de um nó da árvore da cena até a raiz; o primeiro elemento é o do próprio nó, o último é o da raiz.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct Chain(Vec<Transform>);
+pub struct TransformChain(Vec<Transform>);
 
-impl Chain {
-    pub const IDENTITY: Chain = Chain(Vec::new());
+impl TransformChain {
+    pub const IDENTITY: TransformChain = TransformChain(Vec::new());
 
-    /// Monta a cadeia a partir dos elos **da raiz até o nó** (a ordem em que a
-    /// travessia da árvore os encontra).
-    pub fn from_root_first(links: &[Transform]) -> Chain {
-        Chain(links.iter().rev().copied().collect())
+    /// Monta a cadeia a partir da pilha de transforms do objeto no scene graph.
+    pub fn from_stack(stack: &[Transform]) -> TransformChain {
+        TransformChain(stack.iter().rev().copied().collect())
     }
 
-    pub fn links(&self) -> &[Transform] {
-        &self.0
+    pub fn apply_point(&self, point: Vec3, transform_method: TransformMethod) -> Vec3 {
+        self.0.iter().fold(point, |point, link| {
+            link.apply_point(point, transform_method)
+        })
     }
 
-    pub fn apply_point(&self, p: Vec3, method: TransformMethod) -> Vec3 {
-        self.0.iter().fold(p, |p, link| link.apply_point(p, method))
+    pub fn apply_direction(&self, direction: Vec3, transform_method: TransformMethod) -> Vec3 {
+        self.0.iter().fold(direction, |direction, link| {
+            link.apply_direction(direction, transform_method)
+        })
     }
 
-    pub fn apply_direction(&self, d: Vec3, method: TransformMethod) -> Vec3 {
-        self.0
-            .iter()
-            .fold(d, |d, link| link.apply_direction(d, method))
+    pub fn apply_normal(&self, normal: Vec3, transform_method: TransformMethod) -> Vec3 {
+        self.0.iter().fold(normal, |normal, link| {
+            link.apply_normal(normal, transform_method)
+        })
     }
 
-    pub fn apply_normal(&self, n: Vec3, method: TransformMethod) -> Vec3 {
-        self.0
-            .iter()
-            .fold(n, |n, link| link.apply_normal(n, method))
+    pub fn apply_tangent(&self, tangent: Tangent, transform_method: TransformMethod) -> Tangent {
+        self.0.iter().fold(tangent, |tangent, link| {
+            link.apply_tangent(tangent, transform_method)
+        })
     }
 
-    pub fn apply_tangent(&self, t: Tangent, method: TransformMethod) -> Tangent {
-        self.0
-            .iter()
-            .fold(t, |t, link| link.apply_tangent(t, method))
+    pub fn undo_point(&self, point: Vec3, transform_method: TransformMethod) -> Vec3 {
+        self.0.iter().rev().fold(point, |point, link| {
+            link.undo_point(point, transform_method)
+        })
     }
 
-    pub fn undo_point(&self, p: Vec3, method: TransformMethod) -> Vec3 {
-        self.0
-            .iter()
-            .rev()
-            .fold(p, |p, link| link.undo_point(p, method))
+    pub fn undo_direction(&self, direction: Vec3, transform_method: TransformMethod) -> Vec3 {
+        self.0.iter().rev().fold(direction, |direction, link| {
+            link.undo_direction(direction, transform_method)
+        })
     }
 
-    pub fn undo_direction(&self, d: Vec3, method: TransformMethod) -> Vec3 {
-        self.0
-            .iter()
-            .rev()
-            .fold(d, |d, link| link.undo_direction(d, method))
-    }
-
-    pub fn undo_ray(&self, r: Ray, method: TransformMethod) -> Ray {
+    pub fn undo_ray(&self, ray: Ray, transform_method: TransformMethod) -> Ray {
         Ray {
-            origin: self.undo_point(r.origin, method),
-            direction: self.undo_direction(r.direction, method),
+            origin: self.undo_point(ray.origin, transform_method),
+            direction: self.undo_direction(ray.direction, transform_method),
         }
     }
 }

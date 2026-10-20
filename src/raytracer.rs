@@ -1,160 +1,107 @@
-//! Ray tracer.
-//!
-//! Teoria: raytracer.md#a-pipeline
-//!
-//! Lança um raio primário por pixel, leva o raio pro espaço local de cada
-//! objeto, chama `Geometry::intersect` e resolve o acerto mais próximo com o
-//! mesmo `shade()` do rasterizador.
-//!
-//! O que este arquivo tem e o rasterizador não é a **recursão**: o modelo de
-//! Whitted (1979) soma ao termo direto o que chega pelo raio de reflexão e pelo
-//! de refração, e cada um deles é um `trace()` novo a partir do ponto de
-//! acerto. `shading::shade` continua sendo só o termo direto.
-//!
-//! Com `acceleration.bvh` ligado, quem escolhe quais objetos e triângulos cada
-//! raio testa é a BVH de `bvh.rs`; desligado, todo raio testa a cena inteira.
+use std::cell::RefCell;
 
 use crate::color::Rgb;
 use crate::math::{Ray, Vec3};
 use crate::parameters::Parameters;
-use crate::render::{Contador, RenderResult, Renderer};
-use crate::scene::{
-    Camera, CameraInstance, GeometryInstance, Light, LightInstance, Material, Scene,
-};
+use crate::render::{RayTracingResult, RenderResult, Renderer};
+use crate::scene::{Camera, CameraInstance, GeometryInstance, Light, LightInstance, Scene};
 use crate::shading::{self, Surface};
 
-use crate::bvh::Aceleracao;
-
-// Teoria: raytracer.md#o-acne-e-o-epsilon
-/// Deslocamento da origem de todo raio secundário, para que a superfície que o
-/// gerou não apareça como acerto em `t` quase zero.
-const EPSILON: f32 = 1e-3;
-
-// Teoria: raytracer.md#o-limite-do-espelho-de-whitted
-/// Acima desta rugosidade o lóbulo especular é largo demais para um raio só, e
-/// o raio de espelho deixa de ser disparado.
-const ESPELHO_MAX_ROUGHNESS: f32 = 0.1;
+use crate::bvh::AccelerationStructures;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RayTracer;
 
 impl Renderer for RayTracer {
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
-        let (largura, altura) = (params.output.width, params.output.height);
+        let (width, height) = (params.output.width, params.output.height);
 
-        let (camera_instance, environment, light_instances, instancias) =
+        let (environment, camera_instance, light_instances, geometry_instances) =
             scene.flatten(params.transform.method);
 
-        let mut resultado = RenderResult::new(largura, altura, environment);
-
-        let contador = Contador::default();
+        let mut result = RenderResult::new(width, height, environment);
 
         let Some(camera_instance) = camera_instance else {
-            // Sem câmera não há de onde partir raio: sobra o fundo.
-            return resultado;
+            return result;
         };
 
-        let aceleracao = params.ray_tracing.acceleration.bvh.then(|| {
-            Aceleracao::build(
-                &instancias,
-                params.ray_tracing.acceleration.split,
+        let ray_tracing = RefCell::new(RayTracingResult::new(width, height));
+
+        let acceleration_structures = params.ray_tracing.acceleration.enabled.then(|| {
+            AccelerationStructures::build(
+                &geometry_instances,
+                params.ray_tracing.acceleration.bvh_split,
                 params.transform.method,
-                &contador,
+                &ray_tracing,
             )
         });
 
-        let contexto = Contexto {
+        let state = State {
             lights: light_instances,
             environment,
-            instancias,
+            geometry_instances,
             params,
-            aceleracao,
-            contador,
+            acceleration_structures,
+            ray_tracing,
         };
 
-        let (near, far) = camera_instance.camera.clip_planes();
+        let (near, far) = camera_instance.local.clip_planes();
 
-        for y in 0..altura {
-            for x in 0..largura {
+        for y in 0..height {
+            for x in 0..width {
                 if let Some(on_ray) = params.ray_tracing.on_ray {
                     on_ray(x, y);
                 }
 
-                let antes = contexto.contador.stats();
+                let stats_snapshot = {
+                    let stats = state.ray_tracing.borrow();
+                    (stats.rays, stats.bvh_nodes_visited)
+                };
 
-                let raio = raio_primario(&camera_instance, x, y, largura, altura);
-                contexto.contador.raio();
+                let ray = Self::primary_ray(&camera_instance, x, y, width, height);
+                state.ray_tracing.borrow_mut().rays += 1;
 
-                resultado
+                result
                     .color
-                    .set(x, y, contexto.trace(raio, near, far, 0));
+                    .set(x, y, Self::trace(&state, ray, near, far, 0));
 
-                // Os passes de custo são o quanto os contadores andaram durante
-                // o pixel: com sombra e recursão, não só o raio primário.
-                let depois = contexto.contador.stats();
+                let mut stats = state.ray_tracing.borrow_mut();
 
-                resultado
-                    .ray_tracing
-                    .ray_count
-                    .set(x, y, (depois.rays - antes.rays) as f32);
+                let (rays, bvh_nodes_visited) = (
+                    stats.rays - stats_snapshot.0,
+                    stats.bvh_nodes_visited - stats_snapshot.1,
+                );
 
-                let nos = depois.bvh_nodes_visited - antes.bvh_nodes_visited;
-                resultado.ray_tracing.bvh_heatmap.set(x, y, nos as f32);
+                stats.ray_count.set(x, y, rays as f32);
+                stats.bvh_heatmap.set(x, y, bvh_nodes_visited as f32);
             }
         }
 
-        resultado.apply_output(&params.output);
+        self.apply_output(&mut result, &params.output);
 
-        if let (Some(profundidade), Some(aceleracao)) = (
+        if let (Some(max_depth), Some(acceleration_structures)) = (
             params.ray_tracing.acceleration.wireframe,
-            &contexto.aceleracao,
+            &state.acceleration_structures,
         ) {
-            aceleracao.wireframe(
-                &mut resultado.color,
+            acceleration_structures.wireframe(
                 &camera_instance,
-                &contexto.instancias,
+                &state.geometry_instances,
                 params.transform.method,
-                profundidade,
+                max_depth,
+                &mut result.color,
             );
         }
 
-        let contagem = contexto.contador.stats();
-        let ray_tracing = &mut resultado.ray_tracing;
+        result.ray_tracing = state.ray_tracing.into_inner();
 
-        ray_tracing.primitive_tests = contagem.primitive_tests;
-        ray_tracing.rays = contagem.rays;
-        ray_tracing.bvh_nodes_visited = contagem.bvh_nodes_visited;
-        ray_tracing.tlas_depth = contagem.tlas_depth;
-        ray_tracing.blas_depth = contagem.blas_depth;
-        ray_tracing.bvh_build_time = contagem.bvh_build_time;
-
-        resultado
+        result
     }
 }
 
-/// O que todo raio do render consulta.
-struct Contexto<'a> {
-    lights: Vec<LightInstance>,
-    /// O que o raio devolve quando não acerta nada.
-    environment: Rgb,
-    instancias: Vec<GeometryInstance<'a>>,
-    params: &'a Parameters,
-    /// `None` com a BVH desligada: aí todo raio testa todo objeto.
-    aceleracao: Option<Aceleracao>,
-    contador: Contador,
-}
+impl RayTracer {
+    const EPSILON: f32 = 1e-3;
 
-/// O material da instância acertada e a superfície no ponto de acerto, já em
-/// espaço de mundo.
-struct Acerto<'a> {
-    material: &'a Material,
-    surface: Surface,
-    normal_geometrica: Vec3,
-}
-
-impl<'a> Contexto<'a> {
-    // Teoria: raytracer.md#a-recursao-de-whitted
-    /// A cor que chega pela direção contrária ao raio.
+    /// Segue o raio de luz no sentido contrário: da câmera para a luz.
     ///
     /// ```text
     /// L = Le                                     <- shading::shade, o emitido
@@ -162,143 +109,151 @@ impl<'a> Contexto<'a> {
     ///   + F(v, n) · L(raio refletido)            <- recursão
     ///   + kt      · L(raio refratado)            <- recursão
     /// ```
-    fn trace(&self, raio: Ray, t_min: f32, t_max: f32, profundidade: u32) -> Rgb {
-        let opcoes = &self.params.ray_tracing;
-
-        let Some(acerto) = self.mais_proximo(raio, t_min, t_max, Consulta::Visao) else {
-            return self.environment;
+    fn trace(state: &State, ray: Ray, t_min: f32, t_max: f32, max_depth: u32) -> Rgb {
+        let Some(hit) = Self::closest_hit(state, ray, t_min, t_max, false) else {
+            return state.environment;
         };
 
-        let superficie = acerto.surface;
-        let geometrica = acerto.normal_geometrica;
-        let material = acerto.material;
-        // Teoria: texturas.md#a-footprint-do-pixel
-        // Um raio não sabe dos raios vizinhos, então não há footprint: a textura
-        // fica no nível 0.
-        let amostra = material.sample(superficie.uv, None, self.params.shading.filtering);
+        let material_sample = hit.surface.material;
+        let normal = hit.surface.normal;
 
-        let n = superficie.normal;
-        let direcao = raio.direction.normalized();
+        let ray_dir = ray.direction.normalized();
+        let view = -ray_dir;
 
-        // A direção de visão sai do próprio raio, e não da câmera: dentro de um
-        // reflexo quem "olha" para o ponto é o espelho.
-        let v = -direcao;
-
-        let direto = {
-            let visibilidade = |s: &Surface, luz: &LightInstance| {
-                if !opcoes.shadows {
+        let direct_color = {
+            let visibility = |surface: &Surface, light_instance: &LightInstance| {
+                if !(&state.params.ray_tracing).shadows {
                     return 1.0;
                 }
 
-                if self.ocluido(s.point, geometrica, luz) {
-                    0.0
-                } else {
-                    1.0
+                let shadow_dir = Self::shadow_ray_dir(surface.point, light_instance);
+
+                if shadow_dir.is_some() {
+                    let (shadow_dir, t_max) =
+                        Self::shadow_ray_dir(surface.point, light_instance).unwrap();
+                    let shadow_ray = Ray::new(
+                        Self::offset_ray_origin(surface.point, hit.geometric_normal, shadow_dir),
+                        shadow_dir,
+                    );
+
+                    state.ray_tracing.borrow_mut().rays += 1;
+
+                    if Self::closest_hit(state, shadow_ray, Self::EPSILON, t_max, true).is_some() {
+                        return 0.0;
+                    }
                 }
+
+                1.0
             };
 
             shading::shade(
-                &superficie,
-                &amostra,
-                &self.lights,
-                v,
-                self.params.shading.reflectance,
-                &visibilidade,
+                &hit.surface,
+                view,
+                &state.lights,
+                &visibility,
+                state.params.shading.reflectance_model,
             )
         };
 
-        if profundidade >= opcoes.max_depth {
-            return direto;
+        if max_depth >= state.params.ray_tracing.max_depth {
+            return direct_color;
         }
 
-        let mut cor = direto;
+        let mut result = direct_color;
 
-        // Um único Fresnel divide os dois raios secundários: o que ele manda pro
-        // espelho é o que falta pro que entra na superfície.
-        //
-        // O `abs` é o acerto pela face de dentro, na saída do vidro: ali a normal
-        // aponta contra quem olha, e sem ele o cosseno negativo vira F = 1 e fecha a
-        // refração inteira. Teoria: raytracer.md#entrando-e-saindo
-        let fresnel = shading::fresnel_schlick(shading::f0(&amostra), n.dot(v).abs());
+        // O fresnel define quanta luz é refletida e quanta é refratada.
+        let fresnel =
+            shading::fresnel_schlick(shading::f0(&material_sample), normal.dot(view).abs());
 
-        // Teoria: raytracer.md#o-peso-do-raio-de-espelho
-        if opcoes.reflections && amostra.roughness < ESPELHO_MAX_ROUGHNESS {
-            let refletida = reflete(direcao, n);
-
-            self.contador.raio();
-
-            let vindo_do_espelho = self.trace(
-                Ray::new(desloca(superficie.point, geometrica, refletida), refletida),
-                EPSILON,
-                f32::INFINITY,
-                profundidade + 1,
+        if state.params.ray_tracing.reflections && material_sample.roughness < 0.1 {
+            let reflection_dir = Self::reflection_ray_dir(ray_dir, normal);
+            let reflection_ray = Ray::new(
+                Self::offset_ray_origin(hit.surface.point, hit.geometric_normal, reflection_dir),
+                reflection_dir,
             );
 
-            cor = cor + fresnel * vindo_do_espelho;
-        }
+            state.ray_tracing.borrow_mut().rays += 1;
 
-        // Teoria: raytracer.md#o-raio-refratado
-        if opcoes.refractions && amostra.transparency > 0.0 {
-            // Reflexão interna total: não há caminho de saída, e a energia que
-            // seria transmitida volta como reflexo.
-            let transmitida = refrata(direcao, n, amostra.refractive_index)
-                .unwrap_or_else(|| reflete(direcao, n));
-
-            self.contador.raio();
-
-            let vindo_de_dentro = self.trace(
-                Ray::new(
-                    desloca(superficie.point, geometrica, transmitida),
-                    transmitida,
-                ),
-                EPSILON,
+            let reflection_color = Self::trace(
+                state,
+                reflection_ray,
+                Self::EPSILON,
                 f32::INFINITY,
-                profundidade + 1,
+                max_depth + 1,
             );
 
-            // O que não voltou pelo espelho é o que entrou na superfície, e
-            // `transparency` diz quanto disso atravessa em vez de virar difuso.
-            let peso = (Rgb::WHITE - fresnel) * amostra.transparency;
-
-            cor = cor + vindo_de_dentro * peso;
+            result = result + fresnel * reflection_color;
         }
 
-        cor
+        if state.params.ray_tracing.refractions && material_sample.transparency > 0.0 {
+            let refraction_dir =
+                Self::refraction_ray_dir(ray_dir, normal, material_sample.refractive_index)
+                    .unwrap_or_else(|| {
+                        // Reflexão interna total: o raio de refração vira um raio de reflexão.
+                        Self::reflection_ray_dir(ray_dir, normal)
+                    });
+            let refraction_ray = Ray::new(
+                Self::offset_ray_origin(hit.surface.point, hit.geometric_normal, refraction_dir),
+                refraction_dir,
+            );
+
+            state.ray_tracing.borrow_mut().rays += 1;
+
+            let refraction_color = Self::trace(
+                state,
+                refraction_ray,
+                Self::EPSILON,
+                f32::INFINITY,
+                max_depth + 1,
+            );
+
+            // Desconsiderar a luz que foi refletida (fresnel) e a luz que voltou como brilho difuso
+            // (1 - transparency).
+            let factor = (Rgb::WHITE - fresnel) * material_sample.transparency;
+            result = result + refraction_color * factor;
+        }
+
+        result
     }
 
-    // Teoria: bvh.md#dois-niveis
-    /// O acerto mais próximo da origem do raio, entre `t_min` e `t_max`, entre
-    /// os objetos que a `consulta` enxerga.
-    ///
-    /// Os dois níveis da aceleração aparecem aqui, com a mesma forma: a TLAS
-    /// escolhe entre os objetos, e o teste de um objeto é uma travessia da
-    /// BLAS dele entre as faces.
-    fn mais_proximo(
-        &self,
-        raio: Ray,
+    /// O acerto mais próximo da origem do raio, entre `t_min` e `t_max`.
+    fn closest_hit(
+        state: &State,
+        ray: Ray,
         t_min: f32,
         t_max: f32,
-        consulta: Consulta,
-    ) -> Option<Acerto<'a>> {
-        let (i, hit) = if self.params.ray_tracing.acceleration.bvh {
-            self.aceleracao.as_ref().unwrap().mais_proximo(
-                &self.instancias,
-                raio,
-                consulta == Consulta::Sombra,
-                t_min,
-                t_max,
-                self.params.transform.method,
-                &self.contador,
-            )?
+        in_shadow_ray: bool,
+    ) -> Option<SurfaceHit> {
+        let (i, hit) = if state.params.ray_tracing.acceleration.enabled {
+            state
+                .acceleration_structures
+                .as_ref()
+                .unwrap()
+                .closest_hit(
+                    &state.geometry_instances,
+                    ray,
+                    in_shadow_ray,
+                    t_min,
+                    t_max,
+                    state.params.transform.method,
+                    &state.ray_tracing,
+                )?
         } else {
             let mut t_max = t_max;
             let mut closest = None;
 
-            for (i, inst) in self.instancias.iter().enumerate() {
-                let ray_local = inst.chain.undo_ray(raio, self.params.transform.method);
-                let hit = inst.geometry.intersect(ray_local);
+            for (i, geometry_instance) in state.geometry_instances.iter().enumerate() {
+                if in_shadow_ray && geometry_instance.primitive.material.is_emissive() {
+                    continue;
+                }
 
-                self.contador.teste();
+                let ray_local = geometry_instance
+                    .transform_chain
+                    .undo_ray(ray, state.params.transform.method);
+
+                let hit = geometry_instance.primitive.geometry.intersect(ray_local);
+
+                state.ray_tracing.borrow_mut().primitive_tests += 1;
 
                 if let Some(hit) = hit {
                     if hit.t > t_min && hit.t < t_max {
@@ -311,141 +266,136 @@ impl<'a> Contexto<'a> {
             closest?
         };
 
-        let inst = &self.instancias[i];
-        let method = self.params.transform.method;
+        let geometry_instance = &state.geometry_instances[i];
+        let transform_method = state.params.transform.method;
 
-        let normal = inst.material.shading_normal(
+        let material = &geometry_instance.primitive.material;
+        let normal = material.apply_normal_map(
             hit.uv,
+            // Sem footprint por enquanto: os mipmaps são ignorados.
             None,
-            self.params.shading.filtering,
-            inst.chain.apply_normal(hit.normal, method),
-            inst.chain.apply_tangent(hit.tangent, method),
+            state.params.shading.texture_filter,
+            geometry_instance
+                .transform_chain
+                .apply_normal(hit.shading_normal, transform_method),
+            geometry_instance
+                .transform_chain
+                .apply_tangent(hit.tangent, transform_method),
         );
 
-        Some(Acerto {
-            material: inst.material,
+        Some(SurfaceHit {
             surface: Surface {
-                point: raio.at(hit.t),
+                point: ray.at(hit.t),
                 normal,
                 uv: hit.uv,
+                material: material.sample(hit.uv, None, state.params.shading.texture_filter),
             },
-            normal_geometrica: inst.chain.apply_normal(hit.geometric_normal, method),
+            geometric_normal: geometry_instance
+                .transform_chain
+                .apply_normal(hit.geometric_normal, transform_method),
         })
     }
 
-    // Teoria: raytracer.md#o-raio-de-sombra
-    /// Existe alguma coisa entre o ponto e a luz?
-    fn ocluido(&self, ponto: Vec3, geometrica: Vec3, luz: &LightInstance) -> bool {
-        let (direcao, distancia) = match luz.light {
-            Light::Point { .. } | Light::Spot { .. } => {
-                let ate_a_luz = luz.position - ponto;
-                (ate_a_luz.normalized(), ate_a_luz.length())
+    /// Monta um raio primário que passa pelo centro do pixel `(x, y)`.
+    fn primary_ray(
+        camera_instance: &CameraInstance,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    ) -> Ray {
+        let (right, up, forward) = camera_instance.basis;
+
+        // Calcula o centro do pixel e converte pra [-1, 1].
+        let u = 2.0 * (x as f32 + 0.5) / width as f32 - 1.0;
+        let v = 1.0 - 2.0 * (y as f32 + 0.5) / height as f32;
+
+        match camera_instance.local {
+            Camera::Perspective { fov, aspect, .. } => {
+                let half_height = (fov.to_radians() * 0.5).tan();
+                let direction =
+                    forward + right * (u * half_height * aspect) + up * (v * half_height);
+
+                Ray::new(camera_instance.position, direction)
             }
-            // Luz direcional não tem posição: qualquer coisa no caminho bloqueia,
-            // por mais longe que esteja.
-            Light::Directional { .. } => (-luz.forward(), f32::INFINITY),
-            Light::Environment { .. } => return false,
+
+            Camera::Orthographic { width, height, .. } => {
+                let origem =
+                    camera_instance.position + right * (u * width * 0.5) + up * (v * height * 0.5);
+
+                Ray::new(origem, forward)
+            }
+        }
+    }
+
+    /// Monta um raio de sombra, da superfície até a luz.
+    fn shadow_ray_dir(point: Vec3, light_instance: &LightInstance) -> Option<(Vec3, f32)> {
+        let (direction, t_max) = match light_instance.local {
+            Light::Point { .. } | Light::Spot { .. } => {
+                let to_light = light_instance.position - point;
+                (to_light.normalized(), to_light.length())
+            }
+
+            Light::Directional { .. } => (-light_instance.forward(), f32::INFINITY),
+
+            Light::Environment { .. } => return None,
         };
 
-        let sombra = Ray::new(desloca(ponto, geometrica, direcao), direcao);
-
-        self.contador.raio();
-
-        self.mais_proximo(sombra, EPSILON, distancia, Consulta::Sombra)
-            .is_some()
-    }
-}
-
-/// Pra que serve o raio. O de sombra não enxerga quem tem `casts_shadows`
-/// desligado, e é só nisso que os dois diferem.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Consulta {
-    Visao,
-    Sombra,
-}
-
-// Teoria: raytracer.md#o-acne-e-o-epsilon
-/// Afasta a origem do raio secundário da superfície que o gerou, para o lado em
-/// que ele vai seguir.
-fn desloca(ponto: Vec3, normal: Vec3, direcao: Vec3) -> Vec3 {
-    let lado = if direcao.dot(normal) < 0.0 { -1.0 } else { 1.0 };
-
-    ponto + normal * (EPSILON * lado)
-}
-
-// Teoria: raytracer.md#o-raio-refletido
-/// A direção espelhada de `d` em torno de `n`.
-fn reflete(d: Vec3, n: Vec3) -> Vec3 {
-    d - n * (2.0 * d.dot(n))
-}
-
-// Teoria: raytracer.md#o-raio-refratado
-/// A direção transmitida pela lei de Snell, ou `None` na reflexão interna
-/// total. `d` e `n` unitários, `indice` o índice de refração do objeto (o meio
-/// de fora é sempre o vácuo).
-fn refrata(d: Vec3, n: Vec3, indice: f32) -> Option<Vec3> {
-    let cos_i = -d.dot(n);
-
-    // cos_i negativo é o raio saindo de dentro do objeto: a normal aponta pro
-    // lado oposto de -d, e os dois meios trocam de papel.
-    let (n, eta, cos_i) = if cos_i < 0.0 {
-        (-n, indice, -cos_i)
-    } else {
-        (n, 1.0 / indice, cos_i)
-    };
-
-    // sin²θ₂ = η² · (1 − cos²θ₁)
-    let sen2_t = eta * eta * (1.0 - cos_i * cos_i);
-    if sen2_t > 1.0 {
-        // Caso de refração interna total: sin θ₂ é maior que 1 (inválido)
-        return None;
+        Some((direction, t_max))
     }
 
-    let cos_t = (1.0 - sen2_t).sqrt();
+    /// Monta um raio de refração usando a lei de Snell.
+    fn refraction_ray_dir(direction: Vec3, normal: Vec3, refractive_index: f32) -> Option<Vec3> {
+        let cos_i = -direction.dot(normal);
 
-    // t = η·d + (η·cos θ₁ − cos θ₂)·n
-    Some(d * eta + n * (eta * cos_i - cos_t))
-}
+        // cos_i negativo é o raio saindo de dentro do objeto: a normal aponta pro
+        // lado oposto de -d, e os dois meios trocam de papel.
+        let (normal, eta, cos_i) = if cos_i < 0.0 {
+            (-normal, refractive_index, -cos_i)
+        } else {
+            (normal, 1.0 / refractive_index, cos_i)
+        };
 
-// Teoria: raytracer.md#da-tela-para-a-cena
-/// Monta um raio que passa pelo centro do pixel `(x, y)`.
-///
-/// É aqui que os dois pipelines são diferentes: o rasterizador projeta a geometria
-/// *para* a tela, o ray tracer parte da tela *para* a cena.
-fn raio_primario(
-    camera_instance: &CameraInstance,
-    x: u32,
-    y: u32,
-    largura: u32,
-    altura: u32,
-) -> Ray {
-    let (direita, cima, frente) = camera_instance.basis;
-
-    // Centro do pixel, não o canto.
-    let x = x as f32 + 0.5;
-    let y = y as f32 + 0.5;
-
-    let u = 2.0 * x / largura as f32 - 1.0;
-    let v = 1.0 - 2.0 * y / altura as f32;
-
-    match camera_instance.camera {
-        Camera::Perspective { fov, aspect, .. } => {
-            let meia_altura = (fov.to_radians() * 0.5).tan();
-
-            let deslocamento_pra_frente = frente;
-            let deslocamento_pra_cima = cima * (v * meia_altura);
-            let deslocamento_pra_direita = direita * (u * meia_altura * aspect);
-
-            let direcao =
-                deslocamento_pra_frente + deslocamento_pra_direita + deslocamento_pra_cima;
-
-            Ray::new(camera_instance.position, direcao)
+        // sin²θ₂ = η² · (1 − cos²θ₁)
+        let sen2_t = eta * eta * (1.0 - cos_i * cos_i);
+        if sen2_t > 1.0 {
+            // Caso de refração interna total: sin θ₂ é maior que 1 (inválido)
+            return None;
         }
-        Camera::Orthographic { width, height, .. } => {
-            // Aqui a origem é que varia por pixel; a direção é a mesma pra todos.
-            let origem =
-                camera_instance.position + direita * (u * width * 0.5) + cima * (v * height * 0.5);
-            Ray::new(origem, frente)
-        }
+
+        let cos_t = (1.0 - sen2_t).sqrt();
+
+        // t = η·d + (η·cos θ₁ − cos θ₂)·n
+        Some(direction * eta + normal * (eta * cos_i - cos_t))
     }
+
+    /// Monta um raio de reflexão, espelhando `direction` em torno de `normal`.
+    fn reflection_ray_dir(direction: Vec3, normal: Vec3) -> Vec3 {
+        direction - normal * (2.0 * direction.dot(normal))
+    }
+
+    /// Afasta a origem do raio da superfície, na direção da normal.
+    fn offset_ray_origin(point: Vec3, normal: Vec3, direction: Vec3) -> Vec3 {
+        let sign = if direction.dot(normal) < 0.0 {
+            -1.0
+        } else {
+            1.0
+        };
+
+        point + normal * (Self::EPSILON * sign)
+    }
+}
+
+struct State<'a> {
+    params: &'a Parameters,
+    environment: Rgb,
+    lights: Vec<LightInstance>,
+    geometry_instances: Vec<GeometryInstance<'a>>,
+    acceleration_structures: Option<AccelerationStructures>,
+    ray_tracing: RefCell<RayTracingResult>,
+}
+
+struct SurfaceHit {
+    surface: Surface,
+    geometric_normal: Vec3,
 }

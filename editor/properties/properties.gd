@@ -2,16 +2,16 @@
 extends VBoxContainer
 
 static var PANELS: Array = [
-	[Tcc2Scene, preload("res://properties/scene_form.tscn")],
-	[Tcc2Light, preload("res://properties/light_form.tscn")],
-	[Tcc2Camera, preload("res://properties/camera_form.tscn")],
-	[Tcc2Geometry, preload("res://properties/geometry_form.tscn")],
-	[Tcc2Node, preload("res://properties/group_form.tscn")],
+	[SceneRoot, preload("res://properties/root_form.tscn")],
+	[SceneLight, preload("res://properties/light_form.tscn")],
+	[SceneCamera, preload("res://properties/camera_form.tscn")],
+	[SceneGeometry, preload("res://properties/geometry_form.tscn")],
+	[SceneObject, preload("res://properties/group_form.tscn")],
 ]
 
-var _panel: Tcc2Form
+var _panel: Form
 
-func show_node(node: Tcc2Node) -> void:
+func show_node(node: SceneObject) -> void:
 	if _panel != null:
 		remove_child(_panel)
 		_panel.queue_free()

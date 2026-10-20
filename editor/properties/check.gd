@@ -1,4 +1,4 @@
-class_name Tcc2Check extends CheckBox
+class_name Check extends CheckBox
 
 const ON := "[X]"
 const OFF := "[ ]"

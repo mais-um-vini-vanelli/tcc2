@@ -44,12 +44,8 @@ export class Vec2 {
         return from.add(this.mul(0.5).add(perpendicular.mul(nudge)))
     }
 
-    nudged_up(nudge) {
-        return new Vec2(this.x, this.y + nudge)
-    }
-
-    nudged_right(nudge) {
-        return new Vec2(this.x + nudge, this.y)
+    nudge(dx, dy) {
+        return new Vec2(this.x + dx, this.y + dy)
     }
 }
 
@@ -57,6 +53,99 @@ export const vec2 = (x, y) => new Vec2(x, y)
 
 export function xy(pontos) {
     return { x: pontos.map((p) => p.x), y: pontos.map((p) => p.y) }
+}
+
+export function linha2d(pontos, extra) {
+    return {
+        ...xy(pontos),
+        type: 'scatter',
+        mode: 'lines',
+        hoverinfo: 'skip',
+        showlegend: false,
+        ...extra,
+    }
+}
+
+export function pontos2d(pontos, cor, tamanho = 9, extra) {
+    return {
+        ...xy(pontos),
+        type: 'scatter',
+        mode: 'markers',
+        marker: {
+            size: tamanho,
+            color: cor,
+            ...extra
+        },
+        hoverinfo: 'skip',
+        showlegend: false,
+    }
+}
+
+export function rotulos2d(rotulos, cor, tamanho = 13) {
+    return {
+        ...xy(rotulos.map((r) => r.position)),
+        text: rotulos.map((r) => r.text),
+        textposition: rotulos.map((r) => r.textposition ?? 'middle center'),
+        type: 'scatter',
+        mode: 'text',
+        textfont: {
+            color: cor,
+            size: tamanho
+        },
+        hoverinfo: 'skip',
+        showlegend: false,
+    }
+}
+
+export function seta2d(de, para, cor) {
+    return {
+        x: para.x,
+        y: para.y,
+        ax: de.x,
+        ay: de.y,
+        xref: 'x',
+        yref: 'y',
+        axref: 'x',
+        ayref: 'y',
+        showarrow: true,
+        arrowhead: 2,
+        arrowsize: 1.1,
+        arrowwidth: 2,
+        arrowcolor: cor,
+        text: '',
+    }
+}
+
+export function arco2d(centro, raio, de, ate, passos = 48) {
+    return Array.from({ length: passos + 1 }, (_, i) => {
+        const angulo = de + (ate - de) * (i / passos)
+
+        return centro.add(vec2(Math.cos(angulo), Math.sin(angulo)).mul(raio))
+    })
+}
+
+export function cena2d([x0, x1], [y0, y1], extra) {
+    const eixo = (faixa) => ({
+        visible: false,
+        showgrid: false,
+        zeroline: false,
+        fixedrange: true,
+        range: faixa,
+        constrain: 'domain',
+    })
+
+    return {
+        xaxis: eixo([x0, x1]),
+        yaxis: {
+            ...eixo([y0, y1]),
+            scaleanchor: 'x'
+        },
+        margin: {
+            t: 8, r: 8, b: 8, l: 8
+        },
+        hovermode: false,
+        ...extra,
+    }
 }
 
 const CORES = [
@@ -74,50 +163,10 @@ export function palette(escuro) {
     }
 }
 
-export function eixosIguais([x0, x1], [y0, y1]) {
-    return {
-        xaxis: {
-            visible: false,
-            showgrid: false,
-            zeroline: false,
-            fixedrange: true,
-            range: [x0, x1],
-            constrain: 'domain'
-        },
-        yaxis: {
-            visible: false,
-            showgrid: false,
-            zeroline: false,
-            fixedrange: true,
-            range: [y0, y1],
-            constrain: 'domain',
-            scaleanchor: 'x'
-        },
-    }
-}
-
-export function seta(de, para, cor) {
-    return {
-        x: para.x, y: para.y,
-        ax: de.x, ay: de.y,
-        xref: 'x', yref: 'y', axref: 'x', ayref: 'y',
-        showarrow: true, arrowhead: 2, arrowsize: 1.1, arrowwidth: 2, arrowcolor: cor,
-        text: '',
-    }
-}
-
 export function alfa(cor, a) {
     const n = parseInt(cor.slice(1), 16)
 
     return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
-}
-
-export function arco(centro, raio, de, ate, passos = 48) {
-    return Array.from({ length: passos + 1 }, (_, i) => {
-        const angulo = de + (ate - de) * (i / passos)
-
-        return centro.add(vec2(Math.cos(angulo), Math.sin(angulo)).mul(raio))
-    })
 }
 
 export class Vec3 {
@@ -162,7 +211,7 @@ export class Vec3 {
 
 export const vec3 = (x, y, z) => new Vec3(x, y, z)
 
-// No Plotly o eixo vertical é o z, então precisa girar -90° em torno 
+// No Plotly o eixo vertical é o z, então precisa girar -90° em torno
 // do eixo x.
 export function xyz(pontos) {
     return {
@@ -196,9 +245,15 @@ export function malha3d(pontos, faces, extra) {
 
 export function pontos3d(pontos, cor, tamanho = 5) {
     return {
-        ...xyz(pontos), type: 'scatter3d', mode: 'markers',
-        marker: { size: tamanho, color: cor },
-        hoverinfo: 'skip', showlegend: false,
+        ...xyz(pontos),
+        type: 'scatter3d',
+        mode: 'markers',
+        marker: {
+            size: tamanho,
+            color: cor
+        },
+        hoverinfo: 'skip',
+        showlegend: false,
     }
 }
 
@@ -225,14 +280,22 @@ export function seta3d(de, para, cor, ponta = 0.18) {
     return [
         linha3d([de, para.sub(direcao.mul(ponta * 0.6))], { line: { color: cor, width: 4 } }),
         {
-            ...xyz([para]), u: x, v: y, w: z,
+            ...xyz([para]),
+            u: x,
+            v: y,
+            w: z,
             type: 'cone',
             anchor: 'tip',
             sizemode: 'absolute',
             sizeref: ponta,
-            colorscale: [[0, cor], [1, cor]],
+            colorscale: [
+                [0, cor],
+                [1, cor]
+            ],
             showscale: false,
-            lighting: { ambient: 1 },
+            lighting: {
+                ambient: 1
+            },
             hoverinfo: 'skip',
             showlegend: false,
         },
@@ -252,7 +315,10 @@ export function paralelepipedo(origem, a, b, c) {
     const topo = base.map((p) => p.add(c))
 
     return {
-        cantos: [...base, ...topo],
+        cantos: [
+            ...base,
+            ...topo,
+        ],
         faces: {
             i: [0, 0, 4, 4, 0, 0, 1, 1, 2, 2, 3, 3],
             j: [1, 2, 5, 6, 1, 5, 2, 6, 3, 7, 0, 4],
@@ -297,9 +363,15 @@ export function cena3d(olho, alcance, zoom = 1.45) {
                 z: largura.z / maior * zoom,
             },
             camera: {
-                eye: { x: x[0], y: y[0], z: z[0] },
-                up: { x: 0, y: 0, z: 1 },
-                projection: { type: 'orthographic' },
+                eye: {
+                    x: x[0], y: y[0], z: z[0]
+                },
+                up: {
+                    x: 0, y: 0, z: 1
+                },
+                projection: {
+                    type: 'orthographic'
+                },
             },
             uirevision: 'fixa',
         },

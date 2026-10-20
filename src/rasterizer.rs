@@ -1,15 +1,8 @@
-//! Rasterizador.
-//!
-//! Teoria: rasterizer.md#a-pipeline
-//!
-//! O rasterizador trabalha só com malha: todo objeto da cena passa por
-//! `Geometry::tessellate` na entrada.
-
 use crate::color::Rgb;
-use crate::math::{Baricentrics, Plane, Vec2, Vec3, Vertex};
-use crate::parameters::{Filtering, Parameters, ShadingFrequency};
+use crate::math::{Baricentrics, Plane, Vec2, Vertex};
+use crate::parameters::{Parameters, TextureFilter};
 use crate::render::{RasterizationResult, RenderResult, Renderer};
-use crate::scene::{Camera, CameraInstance, LightInstance, Material, Scene};
+use crate::scene::{CameraInstance, LightInstance, Material, Scene};
 use crate::shading::{self, Surface};
 use crate::texture::Footprint;
 
@@ -18,462 +11,372 @@ pub struct Rasterizer;
 
 impl Renderer for Rasterizer {
     fn render(&self, scene: &Scene, params: &Parameters) -> RenderResult {
-        let (largura, altura) = (params.output.width, params.output.height);
+        let (width, height) = (params.output.width, params.output.height);
 
-        let (camera_instance, environment, light_instances, instances) =
+        let (environment, camera_instance, light_instances, geometry_instances) =
             scene.flatten(params.transform.method);
 
-        if let Filtering::MipmapBilinear | Filtering::Trilinear = params.shading.filtering {
-            for instancia in &instances {
-                instancia.material.generate_mipmaps();
+        if let TextureFilter::MipmapBilinear | TextureFilter::Trilinear =
+            params.shading.texture_filter
+        {
+            for inst in &geometry_instances {
+                for tex in [
+                    &inst.primitive.material.albedo.texture(),
+                    &inst.primitive.material.metallic.texture(),
+                    &inst.primitive.material.roughness.texture(),
+                    &inst.primitive.material.emissive.texture(),
+                    &inst.primitive.material.normal.as_ref(),
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    tex.generate_mipmaps();
+                }
             }
         }
 
-        let mut resultado = RenderResult::new(largura, altura, environment);
+        let mut result = RenderResult::new(width, height, environment);
 
         let Some(camera_instance) = camera_instance else {
-            // Sem câmera não há de onde olhar: sobra o fundo.
-            return resultado;
+            return result;
         };
 
-        let planos = frustum(&camera_instance.camera);
+        let frustum = camera_instance.local.frustum();
 
-        let contexto = Contexto {
+        let state = State {
             camera: &camera_instance,
             lights: &light_instances,
             params,
         };
 
-        for (id, instancia) in instances.iter().enumerate() {
-            let malha = instancia.geometry.tessellate();
+        for (i, geometry_instance) in geometry_instances.iter().enumerate() {
+            let mesh = geometry_instance.primitive.geometry.tessellate();
 
-            for indice in 0..malha.face_count() {
-                let Some(face) = malha.face(indice) else {
+            for face_i in 0..mesh.face_count() {
+                let Some(face) = mesh.face(face_i) else {
                     continue;
                 };
 
                 if let Some(on_triangle) = params.rasterization.on_triangle {
-                    on_triangle(id, indice);
+                    on_triangle(i, face_i);
                 }
 
-                // Local -> mundo -> câmera. Aqui o rasterizador transforma a
-                // *geometria*; o ray tracer resolve o mesmo problema no sentido
-                // contrário, transformando o raio.
-                let tri_camera = face.map(|v| Vertex {
+                // Leva os vértices de local -> world -> camera.
+                let triangle = face.map(|v| Vertex {
                     position: camera_instance.to_camera_space(
-                        instancia
-                            .chain
+                        geometry_instance
+                            .transform_chain
                             .apply_point(v.position, params.transform.method),
                     ),
-                    normal: instancia
-                        .chain
+                    normal: geometry_instance
+                        .transform_chain
                         .apply_normal(v.normal, params.transform.method),
-                    tangent: instancia
-                        .chain
+                    tangent: geometry_instance
+                        .transform_chain
                         .apply_tangent(v.tangent, params.transform.method),
                     uv: v.uv,
                 });
 
-                let triangles = clip(tri_camera, &planos, &mut resultado.rasterization);
+                let triangles = Self::clip(triangle, &frustum, &mut result.rasterization);
 
-                // O recorte devolve um polígono convexo de N vértices; desenhar com triangle fan.
-                for tri_clip in triangles {
-                    let [a, b, c] = tri_clip.map(|v| Vertex {
+                for triangle_camera in triangles {
+                    // Posição em pixels, com o z de câmera guardado sem projeção.
+                    let triangle_screen = triangle_camera.map(|v| Vertex {
                         position: camera_instance
-                            .camera
-                            .to_screen_space(v.position, largura, altura)
-                            .expect("O clipping já garante z >= near"),
+                            .local
+                            .to_screen_space(v.position, width, height)
+                            .expect("o clipping já garante z >= near"),
                         ..v
                     });
 
-                    let area = edge(a.position.xy(), b.position.xy(), c.position.xy());
-                    if area == 0.0 {
-                        // Triângulo degenerado
+                    let [a, b, c] = triangle_screen.map(|v| v.position.xy());
+
+                    let edge_abc = Self::edge_function(a, b, c);
+                    if edge_abc == 0.0 {
+                        // Triângulo degenerado.
                         continue;
                     }
 
-                    if params.rasterization.backface_cull && area > 0.0 {
-                        resultado.rasterization.backfaces_culled += 1;
+                    if params.rasterization.backface_cull && edge_abc > 0.0 {
+                        result.rasterization.backfaces_culled += 1;
                         break;
                     }
 
+                    let perspective_correct = camera_instance.is_perspective()
+                        && params.rasterization.perspective_correct;
+
                     // O shading acontece no espaço de mundo.
-                    let tri_world = tri_clip.map(|v| Vertex {
-                        position: camera_instance.from_camera_space(v.position),
-                        ..v
-                    });
+                    let triangle_world =
+                        triangle_camera.map(|v| camera_instance.from_camera_space(v.position));
 
-                    let shading = contexto.shade_vertex(instancia.material, tri_world);
+                    let (min_x, min_y, max_x, max_y) = Self::bounding_box(a, b, c, width, height);
 
-                    fill(
-                        &mut resultado,
-                        &Triangulo {
-                            tela: [a, b, c],
-                            mundo: tri_world.map(|v| v.position),
-                            area,
-                            shading,
-                            material: instancia.material,
-                        },
-                        &contexto,
-                    );
+                    for y in min_y..=max_y {
+                        for x in min_x..=max_x {
+                            // Usar o centro do pixel: o pixel (1u32, 1u32) tem centro em (1.5f32, 1.5f32).
+                            let pixel = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
+                            let [edge_bc, edge_ca, edge_ab] = [
+                                Self::edge_function(b, c, pixel),
+                                Self::edge_function(c, a, pixel),
+                                Self::edge_function(a, b, pixel),
+                            ];
+
+                            // Um ponto está dentro do triângulo se ele está do mesmo lado das 3 arestas.
+                            let dentro = if edge_abc > 0.0 {
+                                edge_bc >= 0.0 && edge_ca >= 0.0 && edge_ab >= 0.0
+                            } else {
+                                edge_bc <= 0.0 && edge_ca <= 0.0 && edge_ab <= 0.0
+                            };
+
+                            result.rasterization.primitive_tests += 1;
+
+                            if !dentro {
+                                continue;
+                            }
+
+                            if let Some(on_fragment) = params.rasterization.on_fragment {
+                                on_fragment(x, y);
+                            }
+
+                            let screen_weights =
+                                [edge_bc / edge_abc, edge_ca / edge_abc, edge_ab / edge_abc];
+
+                            let baricentrics = if perspective_correct {
+                                Baricentrics::perspective_corrected(
+                                    screen_weights,
+                                    triangle_screen.map(|v| v.position.z),
+                                )
+                            } else {
+                                Baricentrics::new(screen_weights)
+                            };
+
+                            let z =
+                                baricentrics.interpolate_f32(triangle_screen.map(|v| v.position.z));
+
+                            if params.rasterization.depth_test {
+                                let closest = result
+                                    .rasterization
+                                    .depth
+                                    .get(x, y)
+                                    .unwrap_or(f32::INFINITY);
+
+                                if z >= closest {
+                                    continue;
+                                }
+                            }
+
+                            result.rasterization.depth.set(x, y, z);
+
+                            let vertex = Vertex {
+                                position: baricentrics.interpolate_vec3(triangle_world),
+                                normal: baricentrics
+                                    .interpolate_vec3(triangle_screen.map(|v| v.normal))
+                                    // A normal interpolada entre três normais unitárias não sai unitária.
+                                    .normalized(),
+                                tangent: baricentrics
+                                    .interpolate_tangent(triangle_screen.map(|v| v.tangent)),
+                                uv: baricentrics.interpolate_vec2(triangle_screen.map(|v| v.uv)),
+                            };
+
+                            let surface = Self::fragment(
+                                &state,
+                                &geometry_instance.primitive.material,
+                                triangle_screen,
+                                vertex,
+                                pixel,
+                            );
+
+                            result.color.set(
+                                x,
+                                y,
+                                shading::shade(
+                                    &surface,
+                                    state.camera.view_from(surface.point),
+                                    state.lights,
+                                    &shading::always_visible,
+                                    state.params.shading.reflectance_model,
+                                ),
+                            );
+
+                            result.rasterization.normal.set(
+                                x,
+                                y,
+                                // Converte os componentes da normal de [-1,1] para [0,1].
+                                Rgb::new(
+                                    surface.normal.x * 0.5 + 0.5,
+                                    surface.normal.y * 0.5 + 0.5,
+                                    surface.normal.z * 0.5 + 0.5,
+                                ),
+                            );
+
+                            result.rasterization.uv.set(
+                                x,
+                                y,
+                                Rgb::new(vertex.uv.x, vertex.uv.y, 0.0),
+                            );
+                        }
+                    }
                 }
             }
         }
 
-        resultado.apply_output(&params.output);
+        self.apply_output(&mut result, &params.output);
 
-        resultado
+        result
     }
 }
 
-/// O que o shading precisa saber da cena e que não muda de um triângulo para o
-/// outro.
-struct Contexto<'a> {
+struct State<'a> {
+    params: &'a Parameters,
     camera: &'a CameraInstance,
     lights: &'a [LightInstance],
-    params: &'a Parameters,
 }
 
-impl Contexto<'_> {
-    fn shade_fragment(
-        &self,
-        triangulo: &Triangulo,
-        baricentricas: &Baricentrics,
-        normal: Vec3,
-        uv: Vec2,
-        footprint: Footprint,
-    ) -> Rgb {
-        match triangulo.shading {
-            Shading::Face(cor) => cor,
-            Shading::Vertices(cores) => baricentricas.interpolate_rgb(cores),
-            Shading::Pixel => {
-                let superficie = Surface {
-                    point: baricentricas.interpolate_vec3(triangulo.mundo),
-                    normal,
-                    uv,
-                };
+impl Rasterizer {
+    fn clip(
+        triangle: [Vertex; 3],
+        frustum: &[Plane; 6],
+        stats: &mut RasterizationResult,
+    ) -> Vec<[Vertex; 3]> {
+        let mut poligon = triangle.to_vec();
+        let mut clipped = false;
 
-                let filtering = self.params.shading.filtering;
-                let amostra = triangulo.material.sample(uv, Some(footprint), filtering);
-
-                shading::shade(
-                    &superficie,
-                    &amostra,
-                    self.lights,
-                    self.camera.view(superficie.point),
-                    self.params.shading.reflectance,
-                    &shading::always_visible,
-                )
-            }
-        }
-    }
-
-    fn shade_vertex(&self, material: &Material, vertices: [Vertex; 3]) -> Shading {
-        match self.params.shading.frequency {
-            ShadingFrequency::Flat => {
-                let positions = vertices.map(|v| v.position);
-                let uvs = vertices.map(|v| v.uv);
-
-                let normal = (positions[1] - positions[0])
-                    .cross(positions[2] - positions[0])
-                    .normalized();
-                let centro = (positions[0] + positions[1] + positions[2]) / 3.0;
-                let uv = (uvs[0] + uvs[1] + uvs[2]) / 3.0;
-
-                Shading::Face({
-                    shading::shade(
-                        &Surface {
-                            point: centro,
-                            normal,
-                            uv,
-                        },
-                        &material.sample(uv, None, self.params.shading.filtering),
-                        self.lights,
-                        self.camera.view(centro),
-                        self.params.shading.reflectance,
-                        &shading::always_visible,
-                    )
-                })
-            }
-            ShadingFrequency::Gouraud => Shading::Vertices(vertices.map(|v| {
-                shading::shade(
-                    &Surface {
-                        point: v.position,
-                        normal: v.normal,
-                        uv: v.uv,
-                    },
-                    &material.sample(v.uv, None, self.params.shading.filtering),
-                    self.lights,
-                    self.camera.view(v.position),
-                    self.params.shading.reflectance,
-                    &shading::always_visible,
-                )
-            })),
-            ShadingFrequency::Phong => Shading::Pixel,
-        }
-    }
-}
-
-/// O que sobrou do modelo de shading depois de resolver o triângulo: a cor já
-/// pronta, ou o aviso de que ela ainda vai ser calculada em cada pixel.
-enum Shading {
-    Face(Rgb),
-    Vertices([Rgb; 3]),
-    Pixel,
-}
-
-struct Triangulo<'a> {
-    /// Posição em pixels, com o z de câmera guardado sem projeção.
-    tela: [Vertex; 3],
-    /// As mesmas três posições, em espaço de mundo, para o shading.
-    mundo: [Vec3; 3],
-    /// Área com sinal em espaço de tela: o sinal diz a orientação.
-    area: f32,
-    shading: Shading,
-    material: &'a Material,
-}
-
-// Teoria: rasterizer.md#o-frustum
-/// As seis faces do frustum, em espaço de câmera.
-fn frustum(camera: &Camera) -> [Plane; 6] {
-    let (near, far) = camera.clip_planes();
-
-    let laterais = match *camera {
-        Camera::Perspective { fov, aspect, .. } => {
-            let meia_altura = (fov.to_radians() * 0.5).tan();
-            let meia_largura = meia_altura * aspect;
-
-            [
-                Plane::new(Vec3::new(1.0, 0.0, meia_largura), 0.0),
-                Plane::new(Vec3::new(-1.0, 0.0, meia_largura), 0.0),
-                Plane::new(Vec3::new(0.0, 1.0, meia_altura), 0.0),
-                Plane::new(Vec3::new(0.0, -1.0, meia_altura), 0.0),
-            ]
-        }
-        Camera::Orthographic { width, height, .. } => [
-            Plane::new(Vec3::new(1.0, 0.0, 0.0), width * 0.5),
-            Plane::new(Vec3::new(-1.0, 0.0, 0.0), width * 0.5),
-            Plane::new(Vec3::new(0.0, 1.0, 0.0), height * 0.5),
-            Plane::new(Vec3::new(0.0, -1.0, 0.0), height * 0.5),
-        ],
-    };
-
-    [
-        Plane::new(Vec3::new(0.0, 0.0, 1.0), -near),
-        Plane::new(Vec3::new(0.0, 0.0, -1.0), far),
-        laterais[0],
-        laterais[1],
-        laterais[2],
-        laterais[3],
-    ]
-}
-
-/// Recorta o triângulo contra o frustum inteiro, um plano de cada vez.
-///
-/// Pra um ponto estar visível pra câmera, ele precisa estar dentro dos semiespaços definidos por todos
-// os 6 planos.
-fn clip(
-    triangulo: [Vertex; 3],
-    planos: &[Plane; 6],
-    stats: &mut RasterizationResult,
-) -> Vec<[Vertex; 3]> {
-    let mut poligono = triangulo.to_vec();
-    let mut recortou = false;
-
-    for plano in planos {
-        // Se todos os pontos do triângulo estão dentro do plano, nem precisa recortar.
-        if poligono.iter().all(|v| plano.distance(v.position) >= 0.0) {
-            continue;
-        }
-
-        poligono = recorta_no_plano(&poligono, *plano);
-        recortou = true;
-
-        if poligono.len() < 3 {
-            // Todos os pontos do triângulo estão fora do plano: é descartado
-            break;
-        }
-    }
-
-    if recortou {
-        stats.polygons_clipped += 1;
-    }
-
-    let mut triangulos = Vec::with_capacity(poligono.len() - 2);
-
-    for i in 1..poligono.len().saturating_sub(1) {
-        triangulos.push([poligono[0], poligono[i], poligono[i + 1]]);
-    }
-
-    triangulos
-}
-
-// Teoria: rasterizer.md#recorte-no-plano
-/// Sutherland e Hodgman (1974): percorre as arestas do polígono e monta a lista
-/// de saída com o que ficou do lado de dentro de um plano.
-fn recorta_no_plano(poligono: &[Vertex], plano: Plane) -> Vec<Vertex> {
-    let mut saida = Vec::with_capacity(poligono.len() + 1);
-
-    for (i, &atual) in poligono.iter().enumerate() {
-        let proximo = poligono[(i + 1) % poligono.len()];
-        let (d_atual, d_proximo) = (
-            plano.distance(atual.position),
-            plano.distance(proximo.position),
-        );
-
-        if d_atual >= 0.0 {
-            saida.push(atual);
-        }
-
-        if (d_atual >= 0.0) != (d_proximo >= 0.0) {
-            // Um ponto dentro e o outro fora do plano: a aresta atravessou o plano, então entra também o ponto
-            // onde ela cruza o plano.
-
-            let t = -d_atual / (d_proximo - d_atual);
-
-            // E agora a gente contrói o ponto com a fórmula de interpolação. Normal e uv
-            // do vértice novo saem do mesmo t: o recorte inventa um vértice que não estava
-            // na malha, e ele precisa carregar atributos coerentes com a aresta original.
-            saida.push(atual.lerp(proximo, t));
-        }
-    }
-
-    saida
-}
-
-// Teoria: rasterizer.md#edge-functions
-/// A edge function de Pineda (1988).
-fn edge(a: Vec2, b: Vec2, p: Vec2) -> f32 {
-    let u = b - a;
-    let v = p - a;
-
-    u.cross(v)
-}
-
-fn fill(destino: &mut RenderResult, triangulo: &Triangulo, contexto: &Contexto) {
-    let RenderResult {
-        color: cor,
-        rasterization: stats,
-        ..
-    } = destino;
-
-    let RasterizationResult {
-        depth: profundidade,
-        normal: mapa_normal,
-        uv: mapa_uv,
-        primitive_tests,
-        ..
-    } = stats;
-
-    let params = contexto.params;
-
-    let [a, b, c] = triangulo.tela.map(|v| v.position.xy());
-    let profundidades = triangulo.tela.map(|v| v.position.z);
-    let normais = triangulo.tela.map(|v| v.normal);
-    let tangentes = triangulo.tela.map(|v| v.tangent);
-    let uvs = triangulo.tela.map(|v| v.uv);
-    let area = triangulo.area;
-
-    let (largura, altura) = (cor.width() as f32, cor.height() as f32);
-
-    // Calcular a bounding box do triângulo
-    let min_x = a.x.min(b.x).min(c.x).floor().max(0.0) as u32;
-    let max_x = a.x.max(b.x).max(c.x).ceil().min(largura - 1.0).max(0.0) as u32;
-    let min_y = a.y.min(b.y).min(c.y).floor().max(0.0) as u32;
-    let max_y = a.y.max(b.y).max(c.y).ceil().min(altura - 1.0).max(0.0) as u32;
-
-    // Cada edge function dividida pela área do triângulo vira o peso do
-    // vértice oposto àquela aresta: as coordenadas baricêntricas, que
-    // somam 1 em qualquer ponto de dentro.
-    let baricentricas_de = |arestas: [f32; 3]| {
-        let pesos_de_tela = arestas.map(|w| w / area);
-
-        if contexto.camera.is_perspective() && params.rasterization.perspective_correct {
-            Baricentrics::perspective_corrected(pesos_de_tela, profundidades)
-        } else {
-            Baricentrics::new(pesos_de_tela)
-        }
-    };
-
-    let uv_em = |p: Vec2| {
-        baricentricas_de([edge(b, c, p), edge(c, a, p), edge(a, b, p)]).interpolate_vec2(uvs)
-    };
-
-    for y in min_y..=max_y {
-        for x in min_x..=max_x {
-            *primitive_tests += 1;
-
-            // Usar o centro do pixel. Pixel (1,1) tem centro 1.5,1.5 por exemplo
-            let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
-            let [w0, w1, w2] = [edge(b, c, p), edge(c, a, p), edge(a, b, p)];
-
-            // Sem backface culling, aceita as duas orientações. Um ponto está dentro do triângulo se ele está *do mesmo
-            // lado das 3 arestas*
-            let dentro = if area > 0.0 {
-                w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0
-            } else {
-                w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0
-            };
-
-            if !dentro {
+        for plane in frustum {
+            if poligon.iter().all(|v| plane.distance(v.position) >= 0.0) {
+                // Se todos os pontos do triângulo estão dentro do plano.
                 continue;
             }
 
-            if let Some(on_fragment) = params.rasterization.on_fragment {
-                on_fragment(x, y);
+            poligon = Self::sutherland_and_hodgman(&poligon, *plane);
+            clipped = true;
+
+            if poligon.len() < 3 {
+                // Se todos os pontos do triângulo estão fora do plano.
+                break;
+            }
+        }
+
+        if clipped {
+            stats.polygons_clipped += 1;
+        }
+
+        let mut triangles = Vec::with_capacity(poligon.len() - 2);
+
+        for i in 1..poligon.len().saturating_sub(1) {
+            triangles.push([poligon[0], poligon[i], poligon[i + 1]]);
+        }
+
+        triangles
+    }
+
+    fn sutherland_and_hodgman(poligon: &[Vertex], plane: Plane) -> Vec<Vertex> {
+        let mut result = Vec::with_capacity(poligon.len() + 1);
+
+        for (i, &current_vertex) in poligon.iter().enumerate() {
+            let next_vertex = poligon[(i + 1) % poligon.len()];
+
+            let (d_current, d_next) = (
+                plane.distance(current_vertex.position),
+                plane.distance(next_vertex.position),
+            );
+
+            if d_current >= 0.0 {
+                result.push(current_vertex);
             }
 
-            let baricentricas = baricentricas_de([w0, w1, w2]);
-
-            let z = baricentricas.interpolate_f32(profundidades);
-
-            if params.rasterization.depth_test {
-                let mais_proximo = profundidade.get(x, y).unwrap_or(f32::INFINITY);
-                if z >= mais_proximo {
-                    continue;
-                }
+            if (d_current >= 0.0) != (d_next >= 0.0) {
+                // Um ponto dentro e o outro fora do plano.
+                let t = -d_current / (d_next - d_current);
+                result.push(current_vertex.lerp(next_vertex, t));
             }
+        }
 
-            // Teoria: triangulo.md#a-normal-interpolada-não-é-unitária
-            // A normal interpolada entre três normais unitárias não sai unitária.
-            let normal = baricentricas.interpolate_vec3(normais).normalized();
+        result
+    }
 
-            let uv = baricentricas.interpolate_vec2(uvs);
+    fn edge_function(a: Vec2, b: Vec2, p: Vec2) -> f32 {
+        let u = b - a;
+        let v = p - a;
 
-            // Teoria: texturas.md#a-footprint-do-pixel
-            // O pixel vizinho é a próxima iteração do laço, então a derivada da uv sai
-            // por diferença finita.
-            let footprint = Footprint {
-                dx: uv_em(Vec2::new(p.x + 1.0, p.y)) - uv,
-                dy: uv_em(Vec2::new(p.x, p.y + 1.0)) - uv,
+        u.cross(v)
+    }
+
+    fn bounding_box(a: Vec2, b: Vec2, c: Vec2, width: u32, height: u32) -> (u32, u32, u32, u32) {
+        let (min_x, min_y) = (
+            a.x.min(b.x).min(c.x).floor().max(0.0) as u32,
+            a.y.min(b.y).min(c.y).floor().max(0.0) as u32,
+        );
+
+        let (max_x, max_y) = (
+            a.x.max(b.x)
+                .max(c.x)
+                .ceil()
+                .min(width as f32 - 1.0)
+                .max(0.0) as u32,
+            a.y.max(b.y)
+                .max(c.y)
+                .ceil()
+                .min(height as f32 - 1.0)
+                .max(0.0) as u32,
+        );
+
+        (min_x, min_y, max_x, max_y)
+    }
+
+    fn fragment(
+        state: &State,
+        material: &Material,
+        triangle_screen: [Vertex; 3],
+        vertex: Vertex,
+        pixel: Vec2,
+    ) -> Surface {
+        let [a, b, c] = triangle_screen.map(|v| v.position.xy());
+
+        let edge_abc = Self::edge_function(a, b, c);
+
+        let perspective_correct = (state.camera.is_perspective()
+            && state.params.rasterization.perspective_correct)
+            .then(|| triangle_screen.map(|v| v.position.z));
+
+        let footprint = {
+            let uv_at = |point: Vec2| {
+                let screen = [
+                    Self::edge_function(b, c, point) / edge_abc,
+                    Self::edge_function(c, a, point) / edge_abc,
+                    Self::edge_function(a, b, point) / edge_abc,
+                ];
+
+                let baricentrics = match perspective_correct {
+                    Some(depths) => Baricentrics::perspective_corrected(screen, depths),
+                    None => Baricentrics::new(screen),
+                };
+
+                baricentrics.interpolate_vec2(triangle_screen.map(|v| v.uv))
             };
 
-            // Aplicar os desvios do normal_map se tiver.
-            let normal = triangulo.material.shading_normal(
-                uv,
-                Some(footprint),
-                params.shading.filtering,
-                normal,
-                baricentricas.interpolate_tangent(tangentes),
-            );
+            Footprint {
+                dx: uv_at(Vec2::new(pixel.x + 1.0, pixel.y)) - vertex.uv,
+                dy: uv_at(Vec2::new(pixel.x, pixel.y + 1.0)) - vertex.uv,
+            }
+        };
 
-            profundidade.set(x, y, z);
-            cor.set(
-                x,
-                y,
-                contexto.shade_fragment(triangulo, &baricentricas, normal, uv, footprint),
-            );
-            // Os componentes de uma normal vão de [-1,1], mas Rgb espera [0,1]. Então fazemos remap dos componentes da normal aqui:
-            mapa_normal.set(
-                x,
-                y,
-                Rgb::new(
-                    normal.x * 0.5 + 0.5,
-                    normal.y * 0.5 + 0.5,
-                    normal.z * 0.5 + 0.5,
-                ),
-            );
-            mapa_uv.set(x, y, Rgb::new(uv.x, uv.y, 0.0));
+        let normal = material.apply_normal_map(
+            vertex.uv,
+            Some(footprint),
+            state.params.shading.texture_filter,
+            vertex.normal,
+            vertex.tangent,
+        );
+
+        Surface {
+            point: vertex.position,
+            normal,
+            uv: vertex.uv,
+            material: material.sample(
+                vertex.uv,
+                Some(footprint),
+                state.params.shading.texture_filter,
+            ),
         }
     }
 }

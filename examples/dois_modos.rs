@@ -76,38 +76,50 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ..Transform::IDENTITY
                 },
             ),
-            Object::geometry(
-                chao(),
-                Material::textured(xadrez(512, 8)),
+            Object::primitive(
+                Primitive {
+                    geometry: chao(),
+                    material: Material {
+                        albedo: Channel::Map(xadrez(512, 8)),
+                        roughness: Channel::Constant(1.0),
+                        ..Material::default()
+                    },
+                },
                 Transform::IDENTITY,
             ),
-            Object::geometry(
-                Geometry::triangle([
-                    Vec3::new(-3.4, -1.0, 0.0),
-                    Vec3::new(-1.4, -1.0, 0.0),
-                    Vec3::new(-2.4, 1.0, 0.0),
-                ]),
-                Material::diffuse(Rgb::new(0.9, 0.3, 0.2)),
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::triangle([
+                        Vec3::new(-3.4, -1.0, 0.0),
+                        Vec3::new(-1.4, -1.0, 0.0),
+                        Vec3::new(-2.4, 1.0, 0.0),
+                    ]),
+                    material: Material::diffuse(Rgb::new(0.9, 0.3, 0.2)),
+                },
                 Transform::IDENTITY,
             ),
-            Object::geometry(
-                Geometry::cube(0.8),
-                Material {
-                    albedo: Value::Constant(Rgb::new(0.3, 0.8, 0.4)),
-                    roughness: Value::Constant(0.35),
-                    ..Material::default()
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::cube(0.8),
+                    material: Material {
+                        albedo: Channel::Constant(Rgb::new(0.3, 0.8, 0.4)),
+                        roughness: Channel::Constant(0.35),
+                        ..Material::default()
+                    },
                 },
                 Transform {
                     rotation: Vec3::new(25.0, 35.0, 0.0),
                     ..Transform::IDENTITY
                 },
             ),
-            Object::geometry(
-                Geometry::sphere(1.0),
-                Material {
-                    albedo: Value::Constant(Rgb::new(0.2, 0.4, 0.9)),
-                    roughness: Value::Constant(0.3),
-                    ..Material::default()
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::sphere(1.0),
+                    material: Material {
+                        albedo: Channel::Constant(Rgb::new(0.2, 0.4, 0.9)),
+                        roughness: Channel::Constant(0.3),
+                        ..Material::default()
+                    },
                 },
                 Transform {
                     translation: Vec3::new(2.4, 0.0, 0.0),
@@ -115,34 +127,36 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ..Transform::IDENTITY
                 },
             ),
-            Object::geometry(
-                Geometry::sphere(0.75),
-                Material::metal(Rgb::new(0.95, 0.93, 0.88), 0.04),
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::sphere(0.75),
+                    material: Material::metal(Rgb::new(0.95, 0.93, 0.88), 0.04),
+                },
                 Transform {
                     translation: Vec3::new(-2.0, -0.45, 1.6),
                     ..Transform::IDENTITY
                 },
             ),
-            Object {
-                transform: Transform {
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::sphere(0.35),
+                    material: Material::emissive(Rgb::new(1.4, 1.0, 0.55)),
+                },
+                Transform {
                     translation: LAMPADA,
                     ..Transform::IDENTITY
                 },
-                content: Some(Content::Geometry {
-                    geometry: Geometry::sphere(0.35),
-                    material: Material::emissive(Rgb::new(1.4, 1.0, 0.55)),
-                    casts_shadows: false,
-                }),
-                children: Vec::new(),
-            },
-            Object::geometry(
-                Geometry::sphere(0.7),
-                Material {
-                    albedo: Value::Constant(Rgb::gray(0.02)),
-                    roughness: Value::Constant(0.03),
-                    transparency: 0.9,
-                    refractive_index: 1.5,
-                    ..Material::default()
+            ),
+            Object::primitive(
+                Primitive {
+                    geometry: Geometry::sphere(0.7),
+                    material: Material {
+                        albedo: Channel::Constant(Rgb::gray(0.02)),
+                        roughness: Channel::Constant(0.03),
+                        transparency: 0.9,
+                        refractive_index: 1.5,
+                        ..Material::default()
+                    },
                 },
                 Transform {
                     translation: Vec3::new(1.0, -0.5, 2.4),
@@ -156,28 +170,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     renderiza(&Rasterizer, &scene, &params, "raster")?;
     renderiza(&RayTracer, &scene, &params, "raytracer")?;
-
-    for (frequencia, nome) in [
-        (ShadingFrequency::Flat, "flat"),
-        (ShadingFrequency::Gouraud, "gouraud"),
-        (ShadingFrequency::Phong, "phong"),
-    ] {
-        let params = Parameters {
-            shading: ShadingOptions {
-                frequency: frequencia,
-                ..params.shading
-            },
-            ..params.clone()
-        };
-
-        let resultado = Rasterizer.render(&scene, &params);
-
-        comum::grava_textura(
-            &format!("./renders/shading_{nome}.png"),
-            &resultado.color,
-            Rgb::to_srgb,
-        )?;
-    }
 
     // Os toggles de caixa branca do modelo de Whitted: cada render abaixo
     // desliga um termo da recursão.
@@ -229,14 +221,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         (AccelerationOptions::default(), "bvh pelo sah"),
         (
             AccelerationOptions {
-                split: BvhSplit::Median,
+                bvh_split: BvhSplit::Median,
                 ..AccelerationOptions::default()
             },
             "bvh pela mediana",
         ),
         (
             AccelerationOptions {
-                bvh: false,
+                enabled: false,
                 ..AccelerationOptions::default()
             },
             "sem bvh",
@@ -268,7 +260,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let params = Parameters {
             ray_tracing: RayTracingOptions {
                 acceleration: AccelerationOptions {
-                    split,
+                    bvh_split: split,
                     wireframe: Some(6),
                     ..AccelerationOptions::default()
                 },

@@ -87,5 +87,6 @@ watch(isDark, () => {
 .plot {
   width: 100%;
   margin: 1.5rem 0;
+  border: 1px solid var(--vp-c-divider);
 }
 </style>

@@ -7,6 +7,22 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/fonts/IBMPlexSans-latin.woff2') format('woff2');
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/fonts/IBMPlexSans-Italic-latin.woff2') format('woff2');
+  font-weight: 400 600;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   /* a paleta do editor */
   --tcc-ink: #0b0e11;
@@ -16,8 +32,23 @@
   --tcc-fg: #d5dee8;
   --tcc-lit: #ffffff;
 
+  --tcc-fonte-prosa: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+
   --vp-font-family-base: 'Departure Mono', ui-monospace, monospace;
   --vp-font-family-mono: 'Departure Mono', ui-monospace, monospace;
+
+  /* o fundo das colunas de texto, que derrete no grid nas laterais */
+  --tcc-fundo: linear-gradient(to right,
+      transparent,
+      var(--vp-c-bg) 24px,
+      var(--vp-c-bg) calc(100% - 24px),
+      transparent);
+
+  --tcc-fundo-y: linear-gradient(to bottom,
+      transparent,
+      #000 24px,
+      #000 calc(100% - 24px),
+      transparent);
 
   --vp-layout-max-width: 1500px;
   --vp-nav-height: 56px;
@@ -154,11 +185,21 @@ body {
   line-height: 1.75;
 }
 
+/* o texto das páginas; código e interface continuam no mono */
+.vp-doc :is(h1, h2, h3, h4, h5, h6),
+.vp-doc p,
+.vp-doc li,
+.vp-doc blockquote,
+.vp-doc th,
+.vp-doc td {
+  font-family: var(--tcc-fonte-prosa);
+}
+
 .vp-doc h1,
 .vp-doc h2,
 .vp-doc h3,
 .vp-doc h4 {
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
@@ -179,12 +220,16 @@ body {
   letter-spacing: 0.1em;
 }
 
+/* o box fica sempre do mesmo tamanho; só a cor muda */
+.VPSidebar .VPSidebarItem .text {
+  padding: 4px 6px;
+  margin: 0 -6px;
+}
+
 .VPSidebarItem.is-link.is-active>.item .link .text,
 .VPSidebarItem.is-link>.item .link:hover .text {
   background: var(--vp-c-brand-1);
   color: var(--vp-c-bg) !important;
-  padding: 4px 6px;
-  margin: 0 -6px;
 }
 
 .VPSidebarItem.level-0>.item>.text {
@@ -192,16 +237,62 @@ body {
   font-weight: 400;
 }
 
+.VPDocAsideOutline .outline-link {
+  /* as margens negativas batem com o padding de .content */
+  padding: 0 12px 0 16px;
+  margin: 0 -12px 0 -16px;
+}
+
+.VPLocalNavOutlineDropdown .outline {
+  padding: 12px 0;
+}
+
+.VPLocalNavOutlineDropdown .outline-link {
+  padding: 0 16px;
+  margin: 0 -16px;
+}
+
+/* o recuo do subitem vive no padding do link, pro fundo ir de borda a borda */
+.VPDocAsideOutline .VPDocOutlineItem.nested,
+.VPLocalNavOutlineDropdown .VPDocOutlineItem.nested {
+  padding: 0;
+}
+
+.VPDocAsideOutline .nested .outline-link,
+.VPLocalNavOutlineDropdown .nested .outline-link {
+  padding-left: 32px;
+}
+
+.VPDocAsideOutline .outline-link.active,
+.VPDocAsideOutline .outline-link:hover,
+.VPLocalNavOutlineDropdown .outline-link.active,
+.VPLocalNavOutlineDropdown .outline-link:hover {
+  background: var(--vp-c-brand-1);
+  color: var(--vp-c-bg);
+}
+
+.VPDocAsideOutline .outline-marker {
+  display: none;
+}
+
 .VPNavBarMenu .VPNavBarMenuLink:hover {
   background: var(--vp-c-brand-1);
   color: var(--vp-c-bg) !important;
 }
 
+/* tudo que inverte fundo e texto faz a troca do mesmo jeito */
 .VPSidebar .VPSidebarItem .text,
 .VPNavBar .VPNavBarMenu .VPNavBarMenuLink,
 .VPFeatures .VPFeature,
-.VPDocFooter .pager-link {
-  transition: none;
+.VPFeatures .VPFeature .title,
+.VPFeatures .VPFeature .details,
+.VPDocFooter .pager-link,
+.VPDocFooter .pager-link .title,
+.VPDocFooter .pager-link .desc,
+.VPButton,
+.VPDocAsideOutline .content .outline-link,
+.VPLocalNavOutlineDropdown .outline .outline-link {
+  transition: background-color 0.25s, color 0.25s, border-color 0.25s;
 }
 
 * {
@@ -267,10 +358,21 @@ body {
 }
 
 .VPHome>.vp-doc.container {
-  background-color: var(--vp-c-bg);
+  position: relative;
   margin-top: 48px;
-  padding-top: 32px;
+  padding-top: 48px;
   padding-bottom: 48px;
+}
+
+/* o bloco flutua no grid, então derrete nos quatro lados */
+.VPHome>.vp-doc.container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--tcc-fundo);
+  -webkit-mask-image: var(--tcc-fundo-y);
+  mask-image: var(--tcc-fundo-y);
 }
 
 .VPHome .vp-doc h2:first-child {
@@ -281,6 +383,8 @@ body {
 
 /* o plano xz do editor atrás da página */
 :root {
+  /* a posição do eixo z, como fração da largura */
+  --tcc-eixo-z: 0.75;
   --tcc-grid-fine: rgba(95, 102, 108, 0.2);
   --tcc-grid-coarse: rgba(95, 102, 108, 0.4);
   --tcc-axis-x: rgba(255, 61, 110, 0.45);
@@ -292,6 +396,13 @@ body {
   --tcc-grid-coarse: rgba(97, 108, 118, 0.45);
   --tcc-axis-x: rgba(255, 61, 110, 0.6);
   --tcc-axis-z: rgba(58, 150, 255, 0.6);
+}
+
+/* nas páginas de conteúdo o eixo z corre pelo meio do box de "nesta página" */
+@media (min-width: 960px) {
+  body:has(.VPDoc) {
+    --tcc-eixo-z: 0.85;
+  }
 }
 
 body::before {
@@ -307,9 +418,9 @@ body::before {
       var(--tcc-axis-x) calc(25% - 1px) calc(25% + 1px),
       transparent calc(25% + 1px)),
     linear-gradient(to right,
-      transparent calc(75% - 1px),
-      var(--tcc-axis-z) calc(75% - 1px) calc(75% + 1px),
-      transparent calc(75% + 1px)),
+      transparent calc(var(--tcc-eixo-z) * 100% - 1px),
+      var(--tcc-axis-z) calc(var(--tcc-eixo-z) * 100% - 1px) calc(var(--tcc-eixo-z) * 100% + 1px),
+      transparent calc(var(--tcc-eixo-z) * 100% + 1px)),
     linear-gradient(to right,
       transparent calc(50% - 0.5px),
       var(--tcc-grid-coarse) calc(50% - 0.5px) calc(50% + 0.5px),
@@ -333,26 +444,27 @@ body::before {
     400px 400px,
     40px 40px,
     40px 40px;
+  /* o deslocamento T * (p - 0,5) põe uma linha de cada grid em cima do eixo */
   background-position:
     center,
     center,
-    calc(75% + 100px) calc(25% - 100px),
-    calc(75% + 100px) calc(25% - 100px),
-    calc(75% + 10px) calc(25% - 10px),
-    calc(75% + 10px) calc(25% - 10px);
+    calc(var(--tcc-eixo-z) * 100% + 400px * (var(--tcc-eixo-z) - 0.5)) calc(25% - 100px),
+    calc(var(--tcc-eixo-z) * 100% + 400px * (var(--tcc-eixo-z) - 0.5)) calc(25% - 100px),
+    calc(var(--tcc-eixo-z) * 100% + 40px * (var(--tcc-eixo-z) - 0.5)) calc(25% - 10px),
+    calc(var(--tcc-eixo-z) * 100% + 40px * (var(--tcc-eixo-z) - 0.5)) calc(25% - 10px);
 }
 
 .VPDoc>.container>.content::before {
   content: '';
   position: absolute;
-  inset: -32px 0 0;
+  inset: -32px -24px 0;
   z-index: -1;
-  background-color: var(--vp-c-bg);
+  background: var(--tcc-fundo);
 }
 
 @media (min-width: 768px) {
   .VPDoc>.container>.content::before {
-    inset: -48px 0 0;
+    inset: -48px -24px 0;
   }
 }
 
