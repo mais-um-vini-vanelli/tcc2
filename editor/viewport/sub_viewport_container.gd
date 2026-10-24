@@ -7,7 +7,6 @@ const WRAP_INSET := 2.0 # pixels
 
 const HANDLE_HALF := 0.15
 
-
 signal scene_object_selected(node: SceneObject)
 signal gizmo_moved
 signal triangle_picked(node: SceneGeometry, instance: int, face: int)
@@ -17,7 +16,7 @@ signal pixel_picked(x: int, y: int)
 @onready var scene_view: SubViewport = $SceneView
 @onready var outline: SelectionOutline = $"../SelectionOutline"
 
-var _gizmo: Gizmo
+var _gizmo: TransformGizmo
 var _picker: TrianglePicker
 var _target: SceneObject
 var _pov: CameraPov
@@ -33,14 +32,13 @@ var _pan_mouse := Vector2.ZERO
 var _yaw := 0.0
 var _pitch := 0.0
 
-# Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	_yaw = camera_3d.rotation.y
 	_pitch = camera_3d.rotation.x
 
 	camera_3d.cull_mask &= ~SceneObject.SELECTION_LAYER
 
-	_gizmo = Gizmo.new()
+	_gizmo = TransformGizmo.new()
 	_gizmo.camera = camera_3d
 	_gizmo.moved.connect(gizmo_moved.emit)
 	scene_view.add_child(_gizmo)
@@ -247,7 +245,6 @@ func _on_input_event_mouse_motion(event: InputEventMouseMotion) -> void:
 		_pitch = clamp(_pitch - event.relative.y * LOOK_SENSITIVITY, -1.55, 1.55)
 		camera_3d.rotation = Vector3(_pitch, _yaw, 0.0)
 	elif _pan_drag:
-		# Drag the world: the camera moves opposite to the mouse.
 		var motion := _pan_motion()
 		camera_3d.global_position -= camera_3d.global_basis.x * motion.x * PAN_SPEED
 		camera_3d.global_position += camera_3d.global_basis.y * motion.y * PAN_SPEED
@@ -303,10 +300,25 @@ func _over_viewport() -> bool:
 
 	var mouse := get_global_mouse_position()
 
-	if overlay != null and overlay.get_global_rect().has_point(mouse):
+	if _over_overlay(mouse):
 		return false
 
 	return get_global_rect().has_point(mouse)
+
+func _over_overlay(mouse: Vector2) -> bool:
+	if overlay == null:
+		return false
+
+	for child in overlay.get_children():
+		var widget := child as Control
+
+		if widget == null or not widget.visible:
+			continue
+
+		if widget.get_global_rect().has_point(mouse):
+			return true
+
+	return false
 		
 func _process(delta: float) -> void:
 	_update_cursor()

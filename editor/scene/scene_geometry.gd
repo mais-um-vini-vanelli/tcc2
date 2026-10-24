@@ -64,8 +64,6 @@ var cube := Cube.new()
 var mesh := MeshFile.new()
 var triangle := Triangle.new()
 
-@export var cast_shadows: bool = true
-
 var material: SceneMaterial = SceneMaterial.new():
 	set(value):
 		if material.changed.is_connected(_apply_material):
@@ -81,8 +79,6 @@ var material: SceneMaterial = SceneMaterial.new():
 var _preview: MeshInstance3D
 var _preview_material := StandardMaterial3D.new()
 var _mask: MeshInstance3D
-# Kept here too: set_selected can land before _ready has built the silhouette,
-# and the flag would be lost if it only ever lived on that instance.
 var _is_selected := false
 
 func _init() -> void:

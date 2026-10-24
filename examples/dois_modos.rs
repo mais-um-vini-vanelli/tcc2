@@ -1,28 +1,7 @@
-//! Renderiza **a mesma cena** nos dois modos e grava um .png de cada passe que
-//! o renderer produziu.
-//!
-//! A cena tem um chão de xadrez, um triângulo, um cubo, uma esfera difusa, uma
-//! de metal polido, uma de vidro e uma emissiva. O rasterizador tessela tudo em
-//! triângulos e desenha; o ray tracer resolve a esfera pela equação e o resto
-//! pelas faces — e os dois passam pelo mesmo `shade()`.
-//!
-//! O metal e o vidro existem para o que só o ray tracer faz: um reflete a cena
-//! e o outro a refrata, os dois por recursão do modelo de Whitted.
-//!
-//! A esfera emissiva é a lâmpada, e mostra o que a emissão faz e o que ela não
-//! faz: a esfera aparece acesa nos dois modos e no reflexo do metal, mas quem
-//! ilumina a cena é a `Light::Point` dentro dela.
-//!
-//! No fim, o mesmo render do ray tracer com a BVH pelo SAH, pela mediana e
-//! desligada: a imagem é igual, e o que muda é o trabalho.
-//!
-//! ```text
-//! cargo run --example dois_modos
-//! ```
-
 mod comum;
 
 use std::error::Error;
+use std::sync::Arc;
 use std::time::Instant;
 
 use tcc2::prelude::*;
@@ -286,7 +265,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn chao() -> Geometry {
     let y = -1.2;
 
-    Geometry::Mesh(Mesh {
+    Geometry::Mesh(Arc::new(Mesh {
         vertices: vec![
             Vec3::new(-6.0, y, 4.0),
             Vec3::new(6.0, y, 4.0),
@@ -302,10 +281,10 @@ fn chao() -> Geometry {
             Vec2::new(4.0, 4.0),
             Vec2::new(0.0, 4.0),
         ]),
-    })
+    }))
 }
 
-fn xadrez(lado: u32, quadrados: u32) -> Texture {
+fn xadrez(lado: u32, quadrados: u32) -> Arc<Texture> {
     let mut texels = Vec::with_capacity((lado * lado) as usize);
 
     for y in 0..lado {
@@ -319,7 +298,7 @@ fn xadrez(lado: u32, quadrados: u32) -> Texture {
         }
     }
 
-    Texture::new(lado, lado, texels).unwrap()
+    Arc::new(Texture::new(lado, lado, texels).unwrap())
 }
 
 fn renderiza(

@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fs::{self, File};
 use std::io::BufWriter;
+use std::sync::Arc;
 
 use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
 use tcc2::prelude::*;
@@ -8,12 +9,12 @@ use tcc2::prelude::*;
 pub fn le_textura(
     caminho: &str,
     texel: impl Fn([u8; 3]) -> Rgb,
-) -> Result<Texture, Box<dyn Error>> {
+) -> Result<Arc<Texture>, Box<dyn Error>> {
     let imagem = image::open(caminho)?.into_rgb8();
     let (largura, altura) = imagem.dimensions();
     let texels = imagem.pixels().map(|p| texel(p.0)).collect();
 
-    Ok(Texture::new(largura, altura, texels)?)
+    Ok(Arc::new(Texture::new(largura, altura, texels)?))
 }
 
 pub fn grava_textura(

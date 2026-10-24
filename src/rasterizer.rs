@@ -25,7 +25,7 @@ impl Renderer for Rasterizer {
                     &inst.primitive.material.metallic.texture(),
                     &inst.primitive.material.roughness.texture(),
                     &inst.primitive.material.emissive.texture(),
-                    &inst.primitive.material.normal.as_ref(),
+                    &inst.primitive.material.normal.as_deref(),
                 ]
                 .into_iter()
                 .flatten()

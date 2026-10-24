@@ -4,7 +4,7 @@ const SELECTION_COLOR := Color("#ffd63d")
 const ICONS_LAYER := 1 << 1
 const SELECTION_LAYER := 1 << 2
 const ICON_COLOR := Color("#e8eff7")
-const ICON_SCREEN_HEIGHT := 0.05
+const ICON_SCREEN_HEIGHT := 0.04
 
 func _ready() -> void:
 	rotation_order = EULER_ORDER_XYZ
@@ -21,8 +21,18 @@ func _add_icon(texture: Texture2D) -> Sprite3D:
 	icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	icon.fixed_size = true
 	icon.shaded = false
-	# fraction of screen height = pixel_size × texture_height / 2
-	icon.pixel_size = ICON_SCREEN_HEIGHT * 2.0 / texture.get_height()
+	
+	# texture height = pixel_size * texture_height
+	#
+	# screen height = 2 * d * tan(fov/2)
+	# screen height = 2 * 1 * tan(fov/2)  # fixed_size fixes d at 1
+	# screen height = 2 * 1 * 1           # we assume fov = 90, so tan(fov/2) = 1
+	#
+	# fraction of screen height = texture height / screen height
+	# fraction of screen height = pixel_size * texture_height / 2
+	# pixel_size = fraction of screen height * 2 / texture_height
+	icon.pixel_size = ICON_SCREEN_HEIGHT * 2 / texture.get_height()
+	
 	icon.modulate = ICON_COLOR
 	icon.layers = ICONS_LAYER
 	add_child(icon, false, Node.INTERNAL_MODE_FRONT)

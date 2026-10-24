@@ -14,7 +14,6 @@ var _saved := {}
 func is_active() -> bool:
 	return is_instance_valid(_camera)
 
-## The scene camera the preview looks through, or null when there is none.
 func render_camera() -> SceneCamera:
 	var cameras := scene_view.find_children("*", "SceneCamera", true, false)
 	return null if cameras.is_empty() else cameras[0]
@@ -38,8 +37,6 @@ func set_active(enabled: bool) -> void:
 	_save()
 
 	_camera = Camera3D.new()
-	# Icons, gizmos, the grid and the selection silhouettes sit on their own
-	# layers, which the preview skips.
 	_camera.cull_mask = (ALL_LAYERS
 		& ~SceneObject.ICONS_LAYER & ~SceneObject.SELECTION_LAYER)
 	_camera.environment = _build_environment()

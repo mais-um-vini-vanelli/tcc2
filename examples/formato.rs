@@ -2,6 +2,7 @@ mod comum;
 
 use std::error::Error;
 use std::f32::consts::TAU;
+use std::sync::Arc;
 
 use tcc2::glb;
 use tcc2::prelude::*;
@@ -112,7 +113,7 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
             ),
             Object::primitive(
                 Primitive {
-                    geometry: Geometry::Mesh(chao),
+                    geometry: Geometry::Mesh(Arc::new(chao)),
                     material: Material {
                         albedo: Channel::Map(xadrez(
                             64,
@@ -205,7 +206,7 @@ fn cena() -> Result<Scene, Box<dyn Error>> {
     Ok(cena)
 }
 
-fn xadrez(lado: u32, clara: Rgb, escura: Rgb) -> Result<Texture, TextureError> {
+fn xadrez(lado: u32, clara: Rgb, escura: Rgb) -> Result<Arc<Texture>, TextureError> {
     let texels = (0..lado * lado)
         .map(|i| {
             let (x, y) = (i % lado, i / lado);
@@ -217,13 +218,13 @@ fn xadrez(lado: u32, clara: Rgb, escura: Rgb) -> Result<Texture, TextureError> {
         })
         .collect();
 
-    Texture::new(lado, lado, texels)
+    Texture::new(lado, lado, texels).map(Arc::new)
 }
 
 /// Roughness variando na diagonal: um `Value<f32>` que é mapa, ao lado de um
 /// `metallic` que é constante — o caso que o empacotamento em uma textura só
 /// tem que desfazer.
-fn gradiente(lado: u32) -> Result<Texture, TextureError> {
+fn gradiente(lado: u32) -> Result<Arc<Texture>, TextureError> {
     let texels = (0..lado * lado)
         .map(|i| {
             let (x, y) = (i % lado, i / lado);
@@ -231,12 +232,12 @@ fn gradiente(lado: u32) -> Result<Texture, TextureError> {
         })
         .collect();
 
-    Texture::new(lado, lado, texels)
+    Texture::new(lado, lado, texels).map(Arc::new)
 }
 
 /// Mapa de normais de uma superfície ondulada, em espaço tangente: o `z` fica
 /// perto de 1 e o `x`/`y` oscilam em torno de 0,5, que é o zero codificado.
-fn ondulado(lado: u32) -> Result<Texture, TextureError> {
+fn ondulado(lado: u32) -> Result<Arc<Texture>, TextureError> {
     let texels = (0..lado * lado)
         .map(|i| {
             let (x, y) = (i % lado, i / lado);
@@ -253,5 +254,5 @@ fn ondulado(lado: u32) -> Result<Texture, TextureError> {
         })
         .collect();
 
-    Texture::new(lado, lado, texels)
+    Texture::new(lado, lado, texels).map(Arc::new)
 }

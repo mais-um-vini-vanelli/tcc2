@@ -1,7 +1,4 @@
-class_name Gizmo extends Node3D
-
-# The three transform modes show at once, so a click or a hover has to ask each of
-# them in turn; whoever answers first takes it.
+class_name TransformGizmo extends Node3D
 
 signal moved
 
@@ -30,7 +27,6 @@ func _ready() -> void:
 		mode.moved.connect(moved.emit)
 		_modes.append(mode)
 
-# Takes the handle under the mouse, if there is one.
 func grab(screen_position: Vector2, ray_origin: Vector3, ray_dir: Vector3) -> bool:
 	for mode in _modes:
 		var axis := mode.handle_at(screen_position)
@@ -64,9 +60,8 @@ func hover(screen_position: Vector2) -> void:
 		mode.highlight(axis)
 
 class Mode extends Node3D:
-
 	const AXES := [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
-	const AXIS_COLORS := [Color("#ff3d6e"), Color("#2be882"), Color("#3a96ff")]
+	const AXES_COLORS := [Color("#ff3d6e"), Color("#2be882"), Color("#3a96ff")]
 
 	const LENGTH := 1.0
 	const SCREEN_SIZE := 0.26
@@ -101,7 +96,7 @@ class Mode extends Node3D:
 			var mat := StandardMaterial3D.new()
 			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-			mat.albedo_color = AXIS_COLORS[axis]
+			mat.albedo_color = AXES_COLORS[axis]
 			mat.no_depth_test = true
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			mat.render_priority = 3
@@ -184,32 +179,7 @@ class Mode extends Node3D:
 
 	# How far along its axis the mouse ray falls, measured from the grab point.
 	func _along(ray_origin: Vector3, ray_dir: Vector3) -> float:
-		# axis line:  _origin    + t · axis
-		# mouse ray:  ray_origin + s · ray_dir
-		#
-		# gap between a point in each: g(t, s) = (_origin + t · axis) − (ray_origin + s · ray_dir)
-		#									   = (_origin − ray_origin) + t · axis − s · ray_dir
-		#                                      = d + t · axis − s · ray_dir
-		#
-		# we want 't' for the point where the mouse ray is the closest to the axis eg. where the gap is
-		# the shortest. At the shortest gap, g is perpendicular to both lines; if it weren't perpendicular 
-		# to the axis, you could slide along the axis and get closer.
-		#
-		# g · axis    = d·axis    + t·(axis·axis)    − s·(ray_dir·axis)    = 0
-		# g · ray_dir = d·ray_dir + t·(axis·ray_dir) − s·(ray_dir·ray_dir) = 0
-		#
-		# with axis·axis = ray_dir·ray_dir = 1 and a = axis · ray_dir:
-		#
-		# g · axis    = d·axis    + t   − s·a = 0 -> t = -d·axis   + s·a
-		# g · ray_dir = d·ray_dir + t·a − s   = 0 -> s = d·ray_dir + t·a
-		#
-		# replacing s in the equation for t:
-		#
-		# t           = -d·axis + (d·ray_dir + t·a)·a
-		# t           = -d·axis + d·ray_dir·a + t·a·a
-		# t − t·a·a   = -d·axis + d·ray_dir·a
-		# t·(1 − a·a) = d·ray_dir·a − d·axis
-		# t           = (d·ray_dir·a − d·axis) / (1 − a·a)
+		# Teoria: apendice/reta-mais-proxima.md
 		var axis: Vector3 = _orientation() * AXES[_axis]
 		var d := _origin - ray_origin
 		var a := axis.dot(ray_dir)
@@ -232,7 +202,6 @@ class Mode extends Node3D:
 		var depth := maxf(-camera.global_basis.z.dot(offset), 0.001)
 		return depth * tan(deg_to_rad(camera.fov) * 0.5) * SCREEN_SIZE
 
-	# Lights one of the three handles, or clears them all with -1.
 	func highlight(axis: int) -> void:
 		if axis == _hover or _materials.is_empty():
 			return
@@ -240,7 +209,7 @@ class Mode extends Node3D:
 		_hover = axis
 
 		for i in 3:
-			var color: Color = AXIS_COLORS[i]
+			var color: Color = AXES_COLORS[i]
 			_materials[i].albedo_color = color.lightened(HIGHLIGHT) if i == _hover else color
 
 	#region Helpers
@@ -281,7 +250,6 @@ class Mode extends Node3D:
 	#endregion
 
 class Translate extends Mode:
-
 	const REACH := 1.5
 	const HEAD_LENGTH := 0.25
 	const HEAD_RADIUS := 0.08
@@ -320,7 +288,6 @@ class Translate extends Mode:
 		target.global_position = place
 
 class Scale extends Mode:
-
 	const REACH := 0.7
 	const CUBE_SIZE := 0.1
 
@@ -368,7 +335,6 @@ class Scale extends Mode:
 		target.basis = _grabbed.scaled_local(stretch)
 
 class Rotate extends Mode:
-
 	const SEGMENTS := 10
 	const ARC := PI
 	const HALF_WIDTH := 0.016
@@ -422,9 +388,12 @@ class Rotate extends Mode:
 			span = TAU
 
 		var points: Array[Vector3] = []
+		
+		var start := middle - span * 0.5
+		var step := span / SEGMENTS
 
 		for i in SEGMENTS + 1:
-			var angle := middle - span * 0.5 + span * i / SEGMENTS
+			var angle := start + i * step
 			points.append((u * cos(angle) + v * sin(angle)) * radius)
 
 		return points
@@ -478,4 +447,3 @@ class Rotate extends Mode:
 		var v: Vector3 = AXES[(_axis + 2) % 3]
 
 		return atan2(offset.dot(v), offset.dot(u))
-

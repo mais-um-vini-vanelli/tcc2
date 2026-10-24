@@ -1,15 +1,17 @@
 extends Control
 
 @onready var hierarchy: Hierarchy = $Layout/Sidebar/Hierarchy
-@onready var add_menu: AddMenu = $PopupMenu
-@onready var save_button: Button = $Layout/Viewport/Overlay/VBoxContainer/Save
-@onready var open_button: Button = $Layout/Viewport/Overlay/VBoxContainer/Open
+@onready var add_menu: AddMenu = $AddMenu
+@onready var overlay: MarginContainer = $Layout/Viewport/Overlay
+@onready var toast: Toast = $Layout/Viewport/Overlay/Toast
+@onready var save: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/Save
+@onready var open: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/Open
 @onready var sub_viewport_container := $Layout/Viewport/ViewportClip/SubViewportContainer
 @onready var scene_view: SubViewport = $Layout/Viewport/ViewportClip/SubViewportContainer/SceneView
 @onready var properties := $Layout/Sidebar/Properties/VBoxContainer/MarginContainer/ScrollContainer/Padding/VBoxContainer
-@onready var camera_pov: Button = $Layout/Viewport/Overlay/VBoxContainer/CameraPOV
-@onready var pick_triangle: Button = $Layout/Viewport/Overlay/VBoxContainer/PickTriangle
-@onready var pick_pixel: Button = $Layout/Viewport/Overlay/VBoxContainer/PickPixel
+@onready var camera_pov: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/CameraPOV
+@onready var pick_triangle: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/PickTriangle
+@onready var pick_pixel: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/PickPixel
 
 const CURSORS: Array = [
 	[preload("res://icons/Arrow.svg"), Input.CURSOR_ARROW, Vector2(6, 4)],
@@ -21,9 +23,10 @@ const CURSORS: Array = [
 	[preload("res://icons/SplitV.svg"), Input.CURSOR_VSPLIT, Vector2(5, 11)],
 ]
 
-var root: SceneRoot
 var save_dialog: FileDialog
 var open_dialog: FileDialog
+
+var root: SceneRoot
 
 func _ready() -> void:
 	for cursor in CURSORS:
@@ -39,7 +42,6 @@ func _ready() -> void:
 	camera.position = Vector3(0, 1, 4)
 	root.add_child(camera)
 	camera.rotation_degrees = Vector3(-14, 0, 0)
-	camera.owner = root
 
 	var light := SceneLight.new()
 	light.kind = SceneLight.Kind.DIRECTIONAL
@@ -47,13 +49,11 @@ func _ready() -> void:
 	light.position = Vector3(-2, 3, 2)
 	root.add_child(light)
 	light.rotation_degrees = Vector3(-45, -35, 0)
-	light.owner = root
 
 	var sphere := SceneGeometry.new()
 	sphere.kind = SceneGeometry.Kind.SPHERE
 	sphere.name = "Sphere"
 	root.add_child(sphere)
-	sphere.owner = root
 
 	hierarchy.selected.connect(_on_selected)
 	hierarchy.changed.connect(_on_scene_changed)
@@ -68,7 +68,7 @@ func _ready() -> void:
 	sub_viewport_container.gizmo_moved.connect(properties.refresh_values)
 
 	camera_pov.toggled.connect(_on_camera_pov_toggled)
-	sub_viewport_container.overlay = camera_pov.get_parent()
+	sub_viewport_container.overlay = overlay
 
 	pick_triangle.toggled.connect(_on_pick_triangle_toggled)
 	sub_viewport_container.triangle_picked.connect(_on_triangle_picked)
@@ -98,8 +98,8 @@ func _ready() -> void:
 		save_dialog.current_file = root.name + ".tcc2.glb"
 		save_dialog.popup_centered_ratio(0.6)
 
-	save_button.pressed.connect(on_save_pressed)
-	open_button.pressed.connect(open_dialog.popup_centered_ratio.bind(0.6))
+	save.pressed.connect(on_save_pressed)
+	open.pressed.connect(open_dialog.popup_centered_ratio.bind(0.6))
 
 func _rimmed(texture: Texture2D) -> ImageTexture:
 	var shape := texture.get_image()
@@ -134,7 +134,6 @@ func _rebuild() -> void:
 	hierarchy.rebuild(root)
 	_on_scene_changed()
 
-# A cena trocou de forma: a POV pode ter perdido a câmera que estava mostrando.
 func _on_scene_changed() -> void:
 	if sub_viewport_container.render_camera() == null:
 		camera_pov.button_pressed = false
@@ -185,13 +184,18 @@ func _refresh_modes() -> void:
 
 	hierarchy.set_editable(not busy)
 
-func _on_triangle_picked(node: SceneGeometry, instance: int, face: int) -> void:
+func _on_triangle_picked(_node: SceneGeometry, instance: int, face: int) -> void:
 	pick_triangle.button_pressed = false
-	print("%s: instance %d, face %d" % [node.name, instance, face])
+
+	var picked: Array[String] = ["instance: %d" % instance, "face: %d" % face]
+
+	toast.report("PICKED TRIANGLE", picked)
 
 func _on_pixel_picked(x: int, y: int) -> void:
 	pick_pixel.button_pressed = false
-	print("pixel %d, %d" % [x, y])
+
+	var picked: Array[String] = ["pixel: (%d, %d)" % [x, y]]
+	toast.report("PICKED PIXEL", picked)
 
 func _save_scene(path: String) -> void:
 	if path.get_extension().to_lower() != "glb":
@@ -210,17 +214,19 @@ func _save_scene(path: String) -> void:
 	file.store_buffer(bytes)
 	file.close()
 
-	for warning in warnings:
-		print("  ", warning)
+	toast.report("SAVE WARNINGS", warnings)
 
 	root.name = path.get_file().get_basename().trim_suffix(".tcc2")
 	hierarchy.rename(root)
 
 func _open_scene(path: String) -> void:
-	var opened := Import.glb(path, true)
+	var warnings: Array[String] = []
+	var opened := Import.glb(path, true, warnings)
 
 	if opened == null:
 		return
+
+	toast.report("OPEN WARNINGS", warnings)
 
 	hierarchy.select(null)
 	scene_view.remove_child(root)
@@ -233,7 +239,6 @@ func _open_scene(path: String) -> void:
 	for child in opened.get_children():
 		opened.remove_child(child)
 		root.add_child(child)
-		root.adopt(child)
 
 	opened.free()
 	Import.parameters(path, root)
@@ -242,19 +247,21 @@ func _open_scene(path: String) -> void:
 	hierarchy.select(root)
 
 func _on_files_dropped(files: PackedStringArray) -> void:
+	var warnings: Array[String] = []
+
 	for file in files:
 		if file.get_extension().to_lower() != "glb":
 			continue
 
-		var group := Import.glb(file, true)
+		var group := Import.glb(file, true, warnings)
 
 		if group == null:
 			continue
 
 		root.add_child(group)
-		root.adopt(group)
 
 		if Import.parameters(file, root):
 			properties.refresh_values()
 
+	toast.report("IMPORT WARNINGS", warnings)
 	_rebuild()

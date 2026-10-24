@@ -13,12 +13,22 @@ class Rgb:
 			constant = value
 			changed.emit()
 
+	var factor: Color = Color.WHITE:
+		set(value):
+			factor = value
+			changed.emit()
+
 class Scalar:
 	signal changed
 
 	var constant: float = 0.0:
 		set(value):
 			constant = value
+			changed.emit()
+
+	var factor: float = 1.0:
+		set(value):
+			factor = value
 			changed.emit()
 
 	var channel: int = 0:

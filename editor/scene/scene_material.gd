@@ -32,7 +32,11 @@ var normal: TextureLocation = TextureLocation.new():
 		_listen(normal)
 		changed.emit()
 
-# Whitted's model, orthogonal to the above.
+var normal_scale: float = 1.0:
+	set(value):
+		normal_scale = value
+		changed.emit()
+
 var transparency: float = 0.0:
 	set(value):
 		transparency = value
@@ -43,7 +47,6 @@ var refractive_index: float = 1.5:
 		refractive_index = value
 		changed.emit()
 
-# The setters don't run for the declarations' initial values.
 func _init() -> void:
 	albedo.rgb.constant = Color(0.8, 0.8, 0.8)
 	roughness.scalar.constant = 0.5
@@ -65,29 +68,34 @@ func apply_to(mat: StandardMaterial3D) -> void:
 
 	var albedo_texture: Texture2D = resolve.call(albedo.texture) if albedo.kind == SceneChannel.Kind.TEXTURE else null
 	var alpha := 1.0 - transparency
-	var tint := albedo.rgb.constant
+	var tint := albedo.rgb.factor if albedo_texture != null else albedo.rgb.constant
 	mat.albedo_texture = albedo_texture
-	mat.albedo_color = (Color(1, 1, 1, alpha) if albedo_texture != null
-		else Color(tint.r, tint.g, tint.b, alpha))
+	mat.albedo_color = Color(tint.r, tint.g, tint.b, alpha)
 
 	var metallic_texture: Texture2D = resolve.call(metallic.texture) if metallic.kind == SceneChannel.Kind.TEXTURE else null
 	mat.metallic_texture = metallic_texture
 	mat.metallic_texture_channel = metallic.scalar.channel
-	mat.metallic = 1.0 if metallic_texture != null else metallic.scalar.constant
+	mat.metallic = (metallic.scalar.factor if metallic_texture != null
+		else metallic.scalar.constant)
 
 	var roughness_texture: Texture2D = resolve.call(roughness.texture) if roughness.kind == SceneChannel.Kind.TEXTURE else null
 	mat.roughness_texture = roughness_texture
 	mat.roughness_texture_channel = roughness.scalar.channel
-	mat.roughness = 1.0 if roughness_texture != null else roughness.scalar.constant
+	mat.roughness = (roughness.scalar.factor if roughness_texture != null
+		else roughness.scalar.constant)
 
 	var emissive_texture: Texture2D = resolve.call(emissive.texture) if emissive.kind == SceneChannel.Kind.TEXTURE else null
+	var emission: Color = (emissive.rgb.factor if emissive_texture != null
+		else emissive.rgb.constant)
+
 	mat.emission_texture = emissive_texture
-	mat.emission = Color.WHITE if emissive_texture != null else emissive.rgb.constant
-	mat.emission_enabled = emissive_texture != null or emissive.rgb.constant != Color.BLACK
+	mat.emission = emission
+	mat.emission_enabled = emission != Color.BLACK
 
 	var normal_texture: Texture2D = resolve.call(normal)
 	mat.normal_texture = normal_texture
 	mat.normal_enabled = normal_texture != null
+	mat.normal_scale = normal_scale
 
 	mat.transparency = (BaseMaterial3D.TRANSPARENCY_ALPHA if transparency > 0.0
 		else BaseMaterial3D.TRANSPARENCY_DISABLED)

@@ -2,6 +2,7 @@ class_name Assets
 
 static var _documents := {}
 static var _images := {}
+static var _surfaces := {}
 
 static func state(path: String) -> GLTFState:
 	if not _documents.has(path):
@@ -33,6 +34,11 @@ static func images(path: String) -> Array:
 	return _images[path]
 
 static func surface(path: String, mesh: int, primitive: int) -> Mesh:
+	var key := "%s#%d#%d" % [path, mesh, primitive]
+
+	if _surfaces.has(key):
+		return _surfaces[key]
+
 	var parsed := state(path)
 
 	if parsed == null or mesh < 0 or mesh >= parsed.get_meshes().size():
@@ -43,10 +49,17 @@ static func surface(path: String, mesh: int, primitive: int) -> Mesh:
 	if primitive < 0 or primitive >= importer.get_surface_count():
 		return null
 
-	var built := ArrayMesh.new()
-	built.add_surface_from_arrays(
-		importer.get_surface_primitive_type(primitive),
-		importer.get_surface_arrays(primitive)
-	)
+	if importer.get_surface_primitive_type(primitive) != Mesh.PRIMITIVE_TRIANGLES:
+		return null
 
-	return built
+	var arrays := importer.get_surface_arrays(primitive)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+
+	if vertices.is_empty():
+		return null
+
+	var built := ArrayMesh.new()
+	built.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	_surfaces[key] = built
+	return _surfaces[key]

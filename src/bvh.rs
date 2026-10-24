@@ -1,5 +1,6 @@
 use std::cell::RefCell;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::color::Rgb;
@@ -16,7 +17,7 @@ const BUCKETS: usize = 12;
 
 pub struct AccelerationStructures {
     tlas: Bvh,
-    blas: Vec<Option<Bvh>>,
+    blas: Vec<Option<Arc<Bvh>>>,
 }
 
 impl AccelerationStructures {
@@ -28,22 +29,33 @@ impl AccelerationStructures {
     ) -> AccelerationStructures {
         let start = Instant::now();
 
-        let blas: Vec<Option<Bvh>> = geometry_instances
+        let mut bvh_cache: HashMap<usize, Arc<Bvh>> = HashMap::new();
+
+        let blas: Vec<Option<Arc<Bvh>>> = geometry_instances
             .iter()
-            .map(|instance| match &instance.primitive.geometry {
-                Geometry::Mesh(mesh) => Some(Bvh::build(
-                    (0..mesh.face_count())
-                        .filter_map(|i| {
-                            Some(BvhNodeItem {
-                                index: i,
-                                bounds: Aabb::around(mesh.face(i)?.map(|v| v.position)),
-                                cost: PRIMITIVE_COST,
-                            })
-                        })
-                        .collect(),
-                    bvh_split,
-                )),
-                _ => None,
+            .map(|instance| {
+                let Geometry::Mesh(mesh) = &instance.primitive.geometry else {
+                    return None;
+                };
+
+                Some(Arc::clone(
+                    bvh_cache
+                        .entry(Arc::as_ptr(mesh) as usize)
+                        .or_insert_with(|| {
+                            Arc::new(Bvh::build(
+                                (0..mesh.face_count())
+                                    .filter_map(|i| {
+                                        Some(BvhNodeItem {
+                                            index: i,
+                                            bounds: Aabb::around(mesh.face(i)?.map(|v| v.position)),
+                                            cost: PRIMITIVE_COST,
+                                        })
+                                    })
+                                    .collect(),
+                                bvh_split,
+                            ))
+                        }),
+                ))
             })
             .collect();
 
@@ -61,7 +73,7 @@ impl AccelerationStructures {
                             .apply_point(corner, transform_method)
                     },
                 )),
-                cost: blas.as_ref().map_or(PRIMITIVE_COST, Bvh::expected_cost),
+                cost: blas.as_deref().map_or(PRIMITIVE_COST, Bvh::expected_cost),
             })
             .collect();
 

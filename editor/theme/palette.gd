@@ -10,6 +10,12 @@ const LIT := Color("ffffff")
 const MARKER_WIDTH := 26
 const KIND_WIDTH := 14
 
+const FONT := preload("res://fonts/Silkscreen-Regular.ttf")
+
+# A caixa de linha da Silkscreen fica 1.5px acima da tinta das maiúsculas, o que
+# joga o texto abaixo dos ícones.
+const BASELINE := -1.5 / 21.0
+
 const FOLD := preload("res://icons/Fold.svg")
 const UNFOLD := preload("res://icons/Unfold.svg")
 const DROPDOWN := preload("res://icons/Dropdown.svg")
@@ -24,6 +30,7 @@ const CARET := 12
 static func build() -> Theme:
 	var theme := Theme.new()
 
+	_font(theme)
 	_regions(theme)
 	_titles(theme)
 	_tree(theme)
@@ -39,18 +46,26 @@ static func build() -> Theme:
 
 	return theme
 
+static func _font(theme: Theme) -> void:
+	var font := FontVariation.new()
+	font.base_font = FONT
+	font.baseline_offset = BASELINE
+
+	theme.default_font = font
+
 static func _regions(theme: Theme) -> void:
 	for type in ["Panel", "PanelContainer"]:
 		theme.set_stylebox("panel", type, _box(BG, DIM))
 
 static func _titles(theme: Theme) -> void:
 	theme.set_type_variation("PanelTitle", "Label")
-	theme.set_color("font_color", "PanelTitle", DIM)
+	theme.set_color("font_color", "PanelTitle", MID)
 
 	var box := _box(Color.TRANSPARENT)
 	box.border_width_bottom = 1
 	box.border_color = DIM
 	_margins(box, PAD, GAP)
+	box.content_margin_bottom = GAP + 1
 
 	theme.set_stylebox("normal", "PanelTitle", box)
 
@@ -66,7 +81,7 @@ static func _tree(theme: Theme) -> void:
 	for name in ["cursor", "cursor_unfocused"]:
 		theme.set_stylebox(name, "Tree", StyleBoxEmpty.new())
 
-	theme.set_color("font_color", "Tree", FG)
+	theme.set_color("font_color", "Tree", MID)
 
 	for name in ["font_selected_color", "font_hovered_selected_color",
 			"font_hovered_color", "font_hovered_dimmed_color"]:
@@ -96,6 +111,8 @@ static func _sections(theme: Theme) -> void:
 	var sub := _box(Color.TRANSPARENT)
 	_margins(sub, PAD, 0)
 	sub.content_margin_right = 0
+	sub.border_width_left = 1
+	sub.border_color = DIM
 
 	theme.set_stylebox("panel", "Subsection", sub)
 
@@ -105,11 +122,11 @@ static func _sections(theme: Theme) -> void:
 	for name in ["normal", "hover", "pressed", "focus", "disabled"]:
 		theme.set_stylebox(name, "SectionHeader", header)
 
-	theme.set_color("font_color", "SectionHeader", DIM)
-	theme.set_color("font_pressed_color", "SectionHeader", DIM)
+	theme.set_color("font_color", "SectionHeader", MID)
+	theme.set_color("font_pressed_color", "SectionHeader", MID)
 	theme.set_color("font_hover_color", "SectionHeader", FG)
-	theme.set_color("icon_normal_color", "SectionHeader", DIM)
-	theme.set_color("icon_pressed_color", "SectionHeader", DIM)
+	theme.set_color("icon_normal_color", "SectionHeader", MID)
+	theme.set_color("icon_pressed_color", "SectionHeader", MID)
 	theme.set_color("icon_hover_color", "SectionHeader", FG)
 	theme.set_constant("h_separation", "SectionHeader", GAP + 2)
 	theme.set_constant("icon_max_width", "SectionHeader", MARKER_WIDTH)
@@ -243,23 +260,23 @@ static func _menus(theme: Theme) -> void:
 static func _buttons(theme: Theme) -> void:
 	theme.set_constant("icon_max_width", "Button", 32)
 
+	theme.set_type_variation("OverlayBar", "PanelContainer")
+	theme.set_stylebox("panel", "OverlayBar", _box(BG, DIM))
+
 	theme.set_type_variation("OverlayButton", "Button")
 
-	var rest := _box(BG, DIM)
+	var rest := _box(BG)
 	_margins(rest, GAP, GAP)
 
-	var lit := _box(FG, FG)
+	var lit := _box(FG)
 	_margins(lit, GAP, GAP)
-
-	var brightest := _box(LIT, LIT)
-	_margins(brightest, GAP, GAP)
 
 	theme.set_stylebox("normal", "OverlayButton", rest)
 	theme.set_stylebox("disabled", "OverlayButton", rest)
 	theme.set_stylebox("focus", "OverlayButton", _box(Color.TRANSPARENT))
 	theme.set_stylebox("hover", "OverlayButton", lit)
 	theme.set_stylebox("pressed", "OverlayButton", lit)
-	theme.set_stylebox("hover_pressed", "OverlayButton", brightest)
+	theme.set_stylebox("hover_pressed", "OverlayButton", lit)
 
 	theme.set_color("icon_normal_color", "OverlayButton", FG)
 	theme.set_color("icon_disabled_color", "OverlayButton", DIM)
@@ -278,6 +295,29 @@ static func _buttons(theme: Theme) -> void:
 	theme.set_font_size("font_size", "OverlayButton", 24)
 
 	theme.set_constant("icon_max_width", "OverlayButton", 32)
+
+	theme.set_type_variation("TitleButton", "Button")
+
+	var flat := StyleBoxEmpty.new()
+	_margins(flat, PAD, GAP)
+
+	var filled := _box(FG)
+	_margins(filled, PAD, GAP)
+
+	theme.set_stylebox("normal", "TitleButton", flat)
+	theme.set_stylebox("disabled", "TitleButton", flat)
+	theme.set_stylebox("focus", "TitleButton", flat)
+	theme.set_stylebox("hover", "TitleButton", filled)
+	theme.set_stylebox("pressed", "TitleButton", filled)
+	theme.set_stylebox("hover_pressed", "TitleButton", filled)
+
+	theme.set_color("font_color", "TitleButton", MID)
+	theme.set_color("font_focus_color", "TitleButton", MID)
+	theme.set_color("font_disabled_color", "TitleButton", DIM)
+
+	for name in ["font_hover_color", "font_pressed_color",
+			"font_hover_pressed_color"]:
+		theme.set_color(name, "TitleButton", INK)
 
 static func _splits(theme: Theme) -> void:
 	for type in ["SplitContainer", "HSplitContainer", "VSplitContainer"]:

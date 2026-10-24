@@ -1,6 +1,4 @@
 class_name TrianglePicker extends Node3D
-## Picks one mesh face under the mouse and reports the two indices the
-## rasterizer's `on_triangle` hook takes.
 
 signal picked(node: SceneGeometry, instance: int, face: int)
 
@@ -12,10 +10,7 @@ var _node: SceneGeometry
 var _face := -1
 var _highlight: MeshInstance3D
 var _shape := ImmediateMesh.new()
-# get_faces() copies the whole buffer, and hover runs on every mouse motion.
 var _faces := {}
-# Mouse waiting to be resolved. Motion arrives in bursts and a pick is a
-# brute-force walk over every face, so at most one runs per frame.
 var _pending := Vector2.INF
 
 func _ready() -> void:
@@ -41,7 +36,6 @@ func set_active(value: bool) -> void:
 		_faces.clear()
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
-## Mouse moved inside the viewport. Resolved on the next frame.
 func hover(mouse: Vector2) -> void:
 	if _active:
 		_pending = mouse

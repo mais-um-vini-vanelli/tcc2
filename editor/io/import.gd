@@ -1,17 +1,13 @@
-# Turns a .glb into editor nodes: the file's tree comes in as a tree, with the
-# glTF transforms kept as transforms and nothing baked or merged.
 class_name Import
 
 var _path: String
 var _state: GLTFState
 var _cameras: bool
-var _materials := {}
 var _json := {}
-var _ours := false
+var _warnings: Array[String] = []
 
-# Everything the file holds, under a single node named after it. Cameras come in
-# only if the scene has none, since the lib renders through one.
-static func glb(path: String, cameras: bool) -> SceneObject:
+static func glb(path: String, cameras: bool,
+		warnings: Array[String] = []) -> SceneObject:
 	var parsed := Assets.state(path)
 
 	if parsed == null:
@@ -22,13 +18,14 @@ static func glb(path: String, cameras: bool) -> SceneObject:
 	importer._state = parsed
 	importer._cameras = cameras
 	importer._json = parsed.json
-	importer._ours = not importer._json.get("extensions", {}).get(Export.EXTENSION, {})
 
 	var group := SceneObject.new()
 	group.name = path.get_file().get_basename().trim_suffix(".tcc2")
 
 	for index in parsed.root_nodes:
 		importer._build(index, group)
+
+	warnings.append_array(importer._warnings)
 
 	return group
 
@@ -49,7 +46,7 @@ func _build(node_index: int, parent: SceneObject) -> void:
 
 func _node(gltf: GLTFNode, node_index: int, node_name: String) -> SceneObject:
 	if gltf.mesh >= 0:
-		return _mesh(gltf.mesh, node_name, node_index)
+		return _mesh(gltf.mesh, node_name)
 
 	if gltf.camera >= 0 and _cameras:
 		_cameras = false
@@ -74,34 +71,60 @@ func _node(gltf: GLTFNode, node_index: int, node_name: String) -> SceneObject:
 			light.environment.intensity = float(environment.get("intensity", 1.0))
 			return light
 
-	# A group, or a camera there was no room for: the children still matter.
 	return SceneObject.new()
 
-# A primitive is one Object in the lib, so a mesh with several becomes a group.
-func _mesh(mesh: int, node_name: String, node_index: int) -> SceneObject:
+func _mesh(mesh: int, node_name: String) -> SceneObject:
 	var count: int = _state.get_meshes()[mesh].mesh.get_surface_count()
-	var casts_shadows: bool = _extras("nodes", node_index).get("casts_shadows", true)
 
 	if count == 1:
-		return _primitive(mesh, 0, casts_shadows)
+		if not _usable(mesh, 0, node_name):
+			return SceneObject.new()
+
+		return _primitive(mesh, 0, node_name)
 
 	var group := SceneObject.new()
 
 	for surface in count:
-		var primitive := _primitive(mesh, surface, casts_shadows)
+		if not _usable(mesh, surface, node_name):
+			continue
+
+		var primitive := _primitive(mesh, surface, node_name)
 		primitive.name = "%s_%d" % [node_name, surface]
 		group.add_child(primitive)
 
 	return group
 
-func _primitive(mesh: int, index: int, casts_shadows: bool) -> SceneGeometry:
+func _usable(mesh: int, index: int, node_name: String) -> bool:
+	if Assets.surface(_path, mesh, index) != null:
+		return true
+
+	_warn("%s: mesh %d surface %d has no triangles, dropped"
+		% [node_name, mesh, index])
+
+	return false
+
+func _warn_ignored(mesh: int, index: int, node_name: String) -> void:
+	var arrays := Assets.surface(_path, mesh, index).surface_get_arrays(0)
+
+	const IGNORED_ARRAYS := {
+		Mesh.ARRAY_TEX_UV2: "a second uv set is ignored",
+		Mesh.ARRAY_COLOR: "vertex colors are ignored",
+		Mesh.ARRAY_BONES: "a skin is ignored",
+	}
+
+	for array in IGNORED_ARRAYS:
+		if arrays[array] != null:
+			_warn("%s: %s" % [node_name, IGNORED_ARRAYS[array]])
+
+func _primitive(mesh: int, index: int, node_name: String) -> SceneGeometry:
+	_warn_ignored(mesh, index, node_name)
+
 	var primitive := SceneGeometry.new()
 	primitive.kind = SceneGeometry.Kind.MESH
 	primitive.mesh.source = _path
 	primitive.mesh.mesh = mesh
 	primitive.mesh.surface = index
 	primitive.material = _material(mesh, index)
-	primitive.cast_shadows = casts_shadows
 
 	if index == 0:
 		var geometry = _extras("meshes", mesh).get("geometry");
@@ -186,16 +209,12 @@ func _light(gltf: GLTFLight) -> SceneLight:
 
 	return node
 
-# Primitives that share a glTF material share the SceneMaterial.
 func _material(mesh: int, index: int) -> SceneMaterial:
 	var mat := _state.get_meshes()[mesh].mesh.get_surface_material(index)
 	var id: int = _state.get_materials().find(mat)
 
 	if id < 0 or not (mat is BaseMaterial3D):
 		return SceneMaterial.new()
-
-	if _materials.has(id):
-		return _materials[id]
 
 	var _mat := mat as BaseMaterial3D
 	var material := SceneMaterial.new()
@@ -208,38 +227,35 @@ func _material(mesh: int, index: int) -> SceneMaterial:
 	else:
 		material.albedo.kind = SceneChannel.Kind.TEXTURE
 		material.albedo.texture = albedo
+		material.albedo.rgb.factor = tint
 
-		if tint != Color.WHITE:
-			push_warning("%s: albedo factor dropped beside its map" % _path)
+	var constants: Array = _extras("materials", id).get("constants", [])
 
 	_scalar(material.metallic, _mat.metallic, _texture(_mat.metallic_texture),
-		_mat.metallic_texture_channel, "metallic")
+		_mat.metallic_texture_channel, "metallic" in constants)
 
 	_scalar(material.roughness, _mat.roughness, _texture(_mat.roughness_texture),
-		_mat.roughness_texture_channel, "roughness")
+		_mat.roughness_texture_channel, "roughness" in constants)
 
 	if _mat.emission_enabled:
 		var strength := _mat.emission_energy_multiplier
 		var emissive := _texture(_mat.emission_texture)
+		var emission := (_mat.emission.srgb_to_linear() * strength).linear_to_srgb()
+		emission.a = 1.0
 
 		if emissive == null:
-			material.emissive.rgb.constant = (_mat.emission.srgb_to_linear()
-				* strength).linear_to_srgb()
+			material.emissive.rgb.constant = emission
 		else:
 			material.emissive.kind = SceneChannel.Kind.TEXTURE
 			material.emissive.texture = emissive
-
-			if _mat.emission != Color.WHITE or not is_equal_approx(strength, 1.0):
-				push_warning("%s: emissive factor dropped beside its map" % _path)
+			material.emissive.rgb.factor = emission
 
 	if _mat.normal_enabled:
 		material.normal = _texture(_mat.normal_texture)
-
-		if not is_equal_approx(_mat.normal_scale, 1.0):
-			push_warning("%s: normal scale %f dropped" % [_path, _mat.normal_scale])
+		material.normal_scale = _mat.normal_scale
 
 	if _mat.uv1_offset != Vector3.ZERO or _mat.uv1_scale != Vector3.ONE:
-		push_warning("%s: a uv offset or scale was dropped" % _path)
+		_warn("%s: a uv offset or scale was dropped" % _path)
 
 	var extensions := _extensions("materials", id)
 
@@ -249,25 +265,18 @@ func _material(mesh: int, index: int) -> SceneMaterial:
 	material.refractive_index = float(extensions
 		.get("KHR_materials_ior", {}).get("ior", 1.5))
 
-	_materials[id] = material
 	return material
 
 func _scalar(value: SceneChannel, factor: float,
-		texture: TextureLocation, channel: int, channel_name: String) -> void:
-	if texture == null:
-		value.scalar.constant = factor
-		return
-
-	if _ours and not is_equal_approx(factor, 1.0):
+		texture: TextureLocation, channel: int, padded: bool) -> void:
+	if texture == null or padded:
 		value.scalar.constant = factor
 		return
 
 	value.kind = SceneChannel.Kind.TEXTURE
 	value.texture = texture
 	value.scalar.channel = channel
-
-	if not is_equal_approx(factor, 1.0):
-		push_warning("%s: %s factor dropped beside its map" % [_path, channel_name])
+	value.scalar.factor = factor
 
 func _extensions(kind: String, index: int) -> Dictionary:
 	var list: Array = _json.get(kind, [])
@@ -339,7 +348,7 @@ func _texture(tex: Texture2D) -> TextureLocation:
 	var image: int = Assets.images(_path).find(tex)
 
 	if image < 0:
-		push_warning("%s: a texture is not one of the file's images" % _path)
+		_warn("%s: a texture is not one of the file's images" % _path)
 		return null
 
 	var texture := TextureLocation.new()
@@ -347,3 +356,7 @@ func _texture(tex: Texture2D) -> TextureLocation:
 	texture.image = image
 
 	return texture
+
+func _warn(message: String) -> void:
+	_warnings.append(message)
+	push_warning(message)

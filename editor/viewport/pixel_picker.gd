@@ -31,7 +31,6 @@ func set_active(value: bool) -> void:
 
 	_loupe.visible = false
 
-## Mouse moved inside the viewport, in container-local coordinates.
 func hover(mouse: Vector2) -> void:
 	if not _active:
 		return
@@ -39,7 +38,6 @@ func hover(mouse: Vector2) -> void:
 	var pixel := _at(mouse)
 
 	if pixel.x < 0:
-		# Inside the pane but outside the frame: the letterbox has no pixels.
 		_loupe.visible = false
 		_rest(Input.CURSOR_FORBIDDEN)
 		return
@@ -49,7 +47,6 @@ func hover(mouse: Vector2) -> void:
 	
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 
-## Mouse left the viewport. The cursor shape is global, so it has to go back.
 func leave() -> void:
 	if not _active:
 		return
@@ -57,7 +54,6 @@ func leave() -> void:
 	_loupe.visible = false
 	_rest()
 
-## True when the click was the picker's, so the viewport leaves it alone.
 func click(mouse: Vector2) -> bool:
 	if not _active:
 		return false
@@ -70,8 +66,6 @@ func click(mouse: Vector2) -> bool:
 
 	return true
 
-## The render pixel under a container-local position, or (-1, -1) outside the
-## frame.
 func _at(mouse: Vector2) -> Vector2i:
 	var size := scene_view.size
 	var pixel := Vector2i(floori(mouse.x), floori(mouse.y))
@@ -84,13 +78,9 @@ func _at(mouse: Vector2) -> Vector2i:
 ## Centres the loupe on the cursor and scrolls the frame inside it so that the
 ## picked pixel lands in the middle, under the reticle.
 func _place(mouse: Vector2, pixel: Vector2i) -> void:
-	# The mouse arrives in render pixels; the loupe lives in the pane, which
-	# the preview's scale and letterbox separate from them.
 	var at := container.position + mouse * container.scale
 	_loupe.position = (at - Vector2(SIDE, SIDE) * 0.5).round()
 
-	# Drawn at one screen pixel per render pixel, then scaled: the texture is
-	# the live frame, so its size follows the scene's output.
 	_zoom.size = Vector2(scene_view.size)
 	_zoom.position = (Vector2(SIDE, SIDE) * 0.5
 		- (Vector2(pixel) + Vector2(0.5, 0.5)) * ZOOM)
@@ -101,8 +91,6 @@ func _rest(shape := Input.CURSOR_ARROW) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	Input.set_default_cursor_shape(shape)
 
-## Built on first use and kept, hidden, afterwards. It goes in the pane rather
-## than the container so that the preview's scale does not magnify it too.
 func _build() -> void:
 	if _loupe != null:
 		return

@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dwgs3p0c8i1pr" path="res://properties/material_section.gd" id="2_gvopl"]
 [ext_resource type="Script" path="res://properties/rows.gd" id="rows"]
+[ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="section"]
 
 [node name="Material" type="PanelContainer" unique_id=1918105084]
 script = ExtResource("2_gvopl")
@@ -21,15 +22,34 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="Stack" unique_id=1690394648]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="Stack/Body" unique_id=1399812642]
+[node name="Albedo" type="PanelContainer" parent="Stack/Body" unique_id=902000001]
+layout_mode = 2
+script = ExtResource("section")
+
+[node name="Stack" type="VBoxContainer" parent="Stack/Body/Albedo" unique_id=902000002]
+layout_mode = 2
+
+[node name="Header" type="Button" parent="Stack/Body/Albedo/Stack" unique_id=902000003]
+layout_mode = 2
+focus_mode = 0
+toggle_mode = true
+button_pressed = true
+text = "Albedo"
+flat = true
+alignment = 0
+
+[node name="Body" type="VBoxContainer" parent="Stack/Body/Albedo/Stack" unique_id=902000004]
+layout_mode = 2
+
+[node name="Rows" type="Container" parent="Stack/Body/Albedo/Stack/Body" unique_id=902000005]
 layout_mode = 2
 script = ExtResource("rows")
 
-[node name="AlbedoKindLabel" type="Label" parent="Stack/Body/Rows" unique_id=136970906]
+[node name="AlbedoKindLabel" type="Label" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=136970906]
 layout_mode = 2
-text = "Albedo kind"
+text = "Kind"
 
-[node name="albedo_kind" type="OptionButton" parent="Stack/Body/Rows" unique_id=1221707538]
+[node name="albedo_kind" type="OptionButton" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=1221707538]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
@@ -39,99 +59,142 @@ popup/item_0/id = 0
 popup/item_1/text = "Texture"
 popup/item_1/id = 1
 
-[node name="AlbedoConstantLabel" type="Label" parent="Stack/Body/Rows" unique_id=1334454954]
+[node name="AlbedoConstantLabel" type="Label" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=1334454954]
 layout_mode = 2
-text = "Albedo"
+text = "Constant"
 
-[node name="albedo_constant" type="ColorPickerButton" parent="Stack/Body/Rows" unique_id=452352535]
+[node name="albedo_constant" type="ColorPickerButton" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=452352535]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 edit_alpha = false
 
-[node name="AlbedoSourceLabel" type="Label" parent="Stack/Body/Rows" unique_id=315259276]
+[node name="AlbedoFactorLabel" type="Label" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=901000001]
 layout_mode = 2
-text = "Albedo map"
+text = "Factor"
 
-[node name="albedo_source" type="Button" parent="Stack/Body/Rows" unique_id=1381755220]
+[node name="albedo_factor" type="ColorPickerButton" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=901000002]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+edit_alpha = false
+
+[node name="AlbedoSourceLabel" type="Label" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=315259276]
+layout_mode = 2
+text = "Map"
+
+[node name="albedo_source" type="Button" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=1381755220]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 clip_text = true
 
-[node name="Dialog" type="FileDialog" parent="Stack/Body/Rows/albedo_source" unique_id=1482176534]
+[node name="Dialog" type="FileDialog" parent="Stack/Body/Albedo/Stack/Body/Rows/albedo_source" unique_id=1482176534]
 title = "Open a File"
 file_mode = 0
 access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="AlbedoImageLabel" type="Label" parent="Stack/Body/Rows" unique_id=154820068]
+[node name="AlbedoImageLabel" type="Label" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=154820068]
 layout_mode = 2
-text = "Albedo image"
+text = "Image"
 
-[node name="albedo_image" type="SpinBox" parent="Stack/Body/Rows" unique_id=1507565246]
+[node name="albedo_image" type="SpinBox" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=1507565246]
 unique_name_in_owner = true
 layout_mode = 2
 rounded = true
 allow_greater = true
 
-[node name="MetallicKindLabel" type="Label" parent="Stack/Body/Rows" unique_id=1352269235]
+[node name="Metallic" type="PanelContainer" parent="Stack/Body" unique_id=902000006]
 layout_mode = 2
-text = "Metallic kind"
+script = ExtResource("section")
 
-[node name="metallic_kind" type="OptionButton" parent="Stack/Body/Rows" unique_id=444426184]
-unique_name_in_owner = true
+[node name="Stack" type="VBoxContainer" parent="Stack/Body/Metallic" unique_id=902000007]
 layout_mode = 2
-selected = 0
-item_count = 2
-popup/item_0/text = "Constant"
-popup/item_0/id = 0
-popup/item_1/text = "Texture"
-popup/item_1/id = 1
 
-[node name="MetallicConstantLabel" type="Label" parent="Stack/Body/Rows" unique_id=821115780]
+[node name="Header" type="Button" parent="Stack/Body/Metallic/Stack" unique_id=902000008]
 layout_mode = 2
+focus_mode = 0
+toggle_mode = true
+button_pressed = true
 text = "Metallic"
+flat = true
+alignment = 0
 
-[node name="metallic_constant" type="SpinBox" parent="Stack/Body/Rows" unique_id=971425478]
+[node name="Body" type="VBoxContainer" parent="Stack/Body/Metallic/Stack" unique_id=902000009]
+layout_mode = 2
+
+[node name="Rows" type="Container" parent="Stack/Body/Metallic/Stack/Body" unique_id=902000010]
+layout_mode = 2
+script = ExtResource("rows")
+
+[node name="MetallicKindLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=1352269235]
+layout_mode = 2
+text = "Kind"
+
+[node name="metallic_kind" type="OptionButton" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=444426184]
+unique_name_in_owner = true
+layout_mode = 2
+selected = 0
+item_count = 2
+popup/item_0/text = "Constant"
+popup/item_0/id = 0
+popup/item_1/text = "Texture"
+popup/item_1/id = 1
+
+[node name="MetallicConstantLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=821115780]
+layout_mode = 2
+text = "Constant"
+
+[node name="metallic_constant" type="SpinBox" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=971425478]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 1.0
 step = 0.01
 
-[node name="MetallicSourceLabel" type="Label" parent="Stack/Body/Rows" unique_id=1638829140]
+[node name="MetallicFactorLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=901000003]
 layout_mode = 2
-text = "Metallic map"
+text = "Factor"
 
-[node name="metallic_source" type="Button" parent="Stack/Body/Rows" unique_id=270622165]
+[node name="metallic_factor" type="SpinBox" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=901000004]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+
+[node name="MetallicSourceLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=1638829140]
+layout_mode = 2
+text = "Map"
+
+[node name="metallic_source" type="Button" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=270622165]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 clip_text = true
 
-[node name="Dialog" type="FileDialog" parent="Stack/Body/Rows/metallic_source" unique_id=2038202859]
+[node name="Dialog" type="FileDialog" parent="Stack/Body/Metallic/Stack/Body/Rows/metallic_source" unique_id=2038202859]
 title = "Open a File"
 file_mode = 0
 access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="MetallicImageLabel" type="Label" parent="Stack/Body/Rows" unique_id=119684899]
+[node name="MetallicImageLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=119684899]
 layout_mode = 2
-text = "Metallic image"
+text = "Image"
 
-[node name="metallic_image" type="SpinBox" parent="Stack/Body/Rows" unique_id=413285924]
+[node name="metallic_image" type="SpinBox" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=413285924]
 unique_name_in_owner = true
 layout_mode = 2
 rounded = true
 allow_greater = true
 
-[node name="MetallicChannelLabel" type="Label" parent="Stack/Body/Rows" unique_id=1999775596]
+[node name="MetallicChannelLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=1999775596]
 layout_mode = 2
-text = "Metallic channel"
+text = "Channel"
 
-[node name="metallic_channel" type="OptionButton" parent="Stack/Body/Rows" unique_id=1183422541]
+[node name="metallic_channel" type="OptionButton" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=1183422541]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
@@ -143,62 +206,95 @@ popup/item_1/id = 1
 popup/item_2/text = "Blue"
 popup/item_2/id = 2
 
-[node name="RoughnessKindLabel" type="Label" parent="Stack/Body/Rows" unique_id=1169412127]
+[node name="Roughness" type="PanelContainer" parent="Stack/Body" unique_id=902000011]
 layout_mode = 2
-text = "Roughness kind"
+script = ExtResource("section")
 
-[node name="roughness_kind" type="OptionButton" parent="Stack/Body/Rows" unique_id=2071821982]
-unique_name_in_owner = true
+[node name="Stack" type="VBoxContainer" parent="Stack/Body/Roughness" unique_id=902000012]
 layout_mode = 2
-selected = 0
-item_count = 2
-popup/item_0/text = "Constant"
-popup/item_0/id = 0
-popup/item_1/text = "Texture"
-popup/item_1/id = 1
 
-[node name="RoughnessConstantLabel" type="Label" parent="Stack/Body/Rows" unique_id=717284915]
+[node name="Header" type="Button" parent="Stack/Body/Roughness/Stack" unique_id=902000013]
 layout_mode = 2
+focus_mode = 0
+toggle_mode = true
+button_pressed = true
 text = "Roughness"
+flat = true
+alignment = 0
 
-[node name="roughness_constant" type="SpinBox" parent="Stack/Body/Rows" unique_id=31683741]
+[node name="Body" type="VBoxContainer" parent="Stack/Body/Roughness/Stack" unique_id=902000014]
+layout_mode = 2
+
+[node name="Rows" type="Container" parent="Stack/Body/Roughness/Stack/Body" unique_id=902000015]
+layout_mode = 2
+script = ExtResource("rows")
+
+[node name="RoughnessKindLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=1169412127]
+layout_mode = 2
+text = "Kind"
+
+[node name="roughness_kind" type="OptionButton" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=2071821982]
+unique_name_in_owner = true
+layout_mode = 2
+selected = 0
+item_count = 2
+popup/item_0/text = "Constant"
+popup/item_0/id = 0
+popup/item_1/text = "Texture"
+popup/item_1/id = 1
+
+[node name="RoughnessConstantLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=717284915]
+layout_mode = 2
+text = "Constant"
+
+[node name="roughness_constant" type="SpinBox" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=31683741]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 1.0
 step = 0.01
 
-[node name="RoughnessSourceLabel" type="Label" parent="Stack/Body/Rows" unique_id=1564997047]
+[node name="RoughnessFactorLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=901000005]
 layout_mode = 2
-text = "Roughness map"
+text = "Factor"
 
-[node name="roughness_source" type="Button" parent="Stack/Body/Rows" unique_id=1067490854]
+[node name="roughness_factor" type="SpinBox" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=901000006]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+
+[node name="RoughnessSourceLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=1564997047]
+layout_mode = 2
+text = "Map"
+
+[node name="roughness_source" type="Button" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=1067490854]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 clip_text = true
 
-[node name="Dialog" type="FileDialog" parent="Stack/Body/Rows/roughness_source" unique_id=681298305]
+[node name="Dialog" type="FileDialog" parent="Stack/Body/Roughness/Stack/Body/Rows/roughness_source" unique_id=681298305]
 title = "Open a File"
 file_mode = 0
 access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="RoughnessImageLabel" type="Label" parent="Stack/Body/Rows" unique_id=1874149221]
+[node name="RoughnessImageLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=1874149221]
 layout_mode = 2
-text = "Roughness image"
+text = "Image"
 
-[node name="roughness_image" type="SpinBox" parent="Stack/Body/Rows" unique_id=1439108933]
+[node name="roughness_image" type="SpinBox" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=1439108933]
 unique_name_in_owner = true
 layout_mode = 2
 rounded = true
 allow_greater = true
 
-[node name="RoughnessChannelLabel" type="Label" parent="Stack/Body/Rows" unique_id=1628250698]
+[node name="RoughnessChannelLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=1628250698]
 layout_mode = 2
-text = "Roughness channel"
+text = "Channel"
 
-[node name="roughness_channel" type="OptionButton" parent="Stack/Body/Rows" unique_id=1916468523]
+[node name="roughness_channel" type="OptionButton" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=1916468523]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
@@ -210,11 +306,34 @@ popup/item_1/id = 1
 popup/item_2/text = "Blue"
 popup/item_2/id = 2
 
-[node name="EmissiveKindLabel" type="Label" parent="Stack/Body/Rows" unique_id=1816906599]
+[node name="Emissive" type="PanelContainer" parent="Stack/Body" unique_id=902000016]
 layout_mode = 2
-text = "Emissive kind"
+script = ExtResource("section")
 
-[node name="emissive_kind" type="OptionButton" parent="Stack/Body/Rows" unique_id=1463394583]
+[node name="Stack" type="VBoxContainer" parent="Stack/Body/Emissive" unique_id=902000017]
+layout_mode = 2
+
+[node name="Header" type="Button" parent="Stack/Body/Emissive/Stack" unique_id=902000018]
+layout_mode = 2
+focus_mode = 0
+toggle_mode = true
+button_pressed = true
+text = "Emissive"
+flat = true
+alignment = 0
+
+[node name="Body" type="VBoxContainer" parent="Stack/Body/Emissive/Stack" unique_id=902000019]
+layout_mode = 2
+
+[node name="Rows" type="Container" parent="Stack/Body/Emissive/Stack/Body" unique_id=902000020]
+layout_mode = 2
+script = ExtResource("rows")
+
+[node name="EmissiveKindLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=1816906599]
+layout_mode = 2
+text = "Kind"
+
+[node name="emissive_kind" type="OptionButton" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=1463394583]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
@@ -224,69 +343,117 @@ popup/item_0/id = 0
 popup/item_1/text = "Texture"
 popup/item_1/id = 1
 
-[node name="EmissiveConstantLabel" type="Label" parent="Stack/Body/Rows" unique_id=1542561704]
+[node name="EmissiveConstantLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=1542561704]
 layout_mode = 2
-text = "Emissive"
+text = "Constant"
 
-[node name="emissive_constant" type="ColorPickerButton" parent="Stack/Body/Rows" unique_id=221697403]
+[node name="emissive_constant" type="ColorPickerButton" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=221697403]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 edit_alpha = false
 
-[node name="EmissiveSourceLabel" type="Label" parent="Stack/Body/Rows" unique_id=1265881242]
+[node name="EmissiveFactorLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=901000007]
 layout_mode = 2
-text = "Emissive map"
+text = "Factor"
 
-[node name="emissive_source" type="Button" parent="Stack/Body/Rows" unique_id=1623024355]
+[node name="emissive_factor" type="ColorPickerButton" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=901000008]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+edit_alpha = false
+
+[node name="EmissiveSourceLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=1265881242]
+layout_mode = 2
+text = "Map"
+
+[node name="emissive_source" type="Button" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=1623024355]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 clip_text = true
 
-[node name="Dialog" type="FileDialog" parent="Stack/Body/Rows/emissive_source" unique_id=280624849]
+[node name="Dialog" type="FileDialog" parent="Stack/Body/Emissive/Stack/Body/Rows/emissive_source" unique_id=280624849]
 title = "Open a File"
 file_mode = 0
 access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="EmissiveImageLabel" type="Label" parent="Stack/Body/Rows" unique_id=676696305]
+[node name="EmissiveImageLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=676696305]
 layout_mode = 2
-text = "Emissive image"
+text = "Image"
 
-[node name="emissive_image" type="SpinBox" parent="Stack/Body/Rows" unique_id=1555059943]
+[node name="emissive_image" type="SpinBox" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=1555059943]
 unique_name_in_owner = true
 layout_mode = 2
 rounded = true
 allow_greater = true
 
-[node name="NormalSourceLabel" type="Label" parent="Stack/Body/Rows" unique_id=1914612362]
+[node name="Normal" type="PanelContainer" parent="Stack/Body" unique_id=902000021]
 layout_mode = 2
-text = "Normal map"
+script = ExtResource("section")
 
-[node name="normal_source" type="Button" parent="Stack/Body/Rows" unique_id=1415448033]
+[node name="Stack" type="VBoxContainer" parent="Stack/Body/Normal" unique_id=902000022]
+layout_mode = 2
+
+[node name="Header" type="Button" parent="Stack/Body/Normal/Stack" unique_id=902000023]
+layout_mode = 2
+focus_mode = 0
+toggle_mode = true
+button_pressed = true
+text = "Normal"
+flat = true
+alignment = 0
+
+[node name="Body" type="VBoxContainer" parent="Stack/Body/Normal/Stack" unique_id=902000024]
+layout_mode = 2
+
+[node name="Rows" type="Container" parent="Stack/Body/Normal/Stack/Body" unique_id=902000025]
+layout_mode = 2
+script = ExtResource("rows")
+
+[node name="NormalSourceLabel" type="Label" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=1914612362]
+layout_mode = 2
+text = "Map"
+
+[node name="normal_source" type="Button" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=1415448033]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 clip_text = true
 
-[node name="Dialog" type="FileDialog" parent="Stack/Body/Rows/normal_source" unique_id=2014693621]
+[node name="Dialog" type="FileDialog" parent="Stack/Body/Normal/Stack/Body/Rows/normal_source" unique_id=2014693621]
 title = "Open a File"
 file_mode = 0
 access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="NormalImageLabel" type="Label" parent="Stack/Body/Rows" unique_id=365484368]
+[node name="NormalImageLabel" type="Label" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=365484368]
 layout_mode = 2
-text = "Normal image"
+text = "Image"
 
-[node name="normal_image" type="SpinBox" parent="Stack/Body/Rows" unique_id=887984515]
+[node name="normal_image" type="SpinBox" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=887984515]
 unique_name_in_owner = true
 layout_mode = 2
 rounded = true
 allow_greater = true
+
+[node name="NormalScaleLabel" type="Label" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=901000009]
+layout_mode = 2
+text = "Scale"
+
+[node name="normal_scale" type="SpinBox" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=901000010]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -16.0
+max_value = 16.0
+step = 0.01
+
+[node name="Rows" type="Container" parent="Stack/Body" unique_id=902000026]
+layout_mode = 2
+script = ExtResource("rows")
 
 [node name="TransparencyLabel" type="Label" parent="Stack/Body/Rows" unique_id=52693558]
 layout_mode = 2

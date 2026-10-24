@@ -55,7 +55,8 @@ export default defineConfig({
         collapsed: true,
         items: [
           { text: 'Regra de Cramer', link: '/apendice/cramer' },
-          { text: 'Produto escalar e vetorial', link: '/apendice/vetores' }
+          { text: 'Produto escalar e vetorial', link: '/apendice/vetores' },
+          { text: 'Ponto mais próximo entre retas', link: '/apendice/reta-mais-proxima' }
         ]
       }
     ],

@@ -2,8 +2,6 @@
 
 [ext_resource type="Theme" uid="uid://c2ey15w2vubp8" path="res://theme/palette.tres" id="1_4c57u"]
 [ext_resource type="Script" uid="uid://dah2h80rhe785" path="res://main.gd" id="1_ig7tw"]
-[ext_resource type="Script" uid="uid://cdrfivfqwl5dj" path="res://hierarchy/hierarchy.gd" id="13_hier"]
-[ext_resource type="Script" uid="uid://db37b4a5j6g64" path="res://hierarchy/add_menu.gd" id="14_addm"]
 [ext_resource type="Script" uid="uid://7r6yin2j4s2m" path="res://properties/properties.gd" id="2_0xm2m"]
 [ext_resource type="Script" uid="uid://c58uqcxu021pt" path="res://viewport/sub_viewport_container.gd" id="2_h2yge"]
 [ext_resource type="Material" uid="uid://kjr4lmkjwarq" path="res://viewport/grid.tres" id="3_lquwl"]
@@ -14,6 +12,9 @@
 [ext_resource type="Texture2D" uid="uid://cwm5r8t3pixel" path="res://icons/PickPixel.svg" id="10_pixel"]
 [ext_resource type="Script" uid="uid://d8wcuot44any" path="res://viewport/selection_outline.gd" id="11_outline"]
 [ext_resource type="Shader" uid="uid://cawc737o78bm0" path="res://viewport/selection_outline.gdshader" id="12_outline"]
+[ext_resource type="Script" uid="uid://cdrfivfqwl5dj" path="res://hierarchy/hierarchy.gd" id="13_hier"]
+[ext_resource type="Script" uid="uid://db37b4a5j6g64" path="res://hierarchy/add_menu.gd" id="14_addm"]
+[ext_resource type="Script" uid="uid://d1i7mfctkb3p6" path="res://viewport/toast.gd" id="15_toast"]
 
 [sub_resource type="Environment" id="Environment_7dm0k"]
 background_mode = 1
@@ -52,7 +53,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.003921569, 0.015686275, 0.03529412, 1)
 
-[node name="PopupMenu" type="PopupMenu" parent="." unique_id=1658015771]
+[node name="AddMenu" type="PopupMenu" parent="." unique_id=1658015771]
 oversampling_override = 1.0
 script = ExtResource("14_addm")
 
@@ -92,14 +93,26 @@ size_flags_horizontal = 3
 theme_type_variation = &"PanelTitle"
 text = "HIERARCHY"
 
-[node name="Add" type="Button" parent="Layout/Sidebar/Hierarchy/VBoxContainer/Title" unique_id=1252571398]
-unique_name_in_owner = true
+[node name="Buttons" type="HBoxContainer" parent="Layout/Sidebar/Hierarchy/VBoxContainer/Title" unique_id=1252571399]
 layout_mode = 2
 size_flags_horizontal = 8
 size_flags_vertical = 4
+theme_override_constants/separation = 0
+
+[node name="Delete" type="Button" parent="Layout/Sidebar/Hierarchy/VBoxContainer/Title/Buttons" unique_id=1252571400]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Delete object"
+mouse_default_cursor_shape = 2
+theme_type_variation = &"TitleButton"
+text = "X"
+
+[node name="Add" type="Button" parent="Layout/Sidebar/Hierarchy/VBoxContainer/Title/Buttons" unique_id=1252571398]
+unique_name_in_owner = true
+layout_mode = 2
 tooltip_text = "Add object"
 mouse_default_cursor_shape = 2
-theme_type_variation = &"SectionHeader"
+theme_type_variation = &"TitleButton"
 text = "+"
 
 [node name="MarginContainer" type="MarginContainer" parent="Layout/Sidebar/Hierarchy/VBoxContainer" unique_id=829307009]
@@ -204,27 +217,33 @@ render_target_update_mode = 4
 layout_mode = 2
 mouse_filter = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Layout/Viewport/Overlay" unique_id=1379423527]
+[node name="Panel" type="PanelContainer" parent="Layout/Viewport/Overlay" unique_id=1612316583]
 layout_mode = 2
 size_flags_horizontal = 8
 size_flags_vertical = 0
 mouse_filter = 2
+theme_type_variation = &"OverlayBar"
 
-[node name="Save" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=404677421]
+[node name="VBoxContainer" type="VBoxContainer" parent="Layout/Viewport/Overlay/Panel" unique_id=1379423527]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Save" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=404677421]
 layout_mode = 2
 tooltip_text = "Save scene"
 mouse_default_cursor_shape = 2
 theme_type_variation = &"OverlayButton"
 icon = ExtResource("6_save")
 
-[node name="Open" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=316014150]
+[node name="Open" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=316014150]
 layout_mode = 2
 tooltip_text = "Open scene"
 mouse_default_cursor_shape = 2
 theme_type_variation = &"OverlayButton"
 icon = ExtResource("5_open")
 
-[node name="CameraPOV" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=1441981553]
+[node name="CameraPOV" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=1441981553]
 layout_mode = 2
 tooltip_text = "Preview render"
 mouse_default_cursor_shape = 2
@@ -232,7 +251,7 @@ theme_type_variation = &"OverlayButton"
 toggle_mode = true
 icon = ExtResource("8_5vw27")
 
-[node name="PickTriangle" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=377903398]
+[node name="PickTriangle" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=377903398]
 layout_mode = 2
 tooltip_text = "Pick a triangle of a mesh"
 mouse_default_cursor_shape = 2
@@ -240,7 +259,7 @@ theme_type_variation = &"OverlayButton"
 toggle_mode = true
 icon = ExtResource("9_pick")
 
-[node name="PickPixel" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=1450977786]
+[node name="PickPixel" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=1450977786]
 layout_mode = 2
 tooltip_text = "Pick a pixel of the render"
 mouse_default_cursor_shape = 2
@@ -248,7 +267,7 @@ theme_type_variation = &"OverlayButton"
 toggle_mode = true
 icon = ExtResource("10_pixel")
 
-[node name="Help" type="Button" parent="Layout/Viewport/Overlay/VBoxContainer" unique_id=1612316582]
+[node name="Help" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=1612316582]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 tooltip_text = "	LMB: select
@@ -258,3 +277,52 @@ Drag and drop .glb file: import"
 theme_type_variation = &"OverlayButton"
 disabled = true
 text = "?"
+
+[node name="Toast" type="PanelContainer" parent="Layout/Viewport/Overlay" unique_id=1612316590]
+clip_children = 2
+visible = false
+custom_minimum_size = Vector2(420, 180)
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 8
+script = ExtResource("15_toast")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Layout/Viewport/Overlay/Toast" unique_id=1612316591]
+layout_mode = 2
+
+[node name="Title" type="MarginContainer" parent="Layout/Viewport/Overlay/Toast/VBoxContainer" unique_id=1612316592]
+layout_mode = 2
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 0
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 0
+
+[node name="Label" type="Label" parent="Layout/Viewport/Overlay/Toast/VBoxContainer/Title" unique_id=1612316593]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PanelTitle"
+text = "WARNINGS"
+
+[node name="Dismiss" type="Button" parent="Layout/Viewport/Overlay/Toast/VBoxContainer/Title" unique_id=1612316594]
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 4
+tooltip_text = "Dismiss"
+mouse_default_cursor_shape = 2
+theme_type_variation = &"TitleButton"
+text = "X"
+
+[node name="Body" type="MarginContainer" parent="Layout/Viewport/Overlay/Toast/VBoxContainer" unique_id=1612316595]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_top = 0
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Layout/Viewport/Overlay/Toast/VBoxContainer/Body" unique_id=1612316596]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Lines" type="Label" parent="Layout/Viewport/Overlay/Toast/VBoxContainer/Body/ScrollContainer" unique_id=1612316597]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+autowrap_mode = 3

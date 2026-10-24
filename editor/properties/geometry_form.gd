@@ -40,7 +40,5 @@ func _build() -> void:
 			bind(%mesh, model, &"mesh")
 			bind(%surface, model, &"surface")
 
-	bind(%cast_shadows, geometry, &"cast_shadows")
-
 	%Transform.bind(binder, geometry)
 	%Material.bind(binder, geometry.material)

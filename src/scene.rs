@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::color::Rgb;
 use crate::geometry::Geometry;
 use crate::math::{Plane, Tangent, Vec2, Vec3};
@@ -362,10 +364,14 @@ impl Light {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Channel<T> {
     Constant(T),
-    Map(Texture),
+    Map(Arc<Texture>),
 }
 
 impl<T> Channel<T> {
+    pub fn map(texture: Texture) -> Self {
+        Channel::Map(Arc::new(texture))
+    }
+
     pub fn texture(&self) -> Option<&Texture> {
         match self {
             Channel::Constant(_) => None,
@@ -424,7 +430,7 @@ pub struct Material {
     /// Luz que a superfície emite, independente de luzes externas.
     pub emissive: Channel<Rgb>,
     /// Mapa de normais, ou `None` para usar a normal geométrica.
-    pub normal: Option<Texture>,
+    pub normal: Option<Arc<Texture>>,
     /// ~1 para superfícies transparentes, 0 para superfícies opacas.
     pub transparency: f32,
     /// Índice de refração. ~1.5 para vidro.

@@ -1,26 +1,7 @@
-//! O problema que o mipmap resolve, desenhado pelo `Rasterizer`.
-//!
-//! Um chão de xadrez visto rasante até o horizonte, nos quatro filtros:
-//!
-//! - `nearest`: um texel do nível 0. Longe da câmera o pixel cobre dezenas de
-//!   texels e fica com um só, e o xadrez vira moiré.
-//! - `bilinear`: quatro texels do nível 0. Suaviza de perto, mas o moiré ao
-//!   longe continua: a leitura ainda é no nível errado.
-//! - `mipmap_bilinear`: no nível de mip que casa com o pixel. O moiré some, e
-//!   a troca de nível aparece como faixas no chão.
-//! - `trilinear`: interpola os dois níveis vizinhos, e as faixas somem.
-//!
-//! A cena só tem luz ambiente branca de intensidade 1, então o shading devolve
-//! o albedo sem mexer: a cor do pixel é a amostra da textura, e a única coisa
-//! mudando entre as imagens é o filtro.
-//!
-//! ```text
-//! cargo run --release --example mipmaps
-//! ```
-
 mod comum;
 
 use std::error::Error;
+use std::sync::Arc;
 use std::time::Instant;
 
 use tcc2::prelude::*;
@@ -119,7 +100,7 @@ fn chao(alcance: f32) -> Geometry {
         Vec3::new(-alcance, 0.0, -alcance),
     ];
 
-    Geometry::Mesh(Mesh {
+    Geometry::Mesh(Arc::new(Mesh {
         vertices: cantos.to_vec(),
         indices: vec![0, 1, 2, 0, 2, 3],
         normals: Some(vec![Vec3::new(0.0, 1.0, 0.0); 4]),
@@ -130,10 +111,10 @@ fn chao(alcance: f32) -> Geometry {
                 .map(|p| Vec2::new(p.x, p.z) * UV_POR_METRO)
                 .collect(),
         ),
-    })
+    }))
 }
 
-fn xadrez(lado: u32, quadrados: u32) -> Texture {
+fn xadrez(lado: u32, quadrados: u32) -> Arc<Texture> {
     let mut texels = Vec::with_capacity((lado * lado) as usize);
 
     for y in 0..lado {
@@ -147,5 +128,5 @@ fn xadrez(lado: u32, quadrados: u32) -> Texture {
         }
     }
 
-    Texture::new(lado, lado, texels).unwrap()
+    Arc::new(Texture::new(lado, lado, texels).unwrap())
 }

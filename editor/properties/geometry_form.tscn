@@ -4,7 +4,6 @@
 [ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_mplm2"]
 [ext_resource type="PackedScene" uid="uid://ucbcfnd6wi6" path="res://properties/transform_section.tscn" id="4_kxnx1"]
 [ext_resource type="PackedScene" uid="uid://dwiwtshqcrmo" path="res://properties/material_section.tscn" id="5_74bph"]
-[ext_resource type="Script" uid="uid://cexlinptor5e6" path="res://properties/check.gd" id="check_box"]
 [ext_resource type="Script" path="res://properties/rows.gd" id="rows"]
 
 [node name="GeometryPanel" type="VBoxContainer" unique_id=448446973]
@@ -189,15 +188,6 @@ unique_name_in_owner = true
 layout_mode = 2
 rounded = true
 allow_greater = true
-
-[node name="CastShadowsLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1049310603]
-layout_mode = 2
-text = "casts_shadows"
-
-[node name="cast_shadows" type="CheckBox" parent="Geometry/Stack/Body/Rows" unique_id=1182490193]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("check_box")
 
 [node name="Transform" parent="." unique_id=1739651481 instance=ExtResource("4_kxnx1")]
 unique_name_in_owner = true

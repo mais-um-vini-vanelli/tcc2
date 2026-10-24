@@ -49,6 +49,36 @@ du = ∂N/∂φ = (−N.z, 0, N.x)
 Nos polos o paralelo tem raio zero e a direção do `u` não existe; aí cai na
 tangente qualquer.
 
+### O du e o dv de um triângulo
+
+Em um triângulo usamos as uvs dos vértices. As arestas `e1` e `e2` saem das posições, 
+e as diferenças de uv `d1` e `d2` saem das uvs correspondentes.
+
+Dentro do triângulo o mapeamento é afim, então cada aresta é uma combinação dos
+dois eixos com os pesos que a uv dá:
+
+```text
+e1 = d1.x * du + d1.y * dv
+e2 = d2.x * du + d2.y * dv
+
+┌            ┐ ┌    ┐   ┌    ┐
+│ d1.x  d1.y │ │ du │ = │ e1 │
+│ d2.x  d2.y │ │ dv │   │ e2 │
+└            ┘ └    ┘   └    ┘
+```
+
+Com a [regra de Cramer](/apendice/cramer), fixando x:
+
+```text
+       │ e1.x  d1.y │          │ d1.x  e1.x │
+       │ e2.x  d2.y │          │ d2.x  e2.x │
+du.x = ──────────────   dv.x = ──────────────
+       │ d1.x  d1.y │          │ d1.x  d1.y │
+       │ d2.x  d2.y │          │ d2.x  d2.y │
+```
+
+Agora é fazer o mesmo pra y e z.
+
 ### Quando não há uv
 
 Sem uv de onde tirar a tangente de verdade, serve uma tangente qualquer

@@ -20,8 +20,6 @@ const SAMPLER := {
 
 var _json := {}
 var _bin := PackedByteArray()
-var _materials: Array[SceneMaterial] = []
-var _material_ids: Array[int] = []
 var _meshes := {}
 var _images := {}
 var _warnings: Array[String] = []
@@ -266,18 +264,14 @@ func _geometry_node(node: SceneGeometry) -> Dictionary:
 	var entry := _trs(node.transform)
 	entry["mesh"] = mesh
 
-	if not node.cast_shadows:
-		entry["extensions"] = {EXTENSION: {"casts_shadows": false}}
-
 	return entry
 
 func _mesh(node: SceneGeometry) -> int:
-	var material := _material(node.material)
 	var key := ""
 
 	if node.kind == SceneGeometry.Kind.MESH:
 		key = "%s#%d#%d#%d" % [node.mesh.source, node.mesh.mesh,
-			node.mesh.surface, material]
+			node.mesh.surface, node.material.get_instance_id()]
 
 		if _meshes.has(key):
 			return _meshes[key]
@@ -287,17 +281,8 @@ func _mesh(node: SceneGeometry) -> int:
 	if surface == null or surface.get_surface_count() == 0:
 		return -1
 
-	if surface is ArrayMesh \
-			and surface.surface_get_primitive_type(0) != Mesh.PRIMITIVE_TRIANGLES:
-		_warn("%s: not made of triangles, dropped" % node.name)
-		return -1
-
 	var arrays := surface.surface_get_arrays(0)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-
-	if vertices.is_empty():
-		_warn("%s: no vertices, dropped" % node.name)
-		return -1
 
 	var attributes := {
 		"POSITION": _accessor(vertices.to_byte_array(), vertices.size(), "VEC3",
@@ -322,15 +307,6 @@ func _mesh(node: SceneGeometry) -> int:
 		attributes["TEXCOORD_0"] = _accessor(uvs.to_byte_array(), uvs.size(),
 			"VEC2", FLOAT, ARRAY_BUFFER, null)
 
-	if arrays[Mesh.ARRAY_TEX_UV2] != null:
-		_warn("%s: a second uv set was dropped" % node.name)
-
-	if arrays[Mesh.ARRAY_COLOR] != null:
-		_warn("%s: vertex colors were dropped" % node.name)
-
-	if arrays[Mesh.ARRAY_BONES] != null:
-		_warn("%s: a skin was dropped" % node.name)
-
 	var indices := _indices(arrays, vertices.size())
 
 	var entry := {
@@ -338,7 +314,7 @@ func _mesh(node: SceneGeometry) -> int:
 			"attributes": attributes,
 			"indices": _accessor(indices.to_byte_array(), indices.size(),
 				"SCALAR", UNSIGNED_INT, ELEMENT_ARRAY_BUFFER, null),
-			"material": material,
+			"material": _material(node.material),
 			"mode": TRIANGLES,
 		}],
 	}
@@ -381,8 +357,9 @@ func _surface(node: SceneGeometry) -> Mesh:
 				node.mesh.surface)
 
 			if built == null:
-				_warn("%s: %s has no mesh %d surface %d, dropped" % [node.name,
-					node.mesh.source, node.mesh.mesh, node.mesh.surface])
+				_warn("%s: %s has no usable mesh %d surface %d, dropped"
+					% [node.name, node.mesh.source, node.mesh.mesh,
+					node.mesh.surface])
 
 			return built
 
@@ -477,18 +454,14 @@ func _buffer_view(bytes: PackedByteArray, target: int) -> int:
 	return _json["bufferViews"].size() - 1
 
 func _material(material: SceneMaterial) -> int:
-	var known := _materials.find(material)
-
-	if known >= 0:
-		return _material_ids[known]
-
 	var pbr := {}
 
 	if material.albedo.kind == SceneChannel.Kind.TEXTURE:
 		var texture := _texture(material.albedo.texture)
 
 		if texture >= 0:
-			pbr["baseColorFactor"] = [1.0, 1.0, 1.0, 1.0]
+			var factor := _linear(material.albedo.rgb.factor)
+			pbr["baseColorFactor"] = [factor[0], factor[1], factor[2], 1.0]
 			pbr["baseColorTexture"] = {"index": texture}
 
 	if not pbr.has("baseColorTexture"):
@@ -507,25 +480,22 @@ func _material(material: SceneMaterial) -> int:
 		"doubleSided": true,
 	}
 
-	var strength := 1.0
-
 	if material.emissive.kind == SceneChannel.Kind.TEXTURE:
 		var texture := _texture(material.emissive.texture)
 
 		if texture >= 0:
-			entry["emissiveFactor"] = [1.0, 1.0, 1.0]
 			entry["emissiveTexture"] = {"index": texture}
 
-	if not entry.has("emissiveTexture"):
-		var e := material.emissive.rgb.constant.srgb_to_linear()
-		
-		strength = maxf(maxf(e.r, maxf(e.g, e.b)), 1.0)
-		entry["emissiveFactor"] = [e.r / strength, e.g / strength, e.b / strength]
+	var emissive_factor := (material.emissive.rgb.factor
+		if entry.has("emissiveTexture") else material.emissive.rgb.constant).srgb_to_linear()
+
+	var emissive_strength := maxf(maxf(emissive_factor.r, maxf(emissive_factor.g, emissive_factor.b)), 1.0)
+	entry["emissiveFactor"] = [emissive_factor.r / emissive_strength, emissive_factor.g / emissive_strength, emissive_factor.b / emissive_strength]
 
 	var normal := _texture(material.normal)
 
 	if normal >= 0:
-		entry["normalTexture"] = {"index": normal, "scale": 1.0}
+		entry["normalTexture"] = {"index": normal, "scale": material.normal_scale}
 
 	var extensions := {}
 
@@ -536,20 +506,26 @@ func _material(material: SceneMaterial) -> int:
 
 	extensions["KHR_materials_ior"] = {"ior": material.refractive_index}
 
-	if strength > 1.0:
+	if mr[2] >= 0:
+		var constants := []
+
+		for pair in [[material.metallic, "metallic"], [material.roughness, "roughness"]]:
+			if pair[0].kind != SceneChannel.Kind.TEXTURE:
+				constants.append(pair[1])
+
+		if not constants.is_empty():
+			extensions[EXTENSION] = {"constants": constants}
+
+	if emissive_strength > 1.0:
 		extensions["KHR_materials_emissive_strength"] = {
-			"emissiveStrength": strength,
+			"emissiveStrength": emissive_strength,
 		}
 
 	entry["extensions"] = extensions
 
 	_json["materials"].append(entry)
-	var index: int = _json["materials"].size() - 1
 
-	_materials.append(material)
-	_material_ids.append(index)
-
-	return index
+	return _json["materials"].size() - 1
 
 func _metallic_roughness(material: SceneMaterial) -> Array:
 	var metallic := material.metallic
@@ -569,35 +545,49 @@ func _metallic_roughness(material: SceneMaterial) -> Array:
 			and metallic.texture.image == roughness.texture.image \
 			and metallic.scalar.channel == BaseMaterial3D.TEXTURE_CHANNEL_BLUE \
 			and roughness.scalar.channel == BaseMaterial3D.TEXTURE_CHANNEL_GREEN:
-		return [1.0, 1.0, _texture(metallic.texture)]
+		return [metallic.scalar.factor, roughness.scalar.factor,
+			_texture(metallic.texture)]
 
-	var size := (r_image if r_image != null else m_image).get_size()
+	var key := "mr#%s#%s" % [_packed_key(roughness), _packed_key(metallic)]
+	var index: int = _images.get(key, -1)
 
-	for image in [m_image, r_image]:
-		if image != null and image.get_size() != size:
-			_warn("metallic and roughness share one texture in glTF: %dx%d resized to %dx%d"
-				% [image.get_width(), image.get_height(), size.x, size.y])
-			image.resize(int(size.x), int(size.y))
+	if index < 0:
+		var size := (r_image if r_image != null else m_image).get_size()
 
-	var count := int(size.x) * int(size.y)
-	var green := _channel(r_image, roughness.scalar.channel, count)
-	var blue := _channel(m_image, metallic.scalar.channel, count)
+		for image in [m_image, r_image]:
+			if image != null and image.get_size() != size:
+				_warn("metallic and roughness share one texture in glTF: %dx%d resized to %dx%d"
+					% [image.get_width(), image.get_height(), size.x, size.y])
+				image.resize(int(size.x), int(size.y))
 
-	var packed := PackedByteArray()
-	packed.resize(count * 3)
+		var count := int(size.x) * int(size.y)
+		var green := _channel(r_image, roughness.scalar.channel, count)
+		var blue := _channel(m_image, metallic.scalar.channel, count)
 
-	for i in count:
-		packed[i * 3 + 1] = green[i]
-		packed[i * 3 + 2] = blue[i]
+		var packed := PackedByteArray()
+		packed.resize(count * 3)
 
-	var image := Image.create_from_data(int(size.x), int(size.y), false,
-		Image.FORMAT_RGB8, packed)
+		for i in count:
+			packed[i * 3 + 1] = green[i]
+			packed[i * 3 + 2] = blue[i]
+
+		index = _texture_from_image(Image.create_from_data(int(size.x),
+			int(size.y), false, Image.FORMAT_RGB8, packed))
+
+		_images[key] = index
 
 	return [
-		1.0 if m_map else metallic.scalar.constant,
-		1.0 if r_map else roughness.scalar.constant,
-		_texture_from_image(image),
+		metallic.scalar.factor if m_map else metallic.scalar.constant,
+		roughness.scalar.factor if r_map else roughness.scalar.constant,
+		index,
 	]
+
+func _packed_key(channel: SceneChannel) -> String:
+	if channel.kind != SceneChannel.Kind.TEXTURE or channel.texture == null:
+		return "-"
+
+	return "%s#%d#%d" % [channel.texture.source, channel.texture.image,
+		channel.scalar.channel]
 
 func _channel(image: Image, channel: int, count: int) -> PackedByteArray:
 	var out := PackedByteArray()

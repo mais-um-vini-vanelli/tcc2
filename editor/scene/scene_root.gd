@@ -34,10 +34,3 @@ var width := 800
 var height := 600
 var exposure := 0.0
 var tonemap := Tonemap.NONE
-
-# A subárvore inteira passa a pertencer à raiz, que é o dono que o export segue.
-func adopt(node: Node) -> void:
-	node.owner = self
-
-	for child in node.get_children():
-		adopt(child)

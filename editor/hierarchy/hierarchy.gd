@@ -5,6 +5,7 @@ static var ICONS: Array = [
 	[SceneLight, preload("res://icons/KindLight.svg"), Color("#e6c94d")],
 	[SceneCamera, preload("res://icons/KindCamera.svg"), Color("#d86481")],
 	[SceneGeometry, preload("res://icons/KindGeometry.svg"), Color("#51cc8d")],
+	[SceneObject, preload("res://icons/KindScene.svg"), Color("#d5dee8")],
 ]
 
 signal selected(node: SceneObject)
@@ -13,8 +14,10 @@ signal changed
 
 @onready var _tree: Tree = %Tree
 @onready var _add: Button = %Add
+@onready var _delete: Button = %Delete
 
 var _items := {}
+var _editable := true
 var _root: SceneRoot
 var _selected: SceneObject
 var _hovered: SceneObject
@@ -27,6 +30,9 @@ func _ready() -> void:
 	_tree.item_selected.connect(_on_item_selected)
 
 	_add.pressed.connect(func(): add_pressed.emit(_add))
+	_delete.pressed.connect(func(): _remove(_selected))
+
+	_sync_delete()
 
 func rebuild(root: SceneRoot) -> void:
 	_root = root
@@ -55,14 +61,15 @@ func add_node(node: SceneObject, node_name: String) -> void:
 
 	node.name = node_name
 	parent.add_child(node, true)
-	_root.adopt(node)
 
 	rebuild(_root)
 	select(node)
 	changed.emit()
 
 func set_editable(editable: bool) -> void:
+	_editable = editable
 	_add.disabled = not editable
+	_sync_delete()
 
 	for node in _items:
 		_items[node].set_selectable(0, editable)
@@ -97,10 +104,15 @@ func _set_selected(node: SceneObject) -> void:
 		node.set_selected(true)
 		_mark(node)
 
+	_sync_delete()
 	selected.emit(node)
 
 func _on_item_selected() -> void:
 	_set_selected(_tree.get_selected().get_metadata(0))
+
+func _sync_delete() -> void:
+	_delete.disabled = (not _editable or _selected == null
+		or _selected == _root)
 
 func _mark(node: SceneObject) -> void:
 	var item: TreeItem = _items.get(node)
@@ -124,9 +136,6 @@ func _hover(item: TreeItem) -> void:
 		if item != null and item.is_selectable(0) else Control.CURSOR_ARROW)
 
 	var node: SceneObject = item.get_metadata(0) if item != null else null
-
-	if node == _hovered:
-		return
 
 	var was := _hovered
 	_hovered = node

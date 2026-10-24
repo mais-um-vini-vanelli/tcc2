@@ -5,14 +5,14 @@ use crate::math::Vec2;
 use crate::parameters::TextureFilter;
 use crate::render::ColorBuffer;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Texture {
     base: ColorBuffer,
     mipmaps: OnceLock<Mipmaps>,
     pub wrap: TextureWrap,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum TextureWrap {
     #[default]
     Repeat,
@@ -66,7 +66,7 @@ impl Texture {
     }
 
     pub fn mipmaps(&self) -> usize {
-        self.mipmaps.get().unwrap().levels.len()
+        self.mipmaps.get().unwrap().levels.len() + 1
     }
 
     pub fn sample(
@@ -84,7 +84,7 @@ impl Texture {
                     self.mipmaps
                         .get()
                         .unwrap()
-                        .bilinear(uv, footprint, self.wrap)
+                        .bilinear(&self.base, uv, footprint, self.wrap)
                 } else {
                     Self::bilinear(&self.base, uv, self.wrap)
                 }
@@ -95,7 +95,7 @@ impl Texture {
                     self.mipmaps
                         .get()
                         .unwrap()
-                        .trilinear(uv, footprint, self.wrap)
+                        .trilinear(&self.base, uv, footprint, self.wrap)
                 } else {
                     Self::bilinear(&self.base, uv, self.wrap)
                 }
@@ -156,13 +156,23 @@ impl Texture {
 
 impl Mipmaps {
     fn build(base: &ColorBuffer) -> Self {
-        let mut levels = vec![base.clone()];
+        let mut levels: Vec<ColorBuffer> = Vec::new();
 
-        while let Some(previous) = levels.last().filter(|n| n.width() > 1 || n.height() > 1) {
+        loop {
+            let previous = levels.last().unwrap_or(base);
+
+            if previous.width() <= 1 && previous.height() <= 1 {
+                break;
+            }
+
             levels.push(Self::miplevel(previous));
         }
 
         Mipmaps { levels }
+    }
+
+    fn level<'a>(&'a self, base: &'a ColorBuffer, i: usize) -> &'a ColorBuffer {
+        if i == 0 { base } else { &self.levels[i - 1] }
     }
 
     /// Monta um miplevel. Cada texel é a média de um bloco 2x2 do anterior.
@@ -195,44 +205,53 @@ impl Mipmaps {
     }
 
     /// O nível `λ` em que um texel tem um tamanho parecido com o pixel.
-    pub fn level_of_detail(&self, footprint: Footprint) -> f32 {
+    pub fn level_of_detail(&self, base: &ColorBuffer, footprint: Footprint) -> f32 {
         let dx_in_texels = Vec2::new(
-            footprint.dx.x * self.levels[0].width() as f32,
-            footprint.dx.y * self.levels[0].height() as f32,
+            footprint.dx.x * base.width() as f32,
+            footprint.dx.y * base.height() as f32,
         )
         .length();
 
         let dy_in_texels = Vec2::new(
-            footprint.dy.x * self.levels[0].width() as f32,
-            footprint.dy.y * self.levels[0].height() as f32,
+            footprint.dy.x * base.width() as f32,
+            footprint.dy.y * base.height() as f32,
         )
         .length();
 
         // Usa o maior dos dois deslocamentos.
         let lambda = dx_in_texels.max(dy_in_texels).log2();
-        lambda.max(0.0).min(((&self).levels.len() - 1) as f32)
+        lambda.max(0.0).min(self.levels.len() as f32)
     }
 
     /// Os quatro texels vizinhos, no nível de mip mais próximo.
-    fn bilinear(&self, uv: Vec2, footprint: Footprint, wrap: TextureWrap) -> Rgb {
-        Texture::bilinear(
-            &self.levels[self.level_of_detail(footprint).round() as usize],
-            uv,
-            wrap,
-        )
+    fn bilinear(
+        &self,
+        base: &ColorBuffer,
+        uv: Vec2,
+        footprint: Footprint,
+        wrap: TextureWrap,
+    ) -> Rgb {
+        let level = self.level_of_detail(base, footprint).round() as usize;
+        Texture::bilinear(self.level(base, level), uv, wrap)
     }
 
     /// Bilinear nos dois níveis vizinhos, interpolados entre si.
-    fn trilinear(&self, uv: Vec2, footprint: Footprint, wrap: TextureWrap) -> Rgb {
-        let lambda = self.level_of_detail(footprint);
+    fn trilinear(
+        &self,
+        base: &ColorBuffer,
+        uv: Vec2,
+        footprint: Footprint,
+        wrap: TextureWrap,
+    ) -> Rgb {
+        let lambda = self.level_of_detail(base, footprint);
         let d = lambda.floor() as usize;
         let frac = lambda - d as f32;
 
-        if frac == 0.0 || d == self.levels.len() - 1 {
-            Texture::bilinear(&self.levels[d], uv, wrap)
+        if frac == 0.0 || d == self.levels.len() {
+            Texture::bilinear(self.level(base, d), uv, wrap)
         } else {
-            Texture::bilinear(&self.levels[d], uv, wrap)
-                .lerp(Texture::bilinear(&self.levels[d + 1], uv, wrap), frac)
+            Texture::bilinear(self.level(base, d), uv, wrap)
+                .lerp(Texture::bilinear(self.level(base, d + 1), uv, wrap), frac)
         }
     }
 }

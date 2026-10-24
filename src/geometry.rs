@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::math::{Aabb, Baricentrics, Ray, Tangent, Vec2, Vec3, Vertex};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -111,7 +113,7 @@ pub enum Geometry {
     Triangle { points: [Vec3; 3] },
     Cube { half_edge: f32 },
     Sphere { radius: f32 },
-    Mesh(Mesh),
+    Mesh(Arc<Mesh>),
 }
 
 impl Geometry {
@@ -120,7 +122,7 @@ impl Geometry {
     }
 
     pub fn mesh(vertices: Vec<Vec3>, indices: Vec<u32>) -> Self {
-        Geometry::Mesh(Mesh::new(vertices, indices))
+        Geometry::Mesh(Arc::new(Mesh::new(vertices, indices)))
     }
 
     pub fn sphere(radius: f32) -> Self {
@@ -131,9 +133,9 @@ impl Geometry {
         Geometry::Cube { half_edge }
     }
 
-    pub fn tessellate(&self) -> Mesh {
+    pub fn tessellate(&self) -> Arc<Mesh> {
         match self {
-            Geometry::Triangle { points } => Mesh {
+            Geometry::Triangle { points } => Arc::new(Mesh {
                 vertices: points.to_vec(),
                 indices: vec![0, 1, 2],
                 normals: None,
@@ -146,13 +148,13 @@ impl Geometry {
                     ]
                     .to_vec(),
                 ),
-            },
+            }),
 
-            Geometry::Cube { half_edge } => Self::tessellate_cube(Vec3::ZERO, *half_edge),
+            Geometry::Cube { half_edge } => Arc::new(Self::tessellate_cube(Vec3::ZERO, *half_edge)),
 
-            Geometry::Sphere { radius } => Self::tessellate_sphere(Vec3::ZERO, *radius),
+            Geometry::Sphere { radius } => Arc::new(Self::tessellate_sphere(Vec3::ZERO, *radius)),
 
-            Geometry::Mesh(malha) => malha.clone(),
+            Geometry::Mesh(mesh) => Arc::clone(mesh),
         }
     }
 

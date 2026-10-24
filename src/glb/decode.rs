@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use gltf::image::Format;
 use gltf::texture::WrappingMode;
 use serde_json::Value;
@@ -12,6 +15,26 @@ use crate::transform::Transform;
 
 use super::{EXTENSION, Error, LUMENS_PER_WATT, non_null_field};
 
+#[derive(Default)]
+struct Cache {
+    meshes: HashMap<(usize, usize), Arc<Mesh>>,
+    images: HashMap<ImageKey, Arc<Texture>>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ImageKey {
+    index: usize,
+    decoding: ImageKeyDecoding,
+    texture_wrap: TextureWrap,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+enum ImageKeyDecoding {
+    Srgb { factor: [u32; 3] },
+    Normal { scale: u32 },
+    Gray { channel: usize, factor: u32 },
+}
+
 pub fn decode(bytes: &[u8]) -> Result<(Scene, Option<Parameters>), Error> {
     let (document, buffers, images) = gltf::import_slice(bytes)?;
 
@@ -24,10 +47,10 @@ pub fn decode(bytes: &[u8]) -> Result<(Scene, Option<Parameters>), Error> {
         .ok_or("o arquivo não tem cena padrão")?;
 
     let mut objects = Vec::new();
-    let mut materials = Vec::new();
+    let mut cache = Cache::default();
 
     for node in gltf_scene.nodes() {
-        objects.push(decode_object(&node, &buffers, &images, &mut materials)?);
+        objects.push(decode_object(&node, &buffers, &images, &mut cache)?);
     }
 
     let scene = Scene { objects };
@@ -80,7 +103,7 @@ fn decode_object(
     node: &gltf::Node,
     buffers: &[gltf::buffer::Data],
     images: &[gltf::image::Data],
-    materials: &mut Vec<(Option<usize>, Material)>,
+    cache: &mut Cache,
 ) -> Result<Object, Error> {
     let extras = node.extension_value(EXTENSION);
 
@@ -107,8 +130,8 @@ fn decode_object(
         let primitive = mesh.primitives().next().ok_or("mesh sem primitive")?;
 
         Some(ObjectKind::Primitive(Primitive {
-            geometry: decode_geometry(&mesh, &primitive, buffers)?,
-            material: decode_material(&primitive.material(), images, materials)?,
+            geometry: decode_geometry(&mesh, &primitive, buffers, cache)?,
+            material: decode_material(&primitive.material(), images, cache)?,
         }))
     } else {
         None
@@ -116,7 +139,7 @@ fn decode_object(
 
     let children = node
         .children()
-        .map(|child| decode_object(&child, buffers, images, materials))
+        .map(|child| decode_object(&child, buffers, images, cache))
         .collect::<Result<Vec<_>, Error>>()?;
 
     let (translation, rotation, scale) = node.transform().decomposed();
@@ -138,13 +161,25 @@ fn decode_geometry(
     mesh: &gltf::Mesh,
     primitive: &gltf::Primitive,
     buffers: &[gltf::buffer::Data],
+    cache: &mut Cache,
 ) -> Result<Geometry, Error> {
     let tag = mesh
         .extension_value(EXTENSION)
         .and_then(|extras| non_null_field(extras, "geometry"));
 
     match tag {
-        None => Ok(Geometry::Mesh(decode_mesh(primitive, buffers)?)),
+        None => {
+            let mesh_key = (mesh.index(), primitive.index());
+
+            if let Some(cached) = cache.meshes.get(&mesh_key) {
+                return Ok(Geometry::Mesh(Arc::clone(cached)));
+            }
+
+            let decoded = Arc::new(decode_mesh(primitive, buffers)?);
+            cache.meshes.insert(mesh_key, Arc::clone(&decoded));
+
+            Ok(Geometry::Mesh(decoded))
+        }
 
         Some(Value::String(name)) if name == "triangle" => {
             let mesh: &Mesh = &decode_mesh(primitive, buffers)?;
@@ -232,25 +267,33 @@ fn decode_mesh(primitive: &gltf::Primitive, buffers: &[gltf::buffer::Data]) -> R
 fn decode_material(
     material: &gltf::Material,
     images: &[gltf::image::Data],
-    materials: &mut Vec<(Option<usize>, Material)>,
+    cache: &mut Cache,
 ) -> Result<Material, Error> {
-    if let Some((_, cached)) = materials.iter().find(|(i, _)| *i == material.index()) {
-        return Ok(cached.clone());
-    }
-
     let pbr = material.pbr_metallic_roughness();
 
-    let albedo = match pbr.base_color_texture() {
-        Some(info) => {
-            let (width, height, texels) = pop_image(info.texture().source().index(), images)?;
-            let texels = texels.into_iter().map(Rgb::from_srgb).collect();
+    let [r, g, b, _] = pbr.base_color_factor();
+    let base_color_factor = Rgb::new(r, g, b);
 
-            Channel::Map(decode_texture(width, height, texels, info.texture())?)
-        }
-        None => {
-            let [r, g, b, _] = pbr.base_color_factor();
-            Channel::Constant(Rgb::new(r, g, b))
-        }
+    let albedo = match pbr.base_color_texture() {
+        Some(info) => Channel::Map(decode_image(
+            &info.texture(),
+            ImageKeyDecoding::Srgb {
+                factor: [
+                    base_color_factor.r.to_bits(),
+                    base_color_factor.g.to_bits(),
+                    base_color_factor.b.to_bits(),
+                ],
+            },
+            images,
+            |texels| {
+                texels
+                    .into_iter()
+                    .map(|t| Rgb::from_srgb(t) * base_color_factor)
+                    .collect()
+            },
+            cache,
+        )?),
+        None => Channel::Constant(base_color_factor),
     };
 
     let (metallic, roughness) = match pbr.metallic_roughness_texture() {
@@ -258,64 +301,69 @@ fn decode_material(
             Channel::Constant(pbr.metallic_factor()),
             Channel::Constant(pbr.roughness_factor()),
         ),
-        Some(info) => {
-            let (width, height, texels) = pop_image(info.texture().source().index(), images)?;
-
-            // Roughness no verde, metallic no azul, como manda o glTF.
-            let channel = |i: usize, factor: f32| -> Result<Channel<f32>, Error> {
-                if texels.iter().all(|t| t[i] == u8::MAX) {
-                    return Ok(Channel::Constant(factor));
-                }
-
-                let grays = texels
-                    .iter()
-                    .map(|t| Rgb::gray(t[i] as f32 / 255.0 * factor))
-                    .collect();
-
-                Ok(Channel::Map(decode_texture(
-                    width,
-                    height,
-                    grays,
-                    info.texture(),
-                )?))
-            };
-
-            (
-                channel(2, pbr.metallic_factor())?,
-                channel(1, pbr.roughness_factor())?,
-            )
-        }
+        // Roughness no verde, metallic no azul, como manda o glTF.
+        Some(info) => (
+            decode_grayscale_image(&info.texture(), 2, pbr.metallic_factor(), images, cache)?,
+            decode_grayscale_image(&info.texture(), 1, pbr.roughness_factor(), images, cache)?,
+        ),
     };
 
     let [r, g, b] = material.emissive_factor();
-    let factor = Rgb::new(r, g, b) * material.emissive_strength().unwrap_or(1.0);
+    let emissive_factor = Rgb::new(r, g, b) * material.emissive_strength().unwrap_or(1.0);
 
     let emissive = match material.emissive_texture() {
-        Some(info) => {
-            let (width, height, texels) = pop_image(info.texture().source().index(), images)?;
-            let texels = texels
-                .into_iter()
-                .map(|t| Rgb::from_srgb(t) * factor)
-                .collect();
-
-            Channel::Map(decode_texture(width, height, texels, info.texture())?)
-        }
-        None => Channel::Constant(factor),
+        Some(info) => Channel::Map(decode_image(
+            &info.texture(),
+            ImageKeyDecoding::Srgb {
+                factor: [
+                    emissive_factor.r.to_bits(),
+                    emissive_factor.g.to_bits(),
+                    emissive_factor.b.to_bits(),
+                ],
+            },
+            images,
+            |texels| {
+                texels
+                    .into_iter()
+                    .map(|t| Rgb::from_srgb(t) * emissive_factor)
+                    .collect()
+            },
+            cache,
+        )?),
+        None => Channel::Constant(emissive_factor),
     };
 
     let normal = match material.normal_texture() {
         Some(info) => {
-            let (width, height, texels) = pop_image(info.texture().source().index(), images)?;
-            // O normal map é dado, não cor: sem a curva sRGB, senão os vetores
-            // saem todos torcidos.
-            let texels = texels.into_iter().map(Rgb::from_linear).collect();
+            let normal_scale = info.scale();
 
-            Some(decode_texture(width, height, texels, info.texture())?)
+            // O normal map é dado, não cor: sem a curva sRGB, senão os vetores saem
+            // todos torcidos.
+            Some(decode_image(
+                &info.texture(),
+                ImageKeyDecoding::Normal {
+                    scale: normal_scale.to_bits(),
+                },
+                images,
+                |texels| {
+                    texels
+                        .into_iter()
+                        .map(|t| {
+                            Rgb::new(
+                                ((Rgb::from_linear(t).r * 2.0 - 1.0) * normal_scale + 1.0) * 0.5,
+                                ((Rgb::from_linear(t).g * 2.0 - 1.0) * normal_scale + 1.0) * 0.5,
+                                Rgb::from_linear(t).b,
+                            )
+                        })
+                        .collect()
+                },
+                cache,
+            )?)
         }
         None => None,
     };
 
-    let converted = Material {
+    Ok(Material {
         albedo,
         metallic,
         roughness,
@@ -325,18 +373,92 @@ fn decode_material(
             .transmission()
             .map_or(0.0, |t| t.transmission_factor()),
         refractive_index: material.ior().unwrap_or(1.5),
+    })
+}
+
+fn decode_image(
+    texture: &gltf::texture::Texture,
+    decoding: ImageKeyDecoding,
+    images: &[gltf::image::Data],
+    texels: impl FnOnce(Vec<[u8; 3]>) -> Vec<Rgb>,
+    cache: &mut Cache,
+) -> Result<Arc<Texture>, Error> {
+    let image_key = ImageKey {
+        index: texture.source().index(),
+        decoding,
+        texture_wrap: match texture.sampler().wrap_s() {
+            WrappingMode::ClampToEdge => TextureWrap::Clamp,
+            WrappingMode::MirroredRepeat | WrappingMode::Repeat => TextureWrap::Repeat,
+        },
     };
 
-    materials.push((material.index(), converted.clone()));
+    if let Some(decoded) = cache.images.get(&image_key) {
+        return Ok(Arc::clone(decoded));
+    }
 
-    Ok(converted)
+    let (width, height, bytes) = {
+        let data = &images[image_key.index];
+
+        match data.format {
+            Format::R8G8B8 => (),
+            _ => {
+                return Err("image não está em RGB8".into());
+            }
+        }
+
+        let texels = data
+            .pixels
+            .chunks_exact(3)
+            .map(|t| [t[0], t[1], t[2]])
+            .collect();
+        (data.width, data.height, texels)
+    };
+
+    let decoded = Arc::new(decode_texture(width, height, texels(bytes), texture)?);
+
+    cache.images.insert(image_key, Arc::clone(&decoded));
+
+    Ok(decoded)
+}
+
+fn decode_grayscale_image(
+    texture: &gltf::texture::Texture,
+    channel: usize,
+    factor: f32,
+    images: &[gltf::image::Data],
+    cache: &mut Cache,
+) -> Result<Channel<f32>, Error> {
+    let flat = images[texture.source().index()]
+        .pixels
+        .chunks_exact(3)
+        .all(|t| t[channel] == u8::MAX);
+
+    if flat {
+        return Ok(Channel::Constant(factor));
+    }
+
+    Ok(Channel::Map(decode_image(
+        texture,
+        ImageKeyDecoding::Gray {
+            channel,
+            factor: factor.to_bits(),
+        },
+        images,
+        |texels| {
+            texels
+                .iter()
+                .map(|t| Rgb::gray(t[channel] as f32 / 255.0 * factor))
+                .collect()
+        },
+        cache,
+    )?))
 }
 
 fn decode_texture(
     width: u32,
     height: u32,
     texels: Vec<Rgb>,
-    texture: gltf::texture::Texture,
+    texture: &gltf::texture::Texture,
 ) -> Result<Texture, Error> {
     let mut decoded = Texture::new(width, height, texels)?;
 
@@ -346,28 +468,6 @@ fn decode_texture(
     };
 
     Ok(decoded)
-}
-
-fn pop_image(
-    index: usize,
-    images: &[gltf::image::Data],
-) -> Result<(u32, u32, Vec<[u8; 3]>), Error> {
-    let data = &images[index];
-
-    match data.format {
-        Format::R8G8B8 => (),
-        _ => {
-            return Err("image não está em RGB8".into());
-        }
-    }
-
-    let texels = data
-        .pixels
-        .chunks_exact(3)
-        .map(|t| [t[0], t[1], t[2]])
-        .collect();
-
-    Ok((data.width, data.height, texels))
 }
 
 fn euler(quaternion: [f32; 4]) -> Vec3 {
