@@ -6,7 +6,7 @@ extends Control
 @onready var toast: Toast = $Layout/Viewport/Overlay/Toast
 @onready var save: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/Save
 @onready var open: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/Open
-@onready var sub_viewport_container := $Layout/Viewport/ViewportClip/SubViewportContainer
+@onready var sub_viewport_container: ViewportPane = $Layout/Viewport/ViewportClip/SubViewportContainer
 @onready var scene_view: SubViewport = $Layout/Viewport/ViewportClip/SubViewportContainer/SceneView
 @onready var properties := $Layout/Sidebar/Properties/VBoxContainer/MarginContainer/ScrollContainer/Padding/VBoxContainer
 @onready var camera_pov: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/CameraPOV
@@ -29,8 +29,11 @@ var open_dialog: FileDialog
 var root: SceneRoot
 
 func _ready() -> void:
+	get_window().theme = Palette.build()
+
 	for cursor in CURSORS:
-		Input.set_custom_mouse_cursor(_rimmed(cursor[0]), cursor[1], cursor[2])
+		Input.set_custom_mouse_cursor(Glyph.rimmed(cursor[0], Palette.INK),
+			cursor[1], cursor[2])
 	
 	root = SceneRoot.new()
 	root.name = "Scene"
@@ -101,35 +104,6 @@ func _ready() -> void:
 	save.pressed.connect(on_save_pressed)
 	open.pressed.connect(open_dialog.popup_centered_ratio.bind(0.6))
 
-func _rimmed(texture: Texture2D) -> ImageTexture:
-	var shape := texture.get_image()
-	shape.convert(Image.FORMAT_RGBA8)
-
-	var touches := func(shape: Image, x: int, y: int) -> bool:
-		for dy in range(-1, 2):
-			for dx in range(-1, 2):
-				var at := Vector2i(x + dx, y + dy)
-
-				if at.x < 0 or at.y < 0 or at.x >= shape.get_width() or at.y >= shape.get_height():
-					continue
-
-				if shape.get_pixel(at.x, at.y).a > 0.0:
-					return true
-
-		return false
-
-	var size := shape.get_size()
-	var rim := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
-
-	for y in size.y:
-		for x in size.x:
-			if shape.get_pixel(x, y).a == 0.0 and touches.call(shape, x, y):
-				rim.set_pixel(x, y, Palette.INK)
-
-	rim.blend_rect(shape, Rect2i(Vector2i.ZERO, size), Vector2i.ZERO)
-
-	return ImageTexture.create_from_image(rim)
-
 func _rebuild() -> void:
 	hierarchy.rebuild(root)
 	_on_scene_changed()
@@ -138,7 +112,7 @@ func _on_scene_changed() -> void:
 	if sub_viewport_container.render_camera() == null:
 		camera_pov.button_pressed = false
 	elif camera_pov.button_pressed or pick_pixel.button_pressed:
-		sub_viewport_container.set_pov(true)
+		sub_viewport_container.refresh_pov()
 
 	_refresh_modes()
 
@@ -152,16 +126,12 @@ func _on_scene_object_selected(node: SceneObject) -> void:
 
 func _on_camera_pov_toggled(pressed: bool) -> void:
 	_mode(camera_pov, pressed)
-	sub_viewport_container.set_pov(pressed)
 
 func _on_pick_triangle_toggled(pressed: bool) -> void:
 	_mode(pick_triangle, pressed)
-	sub_viewport_container.set_pick_triangle(pressed)
 
 func _on_pick_pixel_toggled(pressed: bool) -> void:
 	_mode(pick_pixel, pressed)
-	sub_viewport_container.set_pov(pressed)
-	sub_viewport_container.set_pick_pixel(pressed)
 
 func _mode(entering: Button, pressed: bool) -> void:
 	if pressed:
@@ -171,7 +141,18 @@ func _mode(entering: Button, pressed: bool) -> void:
 
 		hierarchy.select(root)
 
+	_apply_mode()
 	_refresh_modes.call_deferred()
+
+func _apply_mode() -> void:
+	if pick_pixel.button_pressed:
+		sub_viewport_container.set_mode(ViewportPane.Mode.PICK_PIXEL)
+	elif pick_triangle.button_pressed:
+		sub_viewport_container.set_mode(ViewportPane.Mode.PICK_TRIANGLE)
+	elif camera_pov.button_pressed:
+		sub_viewport_container.set_mode(ViewportPane.Mode.POV)
+	else:
+		sub_viewport_container.set_mode(ViewportPane.Mode.EDIT)
 
 func _refresh_modes() -> void:
 	var busy := (camera_pov.button_pressed or pick_triangle.button_pressed

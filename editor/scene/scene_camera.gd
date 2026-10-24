@@ -83,41 +83,16 @@ func _rebuild_preview() -> void:
 	else:
 		half_h = tan(deg_to_rad(perspective.fov) * 0.5) * GIZMO_DEPTH
 
-	var half_w := half_h * aspect()
+	var far_half := Vector2(half_h * aspect(), half_h)
+	var near_half := far_half if is_ortho else Vector2.ZERO
 
-	var far_corners := [
-		Vector3(-half_w, half_h, -GIZMO_DEPTH),
-		Vector3(half_w, half_h, -GIZMO_DEPTH),
-		Vector3(half_w, -half_h, -GIZMO_DEPTH),
-		Vector3(-half_w, -half_h, -GIZMO_DEPTH),
-	]
-
-	var near_corners: Array[Vector3] = [
-		Vector3.ZERO,
-		Vector3.ZERO,
-		Vector3.ZERO,
-		Vector3.ZERO
-	]
-
-	if is_ortho:
-		for i in 4:
-			near_corners[i] = Vector3(far_corners[i].x, far_corners[i].y, 0.0)
-
-	var mesh := ImmediateMesh.new()
+	var lines := GizmoMesh.frustum(near_half, far_half, GIZMO_DEPTH)
 
 	var mat = _gizmo_material()
 	mat.albedo_color = GIZMO_COLOR
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh.surface_begin(Mesh.PRIMITIVE_LINES, mat)
 
-	for i in 4:
-		var j := (i + 1) % 4
-		_line(mesh, far_corners[i], far_corners[j])
-		_line(mesh, near_corners[i], far_corners[i])
-
-		if is_ortho:
-			_line(mesh, near_corners[i], near_corners[j])
-
-	mesh.surface_end()
+	var mesh := ImmediateMesh.new()
+	GizmoMesh.surface(mesh, Mesh.PRIMITIVE_LINES, mat, lines)
 
 	_gizmo.mesh = mesh

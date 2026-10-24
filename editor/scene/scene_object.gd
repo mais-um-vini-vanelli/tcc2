@@ -38,22 +38,6 @@ func _add_icon(texture: Texture2D) -> Sprite3D:
 	add_child(icon, false, Node.INTERNAL_MODE_FRONT)
 	return icon
 
-func _line(mesh: ImmediateMesh, from: Vector3, to: Vector3) -> void:
-	mesh.surface_add_vertex(from)
-	mesh.surface_add_vertex(to)
-
-func _tri(mesh: ImmediateMesh, a: Vector3, b: Vector3, c: Vector3) -> void:
-	mesh.surface_add_vertex(a)
-	mesh.surface_add_vertex(b)
-	mesh.surface_add_vertex(c)
-
-func _ring(radius: float, z: float, segments: int) -> Array[Vector3]:
-	var points: Array[Vector3] = []
-	for i in segments:
-		var a := TAU * i / segments
-		points.append(Vector3(cos(a) * radius, sin(a) * radius, z))
-	return points
-
 func _gizmo_material() -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

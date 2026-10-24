@@ -9,14 +9,14 @@ func _build() -> void:
 
 	%Light.title = TITLES[light.kind]
 
-	%Light.show_row(%inner_angle, spot)
-	%Light.show_row(%outer_angle, spot)
+	%InnerAngleRow.visible = spot
+	%OuterAngleRow.visible = spot
 
-	bind(%color, model, &"color")
-	bind(%intensity, model, &"intensity")
+	bind(%Color, model, ^"color")
+	bind(%Intensity, model, ^"intensity")
 
 	if spot:
-		bind(%inner_angle, model, &"inner_angle")
-		bind(%outer_angle, model, &"outer_angle")
+		bind(%InnerAngle, model, ^"inner_angle")
+		bind(%OuterAngle, model, ^"outer_angle")
 
-	%Transform.bind(binder, light)
+	%Transform.bind(self, light)

@@ -12,6 +12,7 @@ var _highlight: MeshInstance3D
 var _shape := ImmediateMesh.new()
 var _faces := {}
 var _pending := Vector2.INF
+var _cursor := Input.CURSOR_ARROW
 
 func _ready() -> void:
 	_highlight = MeshInstance3D.new()
@@ -24,6 +25,9 @@ func _ready() -> void:
 func is_active() -> bool:
 	return _active
 
+func cursor() -> Input.CursorShape:
+	return _cursor
+
 func set_active(value: bool) -> void:
 	if _active == value:
 		return
@@ -34,7 +38,7 @@ func set_active(value: bool) -> void:
 
 	if not value:
 		_faces.clear()
-		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+		_cursor = Input.CURSOR_ARROW
 
 func hover(mouse: Vector2) -> void:
 	if _active:
@@ -49,30 +53,29 @@ func _process(_delta: float) -> void:
 
 	if hit.is_empty():
 		_forget()
-		Input.set_default_cursor_shape(Input.CURSOR_FORBIDDEN)
+		_cursor = Input.CURSOR_FORBIDDEN
 	else:
 		_remember(hit["node"], hit["face"])
-		Input.set_default_cursor_shape(Input.CURSOR_CROSS)
+		_cursor = Input.CURSOR_CROSS
 
-## Mouse left the viewport. The cursor shape is global, so it has to go back.
+## Mouse left the viewport.
 func leave() -> void:
 	if not _active:
 		return
 
 	_pending = Vector2.INF
 	_forget()
-	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+	_cursor = Input.CURSOR_ARROW
 
-## True when the click was the picker's, so the viewport leaves it alone.
-func click(mouse: Vector2) -> bool:
+func click(mouse: Vector2) -> void:
 	if not _active:
-		return false
+		return
 
 	var hit := _pick(mouse)
 
 	# A click on nothing stays in picking mode: it just missed every mesh.
 	if hit.is_empty():
-		return true
+		return
 
 	var node: SceneGeometry = hit["node"]
 	var face: int = hit["face"]
@@ -80,8 +83,6 @@ func click(mouse: Vector2) -> bool:
 
 	set_active(false)
 	picked.emit(node, instance, face)
-
-	return true
 
 ## The index Rust's `Scene::flatten` gives this node: a pre-order walk of the
 ## tree, counting every geometry node the exporter writes with a mesh.
@@ -169,11 +170,7 @@ func _remember(node: SceneGeometry, face: int) -> void:
 	var i := face * 3
 
 	_shape.clear_surfaces()
-	_shape.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	_shape.surface_add_vertex(faces[i])
-	_shape.surface_add_vertex(faces[i + 1])
-	_shape.surface_add_vertex(faces[i + 2])
-	_shape.surface_end()
+	GizmoMesh.surface(_shape, Mesh.PRIMITIVE_TRIANGLES, null, faces.slice(i, i + 3))
 
 	_highlight.global_transform = preview.global_transform
 	_highlight.visible = true

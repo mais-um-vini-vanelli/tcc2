@@ -1,4 +1,4 @@
-class_name Check extends CheckBox
+class_name PropsCheckBox extends CheckBox
 
 const ON := "[X]"
 const OFF := "[ ]"
@@ -11,6 +11,8 @@ var value: bool:
 		_refresh()
 
 func _ready() -> void:
+	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
 	alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	toggled.connect(func(_on: bool): _refresh())

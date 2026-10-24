@@ -12,8 +12,6 @@ const KIND_WIDTH := 14
 
 const FONT := preload("res://fonts/Silkscreen-Regular.ttf")
 
-# A caixa de linha da Silkscreen fica 1.5px acima da tinta das maiúsculas, o que
-# joga o texto abaixo dos ícones.
 const BASELINE := -1.5 / 21.0
 
 const FOLD := preload("res://icons/Fold.svg")
@@ -25,7 +23,22 @@ const INDENT := 8
 const PAD := 8
 const GAP := 4
 
+const GLYPH_WIDTH := MARKER_WIDTH + GAP + KIND_WIDTH
+const GLYPH_HEIGHT := 10
+
 const CARET := 12
+
+static func advance(control: Control, text: String) -> float:
+	return control.get_theme_font(&"font").get_string_size(text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, control.get_theme_font_size(&"font_size")).x
+
+static var _preview: Theme
+
+static func preview() -> Theme:
+	if _preview == null:
+		_preview = build()
+
+	return _preview
 
 static func build() -> Theme:
 	var theme := Theme.new()
@@ -91,7 +104,7 @@ static func _tree(theme: Theme) -> void:
 
 	theme.set_constant("draw_relationship_lines", "Tree", 0)
 	theme.set_constant("draw_guides", "Tree", 0)
-	theme.set_constant("icon_max_width", "Tree", KindGlyph.WIDTH)
+	theme.set_constant("icon_max_width", "Tree", GLYPH_WIDTH)
 	theme.set_constant("h_separation", "Tree", GAP)
 	theme.set_constant("v_separation", "Tree", GAP)
 	theme.set_constant("item_margin", "Tree", INDENT)
@@ -198,10 +211,12 @@ static func _fields(theme: Theme) -> void:
 	theme.set_constant("set_min_buttons_width_from_icons", "SpinBox", 0)
 
 static func _rows(theme: Theme) -> void:
-	theme.set_type_variation("Rows", "Container")
-	theme.set_color("leader", "Rows", DIM)
-	theme.set_constant("h_separation", "Rows", PAD)
+	theme.set_type_variation("Rows", "VBoxContainer")
 	theme.set_constant("v_separation", "Rows", GAP)
+
+	theme.set_type_variation("Row", "Container")
+	theme.set_color("leader", "Row", DIM)
+	theme.set_constant("h_separation", "Row", PAD)
 
 static func _checkboxes(theme: Theme) -> void:
 	var rest := _box(Color.TRANSPARENT)

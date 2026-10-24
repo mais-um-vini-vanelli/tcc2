@@ -8,6 +8,8 @@ static var ICONS: Array = [
 	[SceneObject, preload("res://icons/KindScene.svg"), Color("#d5dee8")],
 ]
 
+static var _glyphs := {}
+
 signal selected(node: SceneObject)
 signal add_pressed(button: Button)
 signal changed
@@ -120,16 +122,35 @@ func _mark(node: SceneObject) -> void:
 	if item == null:
 		return
 
-	var fold := KindGlyph.Fold.LEAF
+	var fold_marker: Texture2D = null
 
 	if item.get_child_count() > 0:
-		fold = KindGlyph.Fold.SHUT if item.collapsed else KindGlyph.Fold.OPEN
+		fold_marker = Palette.UNFOLD if item.collapsed else Palette.FOLD
 
-	for entry in ICONS:
-		if is_instance_of(node, entry[0]):
-			item.set_icon(0, KindGlyph.of(entry[1], entry[2], fold,
+	for i in ICONS.size():
+		if is_instance_of(node, ICONS[i][0]):
+			item.set_icon(0, _glyph(i, fold_marker,
 				item.is_selected(0) or node == _hovered))
 			return
+
+static func _glyph(icon: int, fold_marker: Texture2D, lit: bool) -> Texture2D:
+	var key := [icon, fold_marker, lit]
+
+	if not _glyphs.has(key):
+		var kind_marker: Texture2D = ICONS[icon][1]
+		var color: Color = ICONS[icon][2]
+		var stamps := []
+
+		if fold_marker != null:
+			stamps.append([fold_marker, Palette.INK if lit else Palette.FG, 0])
+
+		stamps.append([kind_marker, color.darkened(0.55) if lit else color,
+			Palette.MARKER_WIDTH + Palette.GAP])
+
+		_glyphs[key] = Glyph.of(
+			Vector2i(Palette.GLYPH_WIDTH, Palette.GLYPH_HEIGHT), stamps)
+
+	return _glyphs[key]
 
 func _hover(item: TreeItem) -> void:
 	_tree.mouse_default_cursor_shape = (Control.CURSOR_POINTING_HAND

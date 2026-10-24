@@ -28,7 +28,6 @@ window/size/viewport_height=900
 [gui]
 
 theme/default_font_subpixel_positioning=3
-theme/custom="uid://c2ey15w2vubp8"
 theme/custom_font="uid://bsqvou5jhjnlf"
 
 [physics]

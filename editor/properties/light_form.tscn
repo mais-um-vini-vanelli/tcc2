@@ -3,7 +3,9 @@
 [ext_resource type="Script" uid="uid://b4abeywvdg3rf" path="res://properties/light_form.gd" id="1_t7rc5"]
 [ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_valmq"]
 [ext_resource type="PackedScene" uid="uid://ucbcfnd6wi6" path="res://properties/transform_section.tscn" id="4_gn1aa"]
-[ext_resource type="Script" path="res://properties/rows.gd" id="rows"]
+[ext_resource type="Script" path="res://properties/controls/props_color_picker_button.gd" id="props_color_picker_button"]
+[ext_resource type="Script" path="res://properties/controls/props_spin_box.gd" id="props_spin_box"]
+[ext_resource type="Script" path="res://properties/row.gd" id="row"]
 
 [node name="LightPanel" type="VBoxContainer" unique_id=1698272693]
 script = ExtResource("1_t7rc5")
@@ -28,49 +30,73 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="Light/Stack" unique_id=689637804]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="Light/Stack/Body" unique_id=105386122]
+[node name="Rows" type="VBoxContainer" parent="Light/Stack/Body" unique_id=105386122]
 layout_mode = 2
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="InnerAngleLabel" type="Label" parent="Light/Stack/Body/Rows" unique_id=1916186784]
+[node name="InnerAngleRow" type="Container" parent="Light/Stack/Body/Rows" unique_id=1200081964]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="InnerAngleLabel" type="Label" parent="Light/Stack/Body/Rows/InnerAngleRow" unique_id=1916186784]
 layout_mode = 2
 text = "inner angle"
 
-[node name="inner_angle" type="SpinBox" parent="Light/Stack/Body/Rows" unique_id=142158047]
+[node name="InnerAngle" type="SpinBox" parent="Light/Stack/Body/Rows/InnerAngleRow" unique_id=142158047]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 90.0
 step = 0.01
+script = ExtResource("props_spin_box")
 
-[node name="OuterAngleLabel" type="Label" parent="Light/Stack/Body/Rows" unique_id=927465930]
+[node name="OuterAngleRow" type="Container" parent="Light/Stack/Body/Rows" unique_id=1929895099]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="OuterAngleLabel" type="Label" parent="Light/Stack/Body/Rows/OuterAngleRow" unique_id=927465930]
 layout_mode = 2
 text = "outer angle"
 
-[node name="outer_angle" type="SpinBox" parent="Light/Stack/Body/Rows" unique_id=1901818233]
+[node name="OuterAngle" type="SpinBox" parent="Light/Stack/Body/Rows/OuterAngleRow" unique_id=1901818233]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 90.0
 step = 0.01
+script = ExtResource("props_spin_box")
 
-[node name="ColorLabel" type="Label" parent="Light/Stack/Body/Rows" unique_id=647406638]
+[node name="ColorRow" type="Container" parent="Light/Stack/Body/Rows" unique_id=1498596789]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="ColorLabel" type="Label" parent="Light/Stack/Body/Rows/ColorRow" unique_id=647406638]
 layout_mode = 2
 text = "color"
 
-[node name="color" type="ColorPickerButton" parent="Light/Stack/Body/Rows" unique_id=459760438]
+[node name="Color" type="ColorPickerButton" parent="Light/Stack/Body/Rows/ColorRow" unique_id=459760438]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
 edit_alpha = false
+script = ExtResource("props_color_picker_button")
 
-[node name="IntensityLabel" type="Label" parent="Light/Stack/Body/Rows" unique_id=699461655]
+[node name="IntensityRow" type="Container" parent="Light/Stack/Body/Rows" unique_id=1180547345]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="IntensityLabel" type="Label" parent="Light/Stack/Body/Rows/IntensityRow" unique_id=699461655]
 layout_mode = 2
 text = "intensity"
 
-[node name="intensity" type="SpinBox" parent="Light/Stack/Body/Rows" unique_id=1580024247]
+[node name="Intensity" type="SpinBox" parent="Light/Stack/Body/Rows/IntensityRow" unique_id=1580024247]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
+script = ExtResource("props_spin_box")
 
 [node name="Transform" parent="." unique_id=1739651481 instance=ExtResource("4_gn1aa")]
 unique_name_in_owner = true

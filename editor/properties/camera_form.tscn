@@ -3,7 +3,8 @@
 [ext_resource type="Script" uid="uid://balhvebcvucl7" path="res://properties/camera_form.gd" id="1_gc3qp"]
 [ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_nm545"]
 [ext_resource type="PackedScene" uid="uid://ucbcfnd6wi6" path="res://properties/transform_section.tscn" id="4_qma02"]
-[ext_resource type="Script" path="res://properties/rows.gd" id="rows"]
+[ext_resource type="Script" path="res://properties/controls/props_spin_box.gd" id="props_spin_box"]
+[ext_resource type="Script" path="res://properties/row.gd" id="row"]
 
 [node name="CameraPanel" type="VBoxContainer" unique_id=964333341]
 script = ExtResource("1_gc3qp")
@@ -28,51 +29,75 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="Camera/Stack" unique_id=1105180371]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="Camera/Stack/Body" unique_id=502882821]
+[node name="Rows" type="VBoxContainer" parent="Camera/Stack/Body" unique_id=502882821]
 layout_mode = 2
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="FovLabel" type="Label" parent="Camera/Stack/Body/Rows" unique_id=1420338060]
+[node name="FovRow" type="Container" parent="Camera/Stack/Body/Rows" unique_id=1364316506]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="FovLabel" type="Label" parent="Camera/Stack/Body/Rows/FovRow" unique_id=1420338060]
 layout_mode = 2
 text = "fov"
 
-[node name="fov" type="SpinBox" parent="Camera/Stack/Body/Rows" unique_id=386011974]
+[node name="Fov" type="SpinBox" parent="Camera/Stack/Body/Rows/FovRow" unique_id=386011974]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 1.0
 max_value = 179.0
 step = 0.01
 value = 1.0
+script = ExtResource("props_spin_box")
 
-[node name="HeightLabel" type="Label" parent="Camera/Stack/Body/Rows" unique_id=731722609]
+[node name="HeightRow" type="Container" parent="Camera/Stack/Body/Rows" unique_id=478827402]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="HeightLabel" type="Label" parent="Camera/Stack/Body/Rows/HeightRow" unique_id=731722609]
 layout_mode = 2
 text = "height"
 
-[node name="height" type="SpinBox" parent="Camera/Stack/Body/Rows" unique_id=2134135620]
+[node name="Height" type="SpinBox" parent="Camera/Stack/Body/Rows/HeightRow" unique_id=2134135620]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
+script = ExtResource("props_spin_box")
 
-[node name="NearLabel" type="Label" parent="Camera/Stack/Body/Rows" unique_id=1960117018]
+[node name="NearRow" type="Container" parent="Camera/Stack/Body/Rows" unique_id=1659207361]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="NearLabel" type="Label" parent="Camera/Stack/Body/Rows/NearRow" unique_id=1960117018]
 layout_mode = 2
 text = "near"
 
-[node name="near" type="SpinBox" parent="Camera/Stack/Body/Rows" unique_id=287625521]
+[node name="Near" type="SpinBox" parent="Camera/Stack/Body/Rows/NearRow" unique_id=287625521]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
+script = ExtResource("props_spin_box")
 
-[node name="FarLabel" type="Label" parent="Camera/Stack/Body/Rows" unique_id=472483110]
+[node name="FarRow" type="Container" parent="Camera/Stack/Body/Rows" unique_id=259424404]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="FarLabel" type="Label" parent="Camera/Stack/Body/Rows/FarRow" unique_id=472483110]
 layout_mode = 2
 text = "far"
 
-[node name="far" type="SpinBox" parent="Camera/Stack/Body/Rows" unique_id=308316333]
+[node name="Far" type="SpinBox" parent="Camera/Stack/Body/Rows/FarRow" unique_id=308316333]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
+script = ExtResource("props_spin_box")
 
 [node name="Transform" parent="." unique_id=1739651481 instance=ExtResource("4_qma02")]
 unique_name_in_owner = true

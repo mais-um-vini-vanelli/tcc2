@@ -4,7 +4,9 @@
 [ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_mplm2"]
 [ext_resource type="PackedScene" uid="uid://ucbcfnd6wi6" path="res://properties/transform_section.tscn" id="4_kxnx1"]
 [ext_resource type="PackedScene" uid="uid://dwiwtshqcrmo" path="res://properties/material_section.tscn" id="5_74bph"]
-[ext_resource type="Script" path="res://properties/rows.gd" id="rows"]
+[ext_resource type="Script" path="res://properties/controls/props_button.gd" id="props_button"]
+[ext_resource type="Script" path="res://properties/controls/props_spin_box.gd" id="props_spin_box"]
+[ext_resource type="Script" path="res://properties/row.gd" id="row"]
 
 [node name="GeometryPanel" type="VBoxContainer" unique_id=448446973]
 script = ExtResource("1_psig0")
@@ -29,165 +31,249 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="Geometry/Stack" unique_id=1773626277]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="Geometry/Stack/Body" unique_id=1179673146]
+[node name="Rows" type="VBoxContainer" parent="Geometry/Stack/Body" unique_id=1179673146]
 layout_mode = 2
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="RadiusLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=180353191]
+[node name="RadiusRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=761958187]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="RadiusLabel" type="Label" parent="Geometry/Stack/Body/Rows/RadiusRow" unique_id=180353191]
 layout_mode = 2
 text = "radius"
 
-[node name="radius" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1976309586]
+[node name="Radius" type="SpinBox" parent="Geometry/Stack/Body/Rows/RadiusRow" unique_id=1976309586]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
+script = ExtResource("props_spin_box")
 
-[node name="HalfEdgeLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=748654486]
+[node name="HalfEdgeRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=1493821883]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="HalfEdgeLabel" type="Label" parent="Geometry/Stack/Body/Rows/HalfEdgeRow" unique_id=748654486]
 layout_mode = 2
 text = "half edge"
 
-[node name="half_edge" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1736652733]
+[node name="HalfEdge" type="SpinBox" parent="Geometry/Stack/Body/Rows/HalfEdgeRow" unique_id=1736652733]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
+script = ExtResource("props_spin_box")
 
-[node name="AXLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234567]
+[node name="AXRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=140327556]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="AXLabel" type="Label" parent="Geometry/Stack/Body/Rows/AXRow" unique_id=1101234567]
 layout_mode = 2
 text = "a x"
 
-[node name="a_x" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234568]
+[node name="AX" type="SpinBox" parent="Geometry/Stack/Body/Rows/AXRow" unique_id=1101234568]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="AYLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234569]
+[node name="AYRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=511131538]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="AYLabel" type="Label" parent="Geometry/Stack/Body/Rows/AYRow" unique_id=1101234569]
 layout_mode = 2
 text = "y"
 
-[node name="a_y" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234570]
+[node name="AY" type="SpinBox" parent="Geometry/Stack/Body/Rows/AYRow" unique_id=1101234570]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="AZLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234571]
+[node name="AZRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=1229825011]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="AZLabel" type="Label" parent="Geometry/Stack/Body/Rows/AZRow" unique_id=1101234571]
 layout_mode = 2
 text = "z"
 
-[node name="a_z" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234572]
+[node name="AZ" type="SpinBox" parent="Geometry/Stack/Body/Rows/AZRow" unique_id=1101234572]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="BXLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234573]
+[node name="BXRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=1960690253]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="BXLabel" type="Label" parent="Geometry/Stack/Body/Rows/BXRow" unique_id=1101234573]
 layout_mode = 2
 text = "b x"
 
-[node name="b_x" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234574]
+[node name="BX" type="SpinBox" parent="Geometry/Stack/Body/Rows/BXRow" unique_id=1101234574]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="BYLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234575]
+[node name="BYRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=1749267047]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="BYLabel" type="Label" parent="Geometry/Stack/Body/Rows/BYRow" unique_id=1101234575]
 layout_mode = 2
 text = "y"
 
-[node name="b_y" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234576]
+[node name="BY" type="SpinBox" parent="Geometry/Stack/Body/Rows/BYRow" unique_id=1101234576]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="BZLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234577]
+[node name="BZRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=232170155]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="BZLabel" type="Label" parent="Geometry/Stack/Body/Rows/BZRow" unique_id=1101234577]
 layout_mode = 2
 text = "z"
 
-[node name="b_z" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234578]
+[node name="BZ" type="SpinBox" parent="Geometry/Stack/Body/Rows/BZRow" unique_id=1101234578]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="CXLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234579]
+[node name="CXRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=1694047145]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="CXLabel" type="Label" parent="Geometry/Stack/Body/Rows/CXRow" unique_id=1101234579]
 layout_mode = 2
 text = "c x"
 
-[node name="c_x" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234580]
+[node name="CX" type="SpinBox" parent="Geometry/Stack/Body/Rows/CXRow" unique_id=1101234580]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="CYLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234581]
+[node name="CYRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=1505242138]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="CYLabel" type="Label" parent="Geometry/Stack/Body/Rows/CYRow" unique_id=1101234581]
 layout_mode = 2
 text = "y"
 
-[node name="c_y" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234582]
+[node name="CY" type="SpinBox" parent="Geometry/Stack/Body/Rows/CYRow" unique_id=1101234582]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="CZLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=1101234583]
+[node name="CZRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=1299690133]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="CZLabel" type="Label" parent="Geometry/Stack/Body/Rows/CZRow" unique_id=1101234583]
 layout_mode = 2
 text = "z"
 
-[node name="c_z" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1101234584]
+[node name="CZ" type="SpinBox" parent="Geometry/Stack/Body/Rows/CZRow" unique_id=1101234584]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="SourceLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=2059406977]
+[node name="SourceRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=286623086]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="SourceLabel" type="Label" parent="Geometry/Stack/Body/Rows/SourceRow" unique_id=2059406977]
 layout_mode = 2
 text = "source"
 
-[node name="source" type="Button" parent="Geometry/Stack/Body/Rows" unique_id=1412658647]
+[node name="Source" type="Button" parent="Geometry/Stack/Body/Rows/SourceRow" unique_id=1412658647]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 clip_text = true
+script = ExtResource("props_button")
 
-[node name="Dialog" type="FileDialog" parent="Geometry/Stack/Body/Rows/source" unique_id=379975813]
+[node name="Dialog" type="FileDialog" parent="Geometry/Stack/Body/Rows/SourceRow/Source" unique_id=379975813]
 title = "Open a File"
 file_mode = 0
 access = 2
 filters = PackedStringArray("*.glb")
 use_native_dialog = true
 
-[node name="MeshLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=55300576]
+[node name="MeshRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=826983290]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="MeshLabel" type="Label" parent="Geometry/Stack/Body/Rows/MeshRow" unique_id=55300576]
 layout_mode = 2
 text = "mesh"
 
-[node name="mesh" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=1732186898]
+[node name="Mesh" type="SpinBox" parent="Geometry/Stack/Body/Rows/MeshRow" unique_id=1732186898]
 unique_name_in_owner = true
 layout_mode = 2
 rounded = true
 allow_greater = true
+script = ExtResource("props_spin_box")
 
-[node name="SurfaceLabel" type="Label" parent="Geometry/Stack/Body/Rows" unique_id=2103729376]
+[node name="SurfaceRow" type="Container" parent="Geometry/Stack/Body/Rows" unique_id=1984358118]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="SurfaceLabel" type="Label" parent="Geometry/Stack/Body/Rows/SurfaceRow" unique_id=2103729376]
 layout_mode = 2
 text = "surface"
 
-[node name="surface" type="SpinBox" parent="Geometry/Stack/Body/Rows" unique_id=317803915]
+[node name="Surface" type="SpinBox" parent="Geometry/Stack/Body/Rows/SurfaceRow" unique_id=317803915]
 unique_name_in_owner = true
 layout_mode = 2
 rounded = true
 allow_greater = true
+script = ExtResource("props_spin_box")
 
 [node name="Transform" parent="." unique_id=1739651481 instance=ExtResource("4_kxnx1")]
 unique_name_in_owner = true

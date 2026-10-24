@@ -1,15 +1,15 @@
 @tool
 class_name TransformSection extends Section
 
-func bind(binder: Binder, node: SceneObject) -> void:
-	binder.bind_axis(%position_x, node, &"position", Vector3.AXIS_X)
-	binder.bind_axis(%position_y, node, &"position", Vector3.AXIS_Y)
-	binder.bind_axis(%position_z, node, &"position", Vector3.AXIS_Z)
+func bind(form: Form, node: SceneObject) -> void:
+	form.bind(%PositionX, node, ^"position:x")
+	form.bind(%PositionY, node, ^"position:y")
+	form.bind(%PositionZ, node, ^"position:z")
 
-	binder.bind_axis(%rotation_degrees_x, node, &"rotation_degrees", Vector3.AXIS_X)
-	binder.bind_axis(%rotation_degrees_y, node, &"rotation_degrees", Vector3.AXIS_Y)
-	binder.bind_axis(%rotation_degrees_z, node, &"rotation_degrees", Vector3.AXIS_Z)
+	form.bind(%RotationDegreesX, node, ^"rotation_degrees:x")
+	form.bind(%RotationDegreesY, node, ^"rotation_degrees:y")
+	form.bind(%RotationDegreesZ, node, ^"rotation_degrees:z")
 
-	binder.bind_axis(%scale_x, node, &"scale", Vector3.AXIS_X)
-	binder.bind_axis(%scale_y, node, &"scale", Vector3.AXIS_Y)
-	binder.bind_axis(%scale_z, node, &"scale", Vector3.AXIS_Z)
+	form.bind(%ScaleX, node, ^"scale:x")
+	form.bind(%ScaleY, node, ^"scale:y")
+	form.bind(%ScaleZ, node, ^"scale:z")

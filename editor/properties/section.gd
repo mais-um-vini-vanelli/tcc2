@@ -12,6 +12,9 @@ var title: String:
 			header.text = value.to_upper()
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		theme = Palette.preview()
+
 	var header := _header()
 	var body := _body()
 
@@ -54,11 +57,3 @@ func _header() -> Button:
 
 func _body() -> Control:
 	return get_node_or_null("Stack/Body") as Control
-
-func show_row(control: Control, on: bool) -> void:
-	control.visible = on
-
-	var label := control.get_parent().get_child(control.get_index() - 1) as Control
-
-	if label != null:
-		label.visible = on

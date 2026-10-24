@@ -1,6 +1,5 @@
 [gd_scene format=3 uid="uid://cqi7qdnrdfwcf"]
 
-[ext_resource type="Theme" uid="uid://c2ey15w2vubp8" path="res://theme/palette.tres" id="1_4c57u"]
 [ext_resource type="Script" uid="uid://dah2h80rhe785" path="res://main.gd" id="1_ig7tw"]
 [ext_resource type="Script" uid="uid://7r6yin2j4s2m" path="res://properties/properties.gd" id="2_0xm2m"]
 [ext_resource type="Script" uid="uid://c58uqcxu021pt" path="res://viewport/sub_viewport_container.gd" id="2_h2yge"]
@@ -40,7 +39,6 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme = ExtResource("1_4c57u")
 script = ExtResource("1_ig7tw")
 
 [node name="Background" type="ColorRect" parent="." unique_id=350063807]

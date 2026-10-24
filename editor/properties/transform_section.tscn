@@ -1,7 +1,8 @@
 [gd_scene format=3 uid="uid://ucbcfnd6wi6"]
 
 [ext_resource type="Script" uid="uid://h3a1pocwk6a8" path="res://properties/transform_section.gd" id="2_3rsl6"]
-[ext_resource type="Script" uid="uid://b2ywqkn8rfd3m" path="res://properties/rows.gd" id="rows"]
+[ext_resource type="Script" path="res://properties/controls/props_spin_box.gd" id="props_spin_box"]
+[ext_resource type="Script" path="res://properties/row.gd" id="row"]
 
 [node name="Transform" type="PanelContainer" unique_id=1739651481]
 script = ExtResource("2_3rsl6")
@@ -21,105 +22,159 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="Stack" unique_id=808486769]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="Stack/Body" unique_id=1558303419]
+[node name="Rows" type="VBoxContainer" parent="Stack/Body" unique_id=1558303419]
 layout_mode = 2
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="PositionXLabel" type="Label" parent="Stack/Body/Rows" unique_id=381213555]
+[node name="PositionXRow" type="Container" parent="Stack/Body/Rows" unique_id=1977907839]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="PositionXLabel" type="Label" parent="Stack/Body/Rows/PositionXRow" unique_id=381213555]
 layout_mode = 2
 text = "position x"
 
-[node name="position_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1154715268]
+[node name="PositionX" type="SpinBox" parent="Stack/Body/Rows/PositionXRow" unique_id=1154715268]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="PositionYLabel" type="Label" parent="Stack/Body/Rows" unique_id=196558375]
+[node name="PositionYRow" type="Container" parent="Stack/Body/Rows" unique_id=178595238]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="PositionYLabel" type="Label" parent="Stack/Body/Rows/PositionYRow" unique_id=196558375]
 layout_mode = 2
 text = "y"
 
-[node name="position_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=1932765200]
+[node name="PositionY" type="SpinBox" parent="Stack/Body/Rows/PositionYRow" unique_id=1932765200]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="PositionZLabel" type="Label" parent="Stack/Body/Rows" unique_id=95963643]
+[node name="PositionZRow" type="Container" parent="Stack/Body/Rows" unique_id=965691192]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="PositionZLabel" type="Label" parent="Stack/Body/Rows/PositionZRow" unique_id=95963643]
 layout_mode = 2
 text = "z"
 
-[node name="position_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=231153959]
+[node name="PositionZ" type="SpinBox" parent="Stack/Body/Rows/PositionZRow" unique_id=231153959]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="RotationDegreesXLabel" type="Label" parent="Stack/Body/Rows" unique_id=315995622]
+[node name="RotationDegreesXRow" type="Container" parent="Stack/Body/Rows" unique_id=517748008]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="RotationDegreesXLabel" type="Label" parent="Stack/Body/Rows/RotationDegreesXRow" unique_id=315995622]
 layout_mode = 2
 text = "rotation x"
 
-[node name="rotation_degrees_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1071508911]
+[node name="RotationDegreesX" type="SpinBox" parent="Stack/Body/Rows/RotationDegreesXRow" unique_id=1071508911]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="RotationDegreesYLabel" type="Label" parent="Stack/Body/Rows" unique_id=1576702194]
+[node name="RotationDegreesYRow" type="Container" parent="Stack/Body/Rows" unique_id=273679306]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="RotationDegreesYLabel" type="Label" parent="Stack/Body/Rows/RotationDegreesYRow" unique_id=1576702194]
 layout_mode = 2
 text = "y"
 
-[node name="rotation_degrees_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=1678115118]
+[node name="RotationDegreesY" type="SpinBox" parent="Stack/Body/Rows/RotationDegreesYRow" unique_id=1678115118]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="RotationDegreesZLabel" type="Label" parent="Stack/Body/Rows" unique_id=961766141]
+[node name="RotationDegreesZRow" type="Container" parent="Stack/Body/Rows" unique_id=1170191592]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="RotationDegreesZLabel" type="Label" parent="Stack/Body/Rows/RotationDegreesZRow" unique_id=961766141]
 layout_mode = 2
 text = "z"
 
-[node name="rotation_degrees_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=464856225]
+[node name="RotationDegreesZ" type="SpinBox" parent="Stack/Body/Rows/RotationDegreesZRow" unique_id=464856225]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="ScaleXLabel" type="Label" parent="Stack/Body/Rows" unique_id=1282056345]
+[node name="ScaleXRow" type="Container" parent="Stack/Body/Rows" unique_id=1155635929]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="ScaleXLabel" type="Label" parent="Stack/Body/Rows/ScaleXRow" unique_id=1282056345]
 layout_mode = 2
 text = "scale x"
 
-[node name="scale_x" type="SpinBox" parent="Stack/Body/Rows" unique_id=1654072941]
+[node name="ScaleX" type="SpinBox" parent="Stack/Body/Rows/ScaleXRow" unique_id=1654072941]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="ScaleYLabel" type="Label" parent="Stack/Body/Rows" unique_id=639484831]
+[node name="ScaleYRow" type="Container" parent="Stack/Body/Rows" unique_id=1453253458]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="ScaleYLabel" type="Label" parent="Stack/Body/Rows/ScaleYRow" unique_id=639484831]
 layout_mode = 2
 text = "y"
 
-[node name="scale_y" type="SpinBox" parent="Stack/Body/Rows" unique_id=2065759633]
+[node name="ScaleY" type="SpinBox" parent="Stack/Body/Rows/ScaleYRow" unique_id=2065759633]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="ScaleZLabel" type="Label" parent="Stack/Body/Rows" unique_id=898291836]
+[node name="ScaleZRow" type="Container" parent="Stack/Body/Rows" unique_id=1761099169]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="ScaleZLabel" type="Label" parent="Stack/Body/Rows/ScaleZRow" unique_id=898291836]
 layout_mode = 2
 text = "z"
 
-[node name="scale_z" type="SpinBox" parent="Stack/Body/Rows" unique_id=1060513026]
+[node name="ScaleZ" type="SpinBox" parent="Stack/Body/Rows/ScaleZRow" unique_id=1060513026]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.01
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")

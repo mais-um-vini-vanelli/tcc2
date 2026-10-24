@@ -1,11 +1,8 @@
-extends SubViewportContainer
-
-const LOOK_SENSITIVITY := 0.003 # radians per pixel
-const MOVE_SPEED := 5.0 # units per second
-const PAN_SPEED := 0.01 # units per pixel
-const WRAP_INSET := 2.0 # pixels
+class_name ViewportPane extends SubViewportContainer
 
 const HANDLE_HALF := 0.15
+
+enum Mode {EDIT, POV, PICK_TRIANGLE, PICK_PIXEL}
 
 signal scene_object_selected(node: SceneObject)
 signal gizmo_moved
@@ -21,21 +18,14 @@ var _picker: TrianglePicker
 var _target: SceneObject
 var _pov: CameraPov
 var _pixels: PixelPicker
+var _nav: CameraNav
+var _mode := Mode.EDIT
 
 var overlay: Control
 
-var _flying := false
-var _pan_mode := false
-var _pan_drag := false
-var _using_pan_cursor := false
-var _pan_mouse := Vector2.ZERO
-var _yaw := 0.0
-var _pitch := 0.0
+var _cursor := Input.CURSOR_ARROW
 
 func _ready() -> void:
-	_yaw = camera_3d.rotation.y
-	_pitch = camera_3d.rotation.x
-
 	camera_3d.cull_mask &= ~SceneObject.SELECTION_LAYER
 
 	_gizmo = TransformGizmo.new()
@@ -61,112 +51,140 @@ func _ready() -> void:
 	_pixels.picked.connect(pixel_picked.emit)
 	add_child(_pixels)
 
+	_nav = CameraNav.new()
+	_nav.camera = camera_3d
+	_nav.container = self
+	add_child(_nav)
+
 func _input(event: InputEvent) -> void:
-	if _pixel_input(event):
-		return
+	var over := _over_viewport()
+	var button := event as InputEventMouseButton
 
-	if event is InputEventMouseButton:
-		_on_input_event_mouse_button(event)
-	elif event is InputEventMouseMotion:
-		_on_input_event_mouse_motion(event)
-	elif event is InputEventKey:
-		_on_input_event_key(event)
-
-func _on_input_event_key(event: InputEventKey) -> void:
-	if event.keycode != KEY_SPACE or not event.pressed or event.echo:
-		return
-
-	if _pan_mode:
-		_pan_mode = false
-		_pan_drag = false
-	elif (_over_viewport() and not _flying and not _gizmo.is_dragging()
-		and not _in_pov() and not _picker.is_active()):
-		_pan_mode = true
-	else:
-		return
-
-	get_viewport().set_input_as_handled()
-
-func _on_input_event_mouse_button(event: InputEventMouseButton) -> void:
-	# Otherwise W/A/S/D would also type into a focused SpinBox.
-	if event.pressed and _over_viewport():
+	if button != null and button.pressed and over:
 		var focused := get_viewport().gui_get_focus_owner()
+
 		if focused:
 			focused.release_focus()
-			
-	if event.button_index == MOUSE_BUTTON_RIGHT:
-		if event.pressed and _over_viewport():
-			_flying = true
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		elif not event.pressed and _flying:
-			_flying = false
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and _pan_mode and _over_viewport():
-			_pan_drag = true
-			_pan_mouse = get_viewport().get_mouse_position()
-			get_viewport().set_input_as_handled()
-		elif event.pressed and _over_viewport():
-			var mouse_position := get_local_mouse_position()
 
-			if _picker.click(mouse_position):
-				get_viewport().set_input_as_handled()
-				return
+	match _mode:
+		Mode.PICK_PIXEL:
+			_pixel_input(event, over)
+		Mode.PICK_TRIANGLE:
+			_triangle_input(event, over)
+		Mode.POV:
+			pass # The render camera owns the pane: the mouse does nothing.
+		Mode.EDIT:
+			_edit_input(event, over)
 
-			var grabbed := _gizmo.grab(mouse_position,
-				camera_3d.project_ray_origin(mouse_position),
-				camera_3d.project_ray_normal(mouse_position))
-
-			if not grabbed:
-				scene_object_selected.emit(select_scene_object(mouse_position))
-
-			get_viewport().set_input_as_handled()
-		elif not event.pressed:
-			_pan_drag = false
-			_gizmo.release()
-
-func _cancel_mouse() -> void:
-	if _flying:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-	_flying = false
-	_pan_mode = false
-	_pan_drag = false
-
-	if _picker != null:
-		_picker.leave()
-
-	if _pixels != null:
-		_pixels.leave()
-
-	if _gizmo != null:
-		_gizmo.release()
-
-func _pixel_input(event: InputEvent) -> bool:
-	if not _in_pov() and not _pixels.is_active():
-		return false
-
+func _pixel_input(event: InputEvent, over: bool) -> void:
 	if event is InputEventMouseMotion:
-		if _over_viewport():
+		if over:
 			_pixels.hover(get_local_mouse_position())
 		else:
 			_pixels.leave()
 	elif event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
 
-		if _over_viewport() and button.button_index == MOUSE_BUTTON_LEFT and button.pressed:
+		if over and button.button_index == MOUSE_BUTTON_LEFT and button.pressed:
 			_pixels.click(get_local_mouse_position())
 			get_viewport().set_input_as_handled()
-	
+
+func _triangle_input(event: InputEvent, over: bool) -> void:
+	if event is InputEventMouseMotion:
+		if over:
+			_picker.hover(get_local_mouse_position())
+		else:
+			_picker.leave()
+	elif event is InputEventMouseButton:
+		var button := event as InputEventMouseButton
+
+		if over and button.button_index == MOUSE_BUTTON_LEFT and button.pressed:
+			_picker.click(get_local_mouse_position())
+			get_viewport().set_input_as_handled()
+
+func _edit_input(event: InputEvent, over: bool) -> void:
+	if _nav_input(event, over):
+		return
+
+	if event is InputEventMouseButton:
+		_mouse_button(event as InputEventMouseButton, over)
+	elif event is InputEventMouseMotion:
+		_mouse_motion()
+
+func _nav_input(event: InputEvent, over: bool) -> bool:
+	if not _nav.is_active():
+		if _gizmo.is_dragging() or (not over and not _nav.is_pan_armed()):
+			return false
+
+	if not _nav.handle(event, over):
+		return false
+
+	if event is not InputEventMouseMotion:
+		get_viewport().set_input_as_handled()
+
 	return true
 
-func set_pick_triangle(enabled: bool) -> void:
-	_cancel_mouse()
-	_picker.set_active(enabled)
+func _mouse_button(event: InputEventMouseButton, over: bool) -> void:
+	if event.button_index != MOUSE_BUTTON_LEFT:
+		return
 
-func set_pick_pixel(enabled: bool) -> void:
+	if not event.pressed:
+		_gizmo.release()
+		return
+
+	if not over or _nav.is_active() or _gizmo.is_dragging():
+		return
+
+	var mouse_position := get_local_mouse_position()
+
+	var grabbed := _gizmo.grab(mouse_position,
+		camera_3d.project_ray_origin(mouse_position),
+		camera_3d.project_ray_normal(mouse_position))
+
+	if not grabbed:
+		scene_object_selected.emit(select_scene_object(mouse_position))
+
+	get_viewport().set_input_as_handled()
+
+func _mouse_motion() -> void:
+	var mouse := get_local_mouse_position()
+
+	if _gizmo.is_dragging():
+		_gizmo.drag(camera_3d.project_ray_origin(mouse),
+			camera_3d.project_ray_normal(mouse))
+	else:
+		_gizmo.hover(mouse)
+
+func _cancel_mouse() -> void:
+	if _nav == null:
+		return
+
+	_nav.cancel()
+	_picker.leave()
+	_pixels.leave()
+	_gizmo.release()
+
+	_update_pointer()
+
+func set_mode(mode: Mode) -> void:
+	if _mode == mode:
+		return
+
+	_mode = mode
 	_cancel_mouse()
-	_pixels.set_active(enabled)
+
+	var pov := mode == Mode.POV or mode == Mode.PICK_PIXEL
+
+	_pov.set_active(pov)
+	_picker.set_active(mode == Mode.PICK_TRIANGLE)
+	_pixels.set_active(mode == Mode.PICK_PIXEL)
+	outline.set_enabled(not pov)
+
+	set_target(_target)
+
+func refresh_pov() -> void:
+	if _mode == Mode.POV or _mode == Mode.PICK_PIXEL:
+		_pov.set_active(true)
 
 func set_target(node: SceneObject) -> void:
 	if node is SceneRoot:
@@ -178,26 +196,16 @@ func set_target(node: SceneObject) -> void:
 func render_camera() -> SceneCamera:
 	return _pov.render_camera()
 
-func set_pov(enabled: bool) -> void:
-	_cancel_mouse()
-	_pov.set_active(enabled)
-	outline.set_enabled(not enabled)
-
-	set_target(_target)
-
-func _in_pov() -> bool:
-	return _pov.is_active()
-
 func select_scene_object(screen_position: Vector2) -> SceneObject:
 	var origin := camera_3d.project_ray_origin(screen_position)
 	var dir := camera_3d.project_ray_normal(screen_position)
-	
+
 	var closest: SceneObject = null
 	var closest_distance := INF
 
 	for node in scene_view.find_children("*", "SceneObject", true, false):
 		var distance := _ray_distance(origin, dir, node)
-		
+
 		if distance < closest_distance:
 			closest_distance = distance
 			closest = node
@@ -209,20 +217,20 @@ func _ray_distance(origin: Vector3, dir: Vector3, node: SceneObject) -> float:
 
 	for child in node.get_children(true):
 		var geometry_instance := child as GeometryInstance3D
-		
+
 		if geometry_instance == null or not geometry_instance.visible:
 			continue
-		
+
 		var to_local := geometry_instance.global_transform.affine_inverse()
 		var local_origin = to_local * origin;
 		var local_dir = to_local.basis * dir;
-		
+
 		var mesh_instance := child as MeshInstance3D
-		
+
 		if mesh_instance != null and mesh_instance.mesh != null:
 			if mesh_instance.get_aabb().intersects_ray(to_local * origin, to_local.basis * dir) != null:
 				var vertices := mesh_instance.mesh.get_faces()
-				
+
 				for i in range(0, vertices.size(), 3):
 					var hit = Geometry3D.ray_intersects_triangle(local_origin, local_dir, vertices[i], vertices[i + 1], vertices[i + 2])
 					if hit != null:
@@ -230,74 +238,37 @@ func _ray_distance(origin: Vector3, dir: Vector3, node: SceneObject) -> float:
 		else:
 			# Camera and light don't use MeshInstance3D previews
 			var aabb := AABB(Vector3.ONE * -HANDLE_HALF, Vector3.ONE * HANDLE_HALF * 2.0)
-			
+
 			if aabb.intersects_ray(local_origin, local_dir) != null:
 				nearest = minf(nearest, origin.distance_to(geometry_instance.global_position))
 
 	return nearest
 
-func _on_input_event_mouse_motion(event: InputEventMouseMotion) -> void:
-	if _gizmo.is_dragging():
-		var mouse := get_local_mouse_position()
-		_gizmo.drag(camera_3d.project_ray_origin(mouse), camera_3d.project_ray_normal(mouse))
-	elif _flying:
-		_yaw -= event.relative.x * LOOK_SENSITIVITY
-		_pitch = clamp(_pitch - event.relative.y * LOOK_SENSITIVITY, -1.55, 1.55)
-		camera_3d.rotation = Vector3(_pitch, _yaw, 0.0)
-	elif _pan_drag:
-		var motion := _pan_motion()
-		camera_3d.global_position -= camera_3d.global_basis.x * motion.x * PAN_SPEED
-		camera_3d.global_position += camera_3d.global_basis.y * motion.y * PAN_SPEED
-	elif _picker.is_active():
-		if _over_viewport():
-			_picker.hover(get_local_mouse_position())
-		else:
-			_picker.leave()
-	else:
-		_gizmo.hover(get_local_mouse_position())
-		
-func _pan_motion() -> Vector2:
-	var mouse := get_viewport().get_mouse_position()
-	var motion := mouse - _pan_mouse
-	var wrapped := _wrapped_into_viewport(mouse)
-
-	_pan_mouse = wrapped
-
-	if wrapped != mouse:
-		Input.warp_mouse(wrapped)
-
-	return motion
-
-func _wrapped_into_viewport(mouse: Vector2) -> Vector2:
-	var rect := Rect2(get_global_transform_with_canvas().origin, size)
-	var wrapped := mouse
-
-	if mouse.x <= rect.position.x + WRAP_INSET:
-		wrapped.x = rect.end.x - WRAP_INSET * 2.0
-	elif mouse.x >= rect.end.x - WRAP_INSET:
-		wrapped.x = rect.position.x + WRAP_INSET * 2.0
-
-	if mouse.y <= rect.position.y + WRAP_INSET:
-		wrapped.y = rect.end.y - WRAP_INSET * 2.0
-	elif mouse.y >= rect.end.y - WRAP_INSET:
-		wrapped.y = rect.position.y + WRAP_INSET * 2.0
-
-	return wrapped
-
-func _update_cursor() -> void:
-	var pan := _pan_drag or (_pan_mode and _over_viewport())
-
-	if pan == _using_pan_cursor:
+func _update_pointer() -> void:
+	if _nav == null:
 		return
 
-	_using_pan_cursor = pan
-	Input.set_default_cursor_shape(
-		Input.CURSOR_MOVE if pan else Input.CURSOR_ARROW)
+	var shape := _pixels.cursor()
+
+	if shape == Input.CURSOR_ARROW:
+		shape = _picker.cursor()
+
+	if shape == Input.CURSOR_ARROW:
+		shape = _nav.cursor(_over_viewport())
+
+	if shape != _cursor:
+		_cursor = shape
+		Input.set_default_cursor_shape(shape)
+
+	var mouse := _nav.mouse_mode()
+
+	if mouse == Input.MOUSE_MODE_VISIBLE:
+		mouse = _pixels.mouse_mode()
+
+	if mouse != Input.mouse_mode:
+		Input.mouse_mode = mouse
 
 func _over_viewport() -> bool:
-	if _flying or _pan_drag:
-		return true
-
 	var mouse := get_global_mouse_position()
 
 	if _over_overlay(mouse):
@@ -319,26 +290,9 @@ func _over_overlay(mouse: Vector2) -> bool:
 			return true
 
 	return false
-		
-func _process(delta: float) -> void:
-	_update_cursor()
 
-	if _in_pov():
-		return
-
-	if not _flying:
-		return
-		
-	var dir := Vector3.ZERO
-	if Input.is_key_pressed(KEY_W): dir -= camera_3d.global_basis.z # -Z is forward
-	if Input.is_key_pressed(KEY_S): dir += camera_3d.global_basis.z
-	if Input.is_key_pressed(KEY_A): dir -= camera_3d.global_basis.x
-	if Input.is_key_pressed(KEY_D): dir += camera_3d.global_basis.x
-	if Input.is_key_pressed(KEY_E): dir += camera_3d.global_basis.y
-	if Input.is_key_pressed(KEY_Q): dir -= camera_3d.global_basis.y
-	
-	if dir != Vector3.ZERO:
-		camera_3d.global_position += dir.normalized() * MOVE_SPEED * delta
+func _process(_delta: float) -> void:
+	_update_pointer()
 
 func _notification(what: int) -> void:
 	# Alt-tabbing out while captured would leave the cursor stuck hidden, and

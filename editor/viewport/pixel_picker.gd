@@ -14,9 +14,19 @@ var _active := false
 var _loupe: Control
 var _zoom: TextureRect
 var _label: Label
+var _cursor := Input.CURSOR_ARROW
+var _mouse := Input.MOUSE_MODE_VISIBLE
 
 func is_active() -> bool:
 	return _active
+
+## The shape and the mouse mode this tool wants while it is up. The viewport
+## writes them: both are process-wide and other modes have an opinion too.
+func cursor() -> Input.CursorShape:
+	return _cursor
+
+func mouse_mode() -> Input.MouseMode:
+	return _mouse
 
 func set_active(value: bool) -> void:
 	if _active == value:
@@ -44,8 +54,9 @@ func hover(mouse: Vector2) -> void:
 
 	_place(mouse, pixel)
 	_loupe.visible = true
-	
-	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
+
+	_cursor = Input.CURSOR_ARROW
+	_mouse = Input.MOUSE_MODE_HIDDEN
 
 func leave() -> void:
 	if not _active:
@@ -88,8 +99,8 @@ func _place(mouse: Vector2, pixel: Vector2i) -> void:
 	_label.text = "%d, %d" % [pixel.x, pixel.y]
 
 func _rest(shape := Input.CURSOR_ARROW) -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	Input.set_default_cursor_shape(shape)
+	_cursor = shape
+	_mouse = Input.MOUSE_MODE_VISIBLE
 
 func _build() -> void:
 	if _loupe != null:

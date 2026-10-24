@@ -169,12 +169,12 @@ class Mode extends Node3D:
 		return Basis.IDENTITY
 
 	# The handle as a world-space polyline, which is all the hit test needs.
-	func _outline(axis: int) -> Array[Vector3]:
+	func _outline(axis: int) -> PackedVector3Array:
 		var origin := target.global_position
 		var direction: Vector3 = _orientation() * AXES[axis]
 		var reach := _screen_scale()
-		var points: Array[Vector3] = [origin + direction * _from * reach,
-			origin + direction * _to * reach]
+		var points := PackedVector3Array([origin + direction * _from * reach,
+			origin + direction * _to * reach])
 		return points
 
 	# How far along its axis the mouse ray falls, measured from the grab point.
@@ -220,10 +220,8 @@ class Mode extends Node3D:
 		for axis in 3:
 			var direction: Vector3 = AXES[axis]
 
-			mesh.surface_begin(Mesh.PRIMITIVE_LINES, _materials[axis])
-			mesh.surface_add_vertex(direction * _from)
-			mesh.surface_add_vertex(direction * _to)
-			mesh.surface_end()
+			GizmoMesh.surface(mesh, Mesh.PRIMITIVE_LINES, _materials[axis],
+				PackedVector3Array([direction * _from, direction * _to]))
 
 		_add_mesh(mesh)
 
@@ -362,16 +360,10 @@ class Rotate extends Mode:
 		_mesh.clear_surfaces()
 
 		for axis in 3:
-			var points := _arc(axis, LENGTH)
+			GizmoMesh.surface(_mesh, Mesh.PRIMITIVE_TRIANGLES, _materials[axis],
+				GizmoMesh.ribbon(_arc(axis, LENGTH), eye, HALF_WIDTH))
 
-			_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _materials[axis])
-
-			for i in SEGMENTS:
-				_band(points[i], points[i + 1], eye)
-
-			_mesh.surface_end()
-
-	func _arc(axis: int, radius: float) -> Array[Vector3]:
+	func _arc(axis: int, radius: float) -> PackedVector3Array:
 		var normal: Vector3 = AXES[axis]
 		var u: Vector3 = AXES[(axis + 1) % 3]
 		var v: Vector3 = AXES[(axis + 2) % 3]
@@ -387,30 +379,10 @@ class Rotate extends Mode:
 		else:
 			span = TAU
 
-		var points: Array[Vector3] = []
-		
-		var start := middle - span * 0.5
-		var step := span / SEGMENTS
+		return GizmoMesh.arc(u, v, radius, middle - span * 0.5,
+			middle + span * 0.5, SEGMENTS)
 
-		for i in SEGMENTS + 1:
-			var angle := start + i * step
-			points.append((u * cos(angle) + v * sin(angle)) * radius)
-
-		return points
-
-	# One segment of a ring, widened into a ribbon turned to face the camera.
-	func _band(a: Vector3, b: Vector3, eye: Vector3) -> void:
-		var side := (b - a).cross(eye).normalized() * HALF_WIDTH
-
-		_mesh.surface_add_vertex(a - side)
-		_mesh.surface_add_vertex(a + side)
-		_mesh.surface_add_vertex(b + side)
-
-		_mesh.surface_add_vertex(b + side)
-		_mesh.surface_add_vertex(b - side)
-		_mesh.surface_add_vertex(a - side)
-
-	func _outline(axis: int) -> Array[Vector3]:
+	func _outline(axis: int) -> PackedVector3Array:
 		var points := _arc(axis, LENGTH * _screen_scale())
 		var origin := target.global_position
 

@@ -2,8 +2,10 @@
 
 [ext_resource type="Script" uid="uid://d4kwrq4r2o5q5" path="res://properties/root_form.gd" id="1_0k82w"]
 [ext_resource type="Script" uid="uid://rf2wrssmhkmc" path="res://properties/section.gd" id="3_mnwxo"]
-[ext_resource type="Script" uid="uid://cexlinptor5e6" path="res://properties/check.gd" id="check_box"]
-[ext_resource type="Script" uid="uid://b2ywqkn8rfd3m" path="res://properties/rows.gd" id="rows"]
+[ext_resource type="Script" path="res://properties/controls/props_check_box.gd" id="check_box"]
+[ext_resource type="Script" path="res://properties/controls/props_option_button.gd" id="props_option_button"]
+[ext_resource type="Script" path="res://properties/controls/props_spin_box.gd" id="props_spin_box"]
+[ext_resource type="Script" path="res://properties/row.gd" id="row"]
 
 [node name="RootPanel" type="VBoxContainer" unique_id=680120217]
 script = ExtResource("1_0k82w")
@@ -30,40 +32,55 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="Rasterization/Stack" unique_id=522983514]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="Rasterization/Stack/Body" unique_id=202490591]
+[node name="Rows" type="VBoxContainer" parent="Rasterization/Stack/Body" unique_id=202490591]
 layout_mode = 2
 theme_type_variation = &"Rows"
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="BackfaceCullLabel" type="Label" parent="Rasterization/Stack/Body/Rows" unique_id=794107963]
+[node name="BackfaceCullRow" type="Container" parent="Rasterization/Stack/Body/Rows" unique_id=1659721193]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="BackfaceCullLabel" type="Label" parent="Rasterization/Stack/Body/Rows/BackfaceCullRow" unique_id=794107963]
 layout_mode = 2
 text = "backface cull"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="backface_cull" type="CheckBox" parent="Rasterization/Stack/Body/Rows" unique_id=1515061420]
+[node name="BackfaceCull" type="CheckBox" parent="Rasterization/Stack/Body/Rows/BackfaceCullRow" unique_id=1515061420]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("check_box")
 
-[node name="PerspectiveCorrectLabel" type="Label" parent="Rasterization/Stack/Body/Rows" unique_id=1733759051]
+[node name="PerspectiveCorrectRow" type="Container" parent="Rasterization/Stack/Body/Rows" unique_id=1179016652]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="PerspectiveCorrectLabel" type="Label" parent="Rasterization/Stack/Body/Rows/PerspectiveCorrectRow" unique_id=1733759051]
 layout_mode = 2
 text = "perspective correct"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="perspective_correct" type="CheckBox" parent="Rasterization/Stack/Body/Rows" unique_id=1571066105]
+[node name="PerspectiveCorrect" type="CheckBox" parent="Rasterization/Stack/Body/Rows/PerspectiveCorrectRow" unique_id=1571066105]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("check_box")
 
-[node name="DepthTestLabel" type="Label" parent="Rasterization/Stack/Body/Rows" unique_id=202183299]
+[node name="DepthTestRow" type="Container" parent="Rasterization/Stack/Body/Rows" unique_id=448361058]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="DepthTestLabel" type="Label" parent="Rasterization/Stack/Body/Rows/DepthTestRow" unique_id=202183299]
 layout_mode = 2
 text = "depth test"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="depth_test" type="CheckBox" parent="Rasterization/Stack/Body/Rows" unique_id=810821890]
+[node name="DepthTest" type="CheckBox" parent="Rasterization/Stack/Body/Rows/DepthTestRow" unique_id=810821890]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("check_box")
@@ -90,52 +107,73 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="RayTracing/Stack" unique_id=771260179]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="RayTracing/Stack/Body" unique_id=1753057836]
+[node name="Rows" type="VBoxContainer" parent="RayTracing/Stack/Body" unique_id=1753057836]
 layout_mode = 2
 theme_type_variation = &"Rows"
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="MaxDepthLabel" type="Label" parent="RayTracing/Stack/Body/Rows" unique_id=1960398386]
+[node name="MaxDepthRow" type="Container" parent="RayTracing/Stack/Body/Rows" unique_id=385507801]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="MaxDepthLabel" type="Label" parent="RayTracing/Stack/Body/Rows/MaxDepthRow" unique_id=1960398386]
 layout_mode = 2
 text = "max depth"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="max_depth" type="SpinBox" parent="RayTracing/Stack/Body/Rows" unique_id=1665367132]
+[node name="MaxDepth" type="SpinBox" parent="RayTracing/Stack/Body/Rows/MaxDepthRow" unique_id=1665367132]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 16.0
 rounded = true
+script = ExtResource("props_spin_box")
 
-[node name="ShadowsLabel" type="Label" parent="RayTracing/Stack/Body/Rows" unique_id=48596687]
+[node name="ShadowsRow" type="Container" parent="RayTracing/Stack/Body/Rows" unique_id=679842476]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="ShadowsLabel" type="Label" parent="RayTracing/Stack/Body/Rows/ShadowsRow" unique_id=48596687]
 layout_mode = 2
 text = "shadows"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="shadows" type="CheckBox" parent="RayTracing/Stack/Body/Rows" unique_id=954508422]
+[node name="Shadows" type="CheckBox" parent="RayTracing/Stack/Body/Rows/ShadowsRow" unique_id=954508422]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("check_box")
 
-[node name="ReflectionsLabel" type="Label" parent="RayTracing/Stack/Body/Rows" unique_id=224104864]
+[node name="ReflectionsRow" type="Container" parent="RayTracing/Stack/Body/Rows" unique_id=287485817]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="ReflectionsLabel" type="Label" parent="RayTracing/Stack/Body/Rows/ReflectionsRow" unique_id=224104864]
 layout_mode = 2
 text = "reflections"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="reflections" type="CheckBox" parent="RayTracing/Stack/Body/Rows" unique_id=736052469]
+[node name="Reflections" type="CheckBox" parent="RayTracing/Stack/Body/Rows/ReflectionsRow" unique_id=736052469]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("check_box")
 
-[node name="RefractionsLabel" type="Label" parent="RayTracing/Stack/Body/Rows" unique_id=1124725134]
+[node name="RefractionsRow" type="Container" parent="RayTracing/Stack/Body/Rows" unique_id=890286908]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="RefractionsLabel" type="Label" parent="RayTracing/Stack/Body/Rows/RefractionsRow" unique_id=1124725134]
 layout_mode = 2
 text = "refractions"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="refractions" type="CheckBox" parent="RayTracing/Stack/Body/Rows" unique_id=859787103]
+[node name="Refractions" type="CheckBox" parent="RayTracing/Stack/Body/Rows/RefractionsRow" unique_id=859787103]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("check_box")
@@ -162,29 +200,39 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="RayTracing/Stack/Body/Acceleration/Stack" unique_id=14118837]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="RayTracing/Stack/Body/Acceleration/Stack/Body" unique_id=300747170]
+[node name="Rows" type="VBoxContainer" parent="RayTracing/Stack/Body/Acceleration/Stack/Body" unique_id=300747170]
 layout_mode = 2
 theme_type_variation = &"Rows"
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="BvhEnabledLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=1897204587]
+[node name="BvhEnabledRow" type="Container" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=615584234]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="BvhEnabledLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhEnabledRow" unique_id=1897204587]
 layout_mode = 2
 text = "enabled"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="bvh_enabled" type="CheckBox" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=152059144]
+[node name="BvhEnabled" type="CheckBox" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhEnabledRow" unique_id=152059144]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("check_box")
 
-[node name="BvhSplitLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=958651471]
+[node name="BvhSplitRow" type="Container" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=1552951122]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="BvhSplitLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhSplitRow" unique_id=958651471]
 layout_mode = 2
 text = "split"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="bvh_split" type="OptionButton" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=861835382]
+[node name="BvhSplit" type="OptionButton" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhSplitRow" unique_id=861835382]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
@@ -193,18 +241,25 @@ popup/item_0/text = "Median"
 popup/item_0/id = 0
 popup/item_1/text = "Sah"
 popup/item_1/id = 1
+script = ExtResource("props_option_button")
 
-[node name="BvhWireframeLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=417802355]
+[node name="BvhWireframeRow" type="Container" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=1342992235]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="BvhWireframeLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhWireframeRow" unique_id=417802355]
 layout_mode = 2
 text = "wireframe depth"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="bvh_wireframe" type="SpinBox" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=1304958726]
+[node name="BvhWireframe" type="SpinBox" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhWireframeRow" unique_id=1304958726]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 32.0
 rounded = true
+script = ExtResource("props_spin_box")
 
 [node name="TransformOptions" type="PanelContainer" parent="." unique_id=1707858146]
 layout_mode = 2
@@ -228,24 +283,30 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="TransformOptions/Stack" unique_id=1308540821]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="TransformOptions/Stack/Body" unique_id=83288115]
+[node name="Rows" type="VBoxContainer" parent="TransformOptions/Stack/Body" unique_id=83288115]
 layout_mode = 2
 theme_type_variation = &"Rows"
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="TransformMethodLabel" type="Label" parent="TransformOptions/Stack/Body/Rows" unique_id=496219902]
+[node name="TransformMethodRow" type="Container" parent="TransformOptions/Stack/Body/Rows" unique_id=171671148]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="TransformMethodLabel" type="Label" parent="TransformOptions/Stack/Body/Rows/TransformMethodRow" unique_id=496219902]
 layout_mode = 2
 text = "method"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="transform_method" type="OptionButton" parent="TransformOptions/Stack/Body/Rows" unique_id=1358232795]
+[node name="TransformMethod" type="OptionButton" parent="TransformOptions/Stack/Body/Rows/TransformMethodRow" unique_id=1358232795]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
 item_count = 1
 popup/item_0/text = "Stepwise"
 popup/item_0/id = 0
+script = ExtResource("props_option_button")
 
 [node name="Shading" type="PanelContainer" parent="." unique_id=917561160]
 layout_mode = 2
@@ -269,32 +330,43 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="Shading/Stack" unique_id=1382135917]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="Shading/Stack/Body" unique_id=1255218003]
+[node name="Rows" type="VBoxContainer" parent="Shading/Stack/Body" unique_id=1255218003]
 layout_mode = 2
 theme_type_variation = &"Rows"
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="ReflectanceModelLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=1764027092]
+[node name="ReflectanceModelRow" type="Container" parent="Shading/Stack/Body/Rows" unique_id=1882179189]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="ReflectanceModelLabel" type="Label" parent="Shading/Stack/Body/Rows/ReflectanceModelRow" unique_id=1764027092]
 layout_mode = 2
 text = "reflectance"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="reflectance_model" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=683391924]
+[node name="ReflectanceModel" type="OptionButton" parent="Shading/Stack/Body/Rows/ReflectanceModelRow" unique_id=683391924]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
 item_count = 1
 popup/item_0/text = "BlinnPhong"
 popup/item_0/id = 0
+script = ExtResource("props_option_button")
 
-[node name="TextureFilterLabel" type="Label" parent="Shading/Stack/Body/Rows" unique_id=2051920277]
+[node name="TextureFilterRow" type="Container" parent="Shading/Stack/Body/Rows" unique_id=1291972605]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="TextureFilterLabel" type="Label" parent="Shading/Stack/Body/Rows/TextureFilterRow" unique_id=2051920277]
 layout_mode = 2
 text = "texture filter"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="texture_filter" type="OptionButton" parent="Shading/Stack/Body/Rows" unique_id=809517507]
+[node name="TextureFilter" type="OptionButton" parent="Shading/Stack/Body/Rows/TextureFilterRow" unique_id=809517507]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
@@ -307,6 +379,7 @@ popup/item_2/text = "MipmapBilinear"
 popup/item_2/id = 2
 popup/item_3/text = "Trilinear"
 popup/item_3/id = 3
+script = ExtResource("props_option_button")
 
 [node name="Output" type="PanelContainer" parent="." unique_id=1771626691]
 layout_mode = 2
@@ -329,59 +402,82 @@ alignment = 0
 [node name="Body" type="VBoxContainer" parent="Output/Stack" unique_id=220415410]
 layout_mode = 2
 
-[node name="Rows" type="Container" parent="Output/Stack/Body" unique_id=1447266303]
+[node name="Rows" type="VBoxContainer" parent="Output/Stack/Body" unique_id=1447266303]
 layout_mode = 2
 theme_type_variation = &"Rows"
-script = ExtResource("rows")
+theme_type_variation = &"Rows"
 
-[node name="WidthLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=1161901458]
+[node name="WidthRow" type="Container" parent="Output/Stack/Body/Rows" unique_id=768476523]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="WidthLabel" type="Label" parent="Output/Stack/Body/Rows/WidthRow" unique_id=1161901458]
 layout_mode = 2
 text = "width"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="width" type="SpinBox" parent="Output/Stack/Body/Rows" unique_id=191838806]
+[node name="Width" type="SpinBox" parent="Output/Stack/Body/Rows/WidthRow" unique_id=191838806]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 1.0
 max_value = 4096.0
 value = 1.0
 rounded = true
+script = ExtResource("props_spin_box")
 
-[node name="HeightLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=1178787515]
+[node name="HeightRow" type="Container" parent="Output/Stack/Body/Rows" unique_id=781007278]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="HeightLabel" type="Label" parent="Output/Stack/Body/Rows/HeightRow" unique_id=1178787515]
 layout_mode = 2
 text = "height"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="height" type="SpinBox" parent="Output/Stack/Body/Rows" unique_id=570506534]
+[node name="Height" type="SpinBox" parent="Output/Stack/Body/Rows/HeightRow" unique_id=570506534]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 1.0
 max_value = 4096.0
 value = 1.0
 rounded = true
+script = ExtResource("props_spin_box")
 
-[node name="ExposureLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=596102467]
+[node name="ExposureRow" type="Container" parent="Output/Stack/Body/Rows" unique_id=1082836488]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="ExposureLabel" type="Label" parent="Output/Stack/Body/Rows/ExposureRow" unique_id=596102467]
 layout_mode = 2
 text = "exposure"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="exposure" type="SpinBox" parent="Output/Stack/Body/Rows" unique_id=851464611]
+[node name="Exposure" type="SpinBox" parent="Output/Stack/Body/Rows/ExposureRow" unique_id=851464611]
 unique_name_in_owner = true
 layout_mode = 2
 step = 0.1
 allow_greater = true
 allow_lesser = true
+script = ExtResource("props_spin_box")
 
-[node name="TonemapLabel" type="Label" parent="Output/Stack/Body/Rows" unique_id=2092387296]
+[node name="TonemapRow" type="Container" parent="Output/Stack/Body/Rows" unique_id=220990323]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="TonemapLabel" type="Label" parent="Output/Stack/Body/Rows/TonemapRow" unique_id=2092387296]
 layout_mode = 2
 text = "tonemap"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="tonemap" type="OptionButton" parent="Output/Stack/Body/Rows" unique_id=1118778475]
+[node name="Tonemap" type="OptionButton" parent="Output/Stack/Body/Rows/TonemapRow" unique_id=1118778475]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
@@ -390,3 +486,4 @@ popup/item_0/text = "None"
 popup/item_0/id = 0
 popup/item_1/text = "Reinhard"
 popup/item_1/id = 1
+script = ExtResource("props_option_button")

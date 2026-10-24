@@ -1,89 +1,102 @@
 @tool
 class_name MaterialSection extends Section
 
-func bind(binder: Binder, mat: SceneMaterial) -> void:
+func bind(form: Form, mat: SceneMaterial) -> void:
 	_channel(
-		binder,
+		form,
 		mat.albedo,
 		mat.albedo.rgb,
-		%albedo_kind,
-		%albedo_constant,
-		%albedo_factor,
-		%albedo_source,
-		%albedo_image)
+		%AlbedoKindRow,
+		%AlbedoConstantRow,
+		%AlbedoFactorRow,
+		%AlbedoSourceRow,
+		%AlbedoImageRow)
 
 	_channel(
-		binder,
+		form,
 		mat.metallic,
 		mat.metallic.scalar,
-		%metallic_kind,
-		%metallic_constant,
-		%metallic_factor,
-		%metallic_source,
-		%metallic_image,
-		%metallic_channel)
+		%MetallicKindRow,
+		%MetallicConstantRow,
+		%MetallicFactorRow,
+		%MetallicSourceRow,
+		%MetallicImageRow,
+		%MetallicChannelRow)
 
 	_channel(
-		binder,
+		form,
 		mat.roughness,
 		mat.roughness.scalar,
-		%roughness_kind,
-		%roughness_constant,
-		%roughness_factor,
-		%roughness_source,
-		%roughness_image,
-		%roughness_channel)
+		%RoughnessKindRow,
+		%RoughnessConstantRow,
+		%RoughnessFactorRow,
+		%RoughnessSourceRow,
+		%RoughnessImageRow,
+		%RoughnessChannelRow)
 
 	_channel(
-		binder,
+		form,
 		mat.emissive,
 		mat.emissive.rgb,
-		%emissive_kind,
-		%emissive_constant,
-		%emissive_factor,
-		%emissive_source,
-		%emissive_image)
+		%EmissiveKindRow,
+		%EmissiveConstantRow,
+		%EmissiveFactorRow,
+		%EmissiveSourceRow,
+		%EmissiveImageRow)
 
-	binder.bind(%normal_source, mat.normal, &"source")
-	binder.bind(%normal_image, mat.normal, &"image")
-	binder.bind(%normal_scale, mat, &"normal_scale")
+	form.bind(%NormalSource, mat.normal, ^"source")
+	form.bind(%NormalImage, mat.normal, ^"image")
+	form.bind(%NormalScale, mat, ^"normal_scale")
 
-	binder.follow(mat.normal.changed, func():
+	var normal := func():
+		if not is_inside_tree():
+			return
+
 		var mapped := not mat.normal.source.is_empty()
 
-		show_row(%normal_image, mapped
+		%NormalImageRow.visible = (mapped
 			and mat.normal.source.get_extension().to_lower() == "glb")
-		show_row(%normal_scale, mapped))
+		%NormalScaleRow.visible = mapped
 
-	binder.bind(%transparency, mat, &"transparency")
-	binder.bind(%refractive_index, mat, &"refractive_index")
+	normal.call()
+	mat.normal.changed.connect(normal)
+
+	form.bind(%Transparency, mat, ^"transparency")
+	form.bind(%RefractiveIndex, mat, ^"refractive_index")
 
 func _channel(
-	binder: Binder,
+	form: Form,
 	value: SceneChannel,
 	holder: Object,
-	kind: Control,
-	constant: Control,
-	factor: Control,
-	source: Control,
-	image: Control,
-	channel: Control = null) -> void:
-	binder.bind(kind, value, &"kind")
-	binder.bind(constant, holder, &"constant")
-	binder.bind(factor, holder, &"factor")
-	binder.bind(source, value.texture, &"source")
-	binder.bind(image, value.texture, &"image")
+	kind: Row,
+	constant: Row,
+	factor: Row,
+	source: Row,
+	image: Row,
+	channel: Row = null) -> void:
+	form.bind(kind.value(), value, ^"kind")
+	form.bind(constant.value(), holder, ^"constant")
+	form.bind(factor.value(), holder, ^"factor")
+	form.bind(source.value(), value.texture, ^"source")
+	form.bind(image.value(), value.texture, ^"image")
 
 	if channel != null:
-		binder.bind(channel, holder, &"channel")
+		form.bind(channel.value(), holder, ^"channel")
 
-	binder.follow(value.changed, func():
+	var shown := func():
+		if not is_inside_tree():
+			return
+
 		var textured := value.kind == SceneChannel.Kind.TEXTURE
 
-		show_row(constant, not textured)
-		show_row(factor, textured)
-		show_row(source, textured)
-		show_row(image, textured and value.texture.source.get_extension().to_lower() == "glb")
+		constant.visible = not textured
+		factor.visible = textured
+		source.visible = textured
+		image.visible = (textured
+			and value.texture.source.get_extension().to_lower() == "glb")
 
 		if channel != null:
-			show_row(channel, textured))
+			channel.visible = textured
+
+	shown.call()
+	value.changed.connect(shown)

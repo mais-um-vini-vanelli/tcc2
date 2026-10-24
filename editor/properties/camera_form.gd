@@ -9,15 +9,15 @@ func _build() -> void:
 
 	%Camera.title = TITLES[camera.kind]
 
-	%Camera.show_row(%fov, not orthographic)
-	%Camera.show_row(%height, orthographic)
+	%FovRow.visible = not orthographic
+	%HeightRow.visible = orthographic
 
 	if orthographic:
-		bind(%height, model, &"height")
+		bind(%Height, model, ^"height")
 	else:
-		bind(%fov, model, &"fov")
+		bind(%Fov, model, ^"fov")
 
-	bind(%near, model, &"near")
-	bind(%far, model, &"far")
+	bind(%Near, model, ^"near")
+	bind(%Far, model, ^"far")
 
-	%Transform.bind(binder, camera)
+	%Transform.bind(self, camera)
