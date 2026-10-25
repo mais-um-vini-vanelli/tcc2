@@ -119,7 +119,7 @@ impl Scene {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct GeometryInstance<'a> {
     pub primitive: &'a Primitive,
     pub transform_chain: TransformChain,
@@ -175,20 +175,20 @@ impl LightInstance {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ObjectKind {
     Camera(Camera),
     Light(Light),
     Primitive(Primitive),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Primitive {
     pub geometry: Geometry,
     pub material: Material,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Object {
     pub transform: Transform,
     pub kind: Option<ObjectKind>,
@@ -239,14 +239,10 @@ pub enum Camera {
     Perspective {
         /// FOV vertical, em graus.
         fov: f32,
-        /// Largura/altura da imagem.
-        aspect: f32,
         near: f32,
         far: f32,
     },
     Orthographic {
-        /// Largura do volume de visão, em unidades.
-        width: f32,
         /// Altura do volume de visão, em unidades.
         height: f32,
         near: f32,
@@ -264,13 +260,22 @@ impl Camera {
             return None;
         }
 
+        let aspect = width as f32 / height as f32;
+
         let (ndc_x, ndc_y) = match *self {
-            Camera::Perspective { fov, aspect, .. } => {
+            Camera::Perspective { fov, .. } => {
                 let half_height = (fov.to_radians() * 0.5).tan();
 
                 (x / (z * half_height * aspect), y / (z * half_height))
             }
-            Camera::Orthographic { width, height, .. } => (x / (width * 0.5), y / (height * 0.5)),
+            Camera::Orthographic {
+                height: view_height,
+                ..
+            } => {
+                let half_height = view_height * 0.5;
+
+                (x / (half_height * aspect), y / half_height)
+            }
         };
 
         Some(Vec3::new(
@@ -288,11 +293,11 @@ impl Camera {
         }
     }
 
-    pub fn frustum(&self) -> [Plane; 6] {
+    pub fn frustum(&self, aspect: f32) -> [Plane; 6] {
         let (near, far) = self.clip_planes();
 
         let sides = match *self {
-            Camera::Perspective { fov, aspect, .. } => {
+            Camera::Perspective { fov, .. } => {
                 let half_height = (fov.to_radians() * 0.5).tan();
                 let half_width = half_height * aspect;
 
@@ -303,12 +308,17 @@ impl Camera {
                     Plane::new(Vec3::new(0.0, -1.0, half_height), 0.0),
                 ]
             }
-            Camera::Orthographic { width, height, .. } => [
-                Plane::new(Vec3::new(1.0, 0.0, 0.0), width * 0.5),
-                Plane::new(Vec3::new(-1.0, 0.0, 0.0), width * 0.5),
-                Plane::new(Vec3::new(0.0, 1.0, 0.0), height * 0.5),
-                Plane::new(Vec3::new(0.0, -1.0, 0.0), height * 0.5),
-            ],
+            Camera::Orthographic { height, .. } => {
+                let half_height = height * 0.5;
+                let half_width = half_height * aspect;
+
+                [
+                    Plane::new(Vec3::new(1.0, 0.0, 0.0), half_width),
+                    Plane::new(Vec3::new(-1.0, 0.0, 0.0), half_width),
+                    Plane::new(Vec3::new(0.0, 1.0, 0.0), half_height),
+                    Plane::new(Vec3::new(0.0, -1.0, 0.0), half_height),
+                ]
+            }
         };
 
         [
@@ -361,7 +371,7 @@ impl Light {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Channel<T> {
     Constant(T),
     Map(Arc<Texture>),
@@ -418,7 +428,7 @@ pub struct MaterialSample {
     pub refractive_index: f32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Material {
     /// Cor da superfície. Para dielétricos é a cor do brilho difuso; para metais é a cor do
     /// brilho especular.
@@ -429,8 +439,12 @@ pub struct Material {
     pub roughness: Channel<f32>,
     /// Luz que a superfície emite, independente de luzes externas.
     pub emissive: Channel<Rgb>,
+    /// Fator que multiplica `emissive`.
+    pub emissive_strength: f32,
     /// Mapa de normais, ou `None` para usar a normal geométrica.
     pub normal: Option<Arc<Texture>>,
+    /// Fator que multiplica os componentes x e y dos texels do normal map.
+    pub normal_scale: f32,
     /// ~1 para superfícies transparentes, 0 para superfícies opacas.
     pub transparency: f32,
     /// Índice de refração. ~1.5 para vidro.
@@ -445,6 +459,8 @@ impl Default for Material {
             roughness: Channel::Constant(0.5),
             emissive: Channel::Constant(Rgb::BLACK),
             normal: None,
+            normal_scale: 1.0,
+            emissive_strength: 1.0,
             transparency: 0.0,
             refractive_index: 1.5,
         }
@@ -478,6 +494,10 @@ impl Material {
     }
 
     pub fn is_emissive(&self) -> bool {
+        if self.emissive_strength <= 0.0 {
+            return false;
+        }
+
         match &self.emissive {
             Channel::Constant(color) => *color != Rgb::BLACK,
             Channel::Map(_) => true,
@@ -500,7 +520,8 @@ impl Material {
                 .roughness
                 .sample(uv, footprint, texture_filtering)
                 .clamp(0.045, 1.0),
-            emission: self.emissive.sample(uv, footprint, texture_filtering),
+            emission: self.emissive.sample(uv, footprint, texture_filtering)
+                * self.emissive_strength,
             transparency: self.transparency.clamp(0.0, 1.0),
             // Abaixo de 1 seria o material sendo o meio menos denso.
             refractive_index: self.refractive_index.max(1.0),
@@ -548,8 +569,8 @@ impl Material {
                 .sample(uv, footprint, texture_filtering);
 
             Vec3::new(
-                texel.r * 2.0 - 1.0,
-                texel.g * 2.0 - 1.0,
+                (texel.r * 2.0 - 1.0) * self.normal_scale,
+                (texel.g * 2.0 - 1.0) * self.normal_scale,
                 texel.b * 2.0 - 1.0,
             )
             .normalized()

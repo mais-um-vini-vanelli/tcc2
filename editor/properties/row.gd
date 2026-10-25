@@ -7,15 +7,15 @@ const STEP := 3
 func _ready() -> void:
 	theme_type_variation = &"Row"
 
-	var label := _cell(0) as Label
+	var label_ := label()
 
-	if label != null:
-		label.clip_text = true
-		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	if label_ != null:
+		label_.clip_text = true
+		label_.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 
 func _get_minimum_size() -> Vector2:
-	var name_cell := _cell(0)
-	var value_cell := _cell(1)
+	var name_cell := label()
+	var value_cell := value()
 
 	if name_cell == null or value_cell == null:
 		return Vector2.ZERO
@@ -30,8 +30,8 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_SORT_CHILDREN:
 		return
 
-	var name_cell := _cell(0)
-	var value_cell := _cell(1)
+	var name_cell := label()
+	var value_cell := value()
 
 	if name_cell == null or value_cell == null:
 		return
@@ -53,8 +53,8 @@ func _notification(what: int) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	var name_cell := _cell(0)
-	var value_cell := _cell(1)
+	var name_cell := label()
+	var value_cell := value()
 
 	if name_cell == null or value_cell == null:
 		return
@@ -70,8 +70,17 @@ func _draw() -> void:
 		draw_rect(Rect2(at, y, DOT, DOT), color)
 		at += STEP
 
+func label() -> Label:
+	if get_child_count() <= 0:
+		return null
+
+	return get_child(0) as Control
+
 func value() -> Control:
-	return _cell(1)
+	if get_child_count() <= 1:
+		return null
+
+	return get_child(1) as Control
 
 func _cell(at: int) -> Control:
 	if get_child_count() <= at:
@@ -80,9 +89,9 @@ func _cell(at: int) -> Control:
 	return get_child(at) as Control
 
 func _text_width(cell: Control) -> float:
-	var label := cell as Label
+	var label_ := cell as Label
 
-	if label == null:
+	if label_ == null:
 		return cell.get_minimum_size().x
 
-	return Palette.advance(label, label.text)
+	return Palette.advance(label_, label_.text)

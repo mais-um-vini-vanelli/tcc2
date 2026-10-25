@@ -8,9 +8,8 @@ func bind(form: Form, mat: SceneMaterial) -> void:
 		mat.albedo.rgb,
 		%AlbedoKindRow,
 		%AlbedoConstantRow,
-		%AlbedoFactorRow,
 		%AlbedoSourceRow,
-		%AlbedoImageRow)
+		%AlbedoIndexRow)
 
 	_channel(
 		form,
@@ -18,10 +17,8 @@ func bind(form: Form, mat: SceneMaterial) -> void:
 		mat.metallic.scalar,
 		%MetallicKindRow,
 		%MetallicConstantRow,
-		%MetallicFactorRow,
 		%MetallicSourceRow,
-		%MetallicImageRow,
-		%MetallicChannelRow)
+		%MetallicIndexRow)
 
 	_channel(
 		form,
@@ -29,10 +26,8 @@ func bind(form: Form, mat: SceneMaterial) -> void:
 		mat.roughness.scalar,
 		%RoughnessKindRow,
 		%RoughnessConstantRow,
-		%RoughnessFactorRow,
 		%RoughnessSourceRow,
-		%RoughnessImageRow,
-		%RoughnessChannelRow)
+		%RoughnessIndexRow)
 
 	_channel(
 		form,
@@ -40,26 +35,23 @@ func bind(form: Form, mat: SceneMaterial) -> void:
 		mat.emissive.rgb,
 		%EmissiveKindRow,
 		%EmissiveConstantRow,
-		%EmissiveFactorRow,
 		%EmissiveSourceRow,
-		%EmissiveImageRow)
+		%EmissiveIndexRow)
 
-	form.bind(%NormalSource, mat.normal, ^"source")
-	form.bind(%NormalImage, mat.normal, ^"image")
+	form.bind(%EmissiveStrength, mat, ^"emissive_strength")
 	form.bind(%NormalScale, mat, ^"normal_scale")
+
+	form.asset_picker(%NormalSourceRow, %NormalIndexRow, mat, ^"normal",
+		SceneAssets.Kind.IMAGE)
 
 	var normal := func():
 		if not is_inside_tree():
 			return
 
-		var mapped := not mat.normal.source.is_empty()
-
-		%NormalImageRow.visible = (mapped
-			and mat.normal.source.get_extension().to_lower() == "glb")
-		%NormalScaleRow.visible = mapped
+		%NormalScaleRow.visible = mat.normal >= 0
 
 	normal.call()
-	mat.normal.changed.connect(normal)
+	mat.changed.connect(normal)
 
 	form.bind(%Transparency, mat, ^"transparency")
 	form.bind(%RefractiveIndex, mat, ^"refractive_index")
@@ -70,33 +62,20 @@ func _channel(
 	holder: Object,
 	kind: Row,
 	constant: Row,
-	factor: Row,
 	source: Row,
-	image: Row,
-	channel: Row = null) -> void:
+	entry: Row) -> void:
 	form.bind(kind.value(), value, ^"kind")
 	form.bind(constant.value(), holder, ^"constant")
-	form.bind(factor.value(), holder, ^"factor")
-	form.bind(source.value(), value.texture, ^"source")
-	form.bind(image.value(), value.texture, ^"image")
-
-	if channel != null:
-		form.bind(channel.value(), holder, ^"channel")
 
 	var shown := func():
 		if not is_inside_tree():
 			return
 
-		var textured := value.kind == SceneChannel.Kind.TEXTURE
-
-		constant.visible = not textured
-		factor.visible = textured
-		source.visible = textured
-		image.visible = (textured
-			and value.texture.source.get_extension().to_lower() == "glb")
-
-		if channel != null:
-			channel.visible = textured
+		constant.visible = not value.kind == SceneChannel.Kind.MAP
+		source.visible = value.kind == SceneChannel.Kind.MAP
 
 	shown.call()
 	value.changed.connect(shown)
+
+	value.changed.connect(form.asset_picker(source, entry, value, ^"map",
+		SceneAssets.Kind.IMAGE))

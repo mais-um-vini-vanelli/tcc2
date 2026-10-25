@@ -27,7 +27,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             Object::camera(
                 Camera::Perspective {
                     fov: 50.0,
-                    aspect: LARGURA as f32 / ALTURA as f32,
                     near: 0.1,
                     far: 1000.0,
                 },

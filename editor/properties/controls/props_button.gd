@@ -4,15 +4,15 @@ const ELLIPSIS := "…"
 
 signal path_selected(path: String)
 
-var path: String:
+var label: String:
 	get:
-		return _path
+		return _label
 	set(value):
-		_path = value
+		_label = value
 		_hold()
 
-var _path := ""
-var _file := ""
+var _label := ""
+var _shown := ""
 var _dialog: FileDialog
 
 func _ready() -> void:
@@ -31,28 +31,22 @@ func _ready() -> void:
 		return
 
 	resized.connect(_fit)
-
-	pressed.connect(func():
-		if not _path.is_empty():
-			_dialog.current_path = _path
-
-		_dialog.popup_centered_ratio(0.6))
+	pressed.connect(func(): _dialog.popup_centered_ratio(0.6))
 
 	_dialog.file_selected.connect(func(selected: String):
-		path = selected
 		path_selected.emit(selected))
 
 	_hold()
 
 func _hold() -> void:
-	if not is_node_ready():
+	if not is_inside_tree():
 		return
 
-	_file = _path.get_file() if not _path.is_empty() else "(none)"
+	_shown = _label if not _label.is_empty() else "(none)"
 
-	tooltip_text = _path
+	tooltip_text = _label
 	set_meta(&"wish", get_theme_stylebox(&"normal").get_minimum_size().x
-		+ Palette.advance(self, _file))
+		+ Palette.advance(self, _shown))
 
 	var rows := get_parent()
 
@@ -63,10 +57,10 @@ func _hold() -> void:
 
 func _fit() -> void:
 	var room := size.x - get_theme_stylebox(&"normal").get_minimum_size().x
-	var shown := _file
+	var shown := _shown
 
-	if room > 0.0 and Palette.advance(self, _file) > room:
-		var kept := _file
+	if room > 0.0 and Palette.advance(self, _shown) > room:
+		var kept := _shown
 
 		while not kept.is_empty() and Palette.advance(self, ELLIPSIS + kept) > room:
 			kept = kept.substr(1)

@@ -310,8 +310,10 @@ impl RayTracer {
         let u = 2.0 * (x as f32 + 0.5) / width as f32 - 1.0;
         let v = 1.0 - 2.0 * (y as f32 + 0.5) / height as f32;
 
+        let aspect = width as f32 / height as f32;
+
         match camera_instance.local {
-            Camera::Perspective { fov, aspect, .. } => {
+            Camera::Perspective { fov, .. } => {
                 let half_height = (fov.to_radians() * 0.5).tan();
                 let direction =
                     forward + right * (u * half_height * aspect) + up * (v * half_height);
@@ -319,9 +321,14 @@ impl RayTracer {
                 Ray::new(camera_instance.position, direction)
             }
 
-            Camera::Orthographic { width, height, .. } => {
-                let origem =
-                    camera_instance.position + right * (u * width * 0.5) + up * (v * height * 0.5);
+            Camera::Orthographic {
+                height: view_height,
+                ..
+            } => {
+                let half_height = view_height * 0.5;
+                let origem = camera_instance.position
+                    + right * (u * half_height * aspect)
+                    + up * (v * half_height);
 
                 Ray::new(origem, forward)
             }

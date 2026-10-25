@@ -6,6 +6,8 @@ enum ReflectanceModel {BLINN_PHONG}
 enum BvhSplit {MEDIAN, SAH}
 enum Tonemap {NONE, REINHARD}
 
+var assets := SceneAssets.new()
+
 # TransformOptions
 var transform_method := TransformMethod.STEPWISE
 

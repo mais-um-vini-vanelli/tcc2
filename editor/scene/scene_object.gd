@@ -7,7 +7,7 @@ const ICON_COLOR := Color("#e8eff7")
 const ICON_SCREEN_HEIGHT := 0.04
 
 func _ready() -> void:
-	rotation_order = EULER_ORDER_XYZ
+	rotation_order = EULER_ORDER_ZYX
 
 func set_selected(_value: bool) -> void:
 	pass

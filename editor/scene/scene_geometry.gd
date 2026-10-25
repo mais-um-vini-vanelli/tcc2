@@ -18,22 +18,12 @@ class Cube:
 			half_edge = value
 			geometry._rebuild_preview()
 
-class MeshFile:
+class MeshRef:
 	var geometry: SceneGeometry
 
-	var source: String = "":
+	var index: int = -1:
 		set(value):
-			source = value
-			geometry._rebuild_preview()
-
-	var mesh: int = 0:
-		set(value):
-			mesh = value
-			geometry._rebuild_preview()
-
-	var surface: int = 0:
-		set(value):
-			surface = value
+			index = value
 			geometry._rebuild_preview()
 
 class Triangle:
@@ -61,7 +51,7 @@ var kind: Kind = Kind.SPHERE:
 
 var sphere := Sphere.new()
 var cube := Cube.new()
-var mesh := MeshFile.new()
+var mesh := MeshRef.new()
 var triangle := Triangle.new()
 
 var material: SceneMaterial = SceneMaterial.new():
@@ -163,10 +153,8 @@ func _preview_mesh() -> Mesh:
 			return Tcc2Tessellate.triangle(triangle.a, triangle.b, triangle.c)
 
 		Kind.MESH:
-			if mesh.source.is_empty():
-				return null
-
-			return Assets.surface(mesh.source, mesh.mesh, mesh.surface)
+			var scene := find_scene()
+			return scene.assets.mesh(mesh.index) if scene != null else null
 
 	return Tcc2Tessellate.sphere(sphere.radius)
 
@@ -176,7 +164,8 @@ func _set_preview_mesh(mesh: Mesh) -> void:
 
 func _apply_material() -> void:
 	if _preview_material != null:
-		material.apply_to(_preview_material)
+		var scene := find_scene()
+		material.apply_to(_preview_material, scene.assets if scene != null else null)
 
 func _mask_material() -> StandardMaterial3D:
 	var mask := StandardMaterial3D.new()

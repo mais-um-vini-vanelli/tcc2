@@ -41,7 +41,7 @@ impl Renderer for Rasterizer {
             return result;
         };
 
-        let frustum = camera_instance.local.frustum();
+        let frustum = camera_instance.local.frustum(width as f32 / height as f32);
 
         let state = State {
             camera: &camera_instance,

@@ -65,7 +65,7 @@ selected = 0
 item_count = 2
 popup/item_0/text = "Constant"
 popup/item_0/id = 0
-popup/item_1/text = "Texture"
+popup/item_1/text = "Map"
 popup/item_1/id = 1
 script = ExtResource("props_option_button")
 
@@ -79,22 +79,6 @@ layout_mode = 2
 text = "Constant"
 
 [node name="AlbedoConstant" type="ColorPickerButton" parent="Stack/Body/Albedo/Stack/Body/Rows/AlbedoConstantRow" unique_id=452352535]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(90, 0)
-layout_mode = 2
-edit_alpha = false
-script = ExtResource("props_color_picker_button")
-
-[node name="AlbedoFactorRow" type="Container" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=955668444]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("row")
-
-[node name="AlbedoFactorLabel" type="Label" parent="Stack/Body/Albedo/Stack/Body/Rows/AlbedoFactorRow" unique_id=901000001]
-layout_mode = 2
-text = "Factor"
-
-[node name="AlbedoFactor" type="ColorPickerButton" parent="Stack/Body/Albedo/Stack/Body/Rows/AlbedoFactorRow" unique_id=901000002]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
@@ -124,21 +108,19 @@ access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="AlbedoImageRow" type="Container" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=443148628]
+[node name="AlbedoIndexRow" type="Container" parent="Stack/Body/Albedo/Stack/Body/Rows" unique_id=443148628]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("row")
 
-[node name="AlbedoImageLabel" type="Label" parent="Stack/Body/Albedo/Stack/Body/Rows/AlbedoImageRow" unique_id=154820068]
+[node name="AlbedoIndexLabel" type="Label" parent="Stack/Body/Albedo/Stack/Body/Rows/AlbedoIndexRow" unique_id=154820068]
 layout_mode = 2
-text = "Image"
+text = "Index"
 
-[node name="AlbedoImage" type="SpinBox" parent="Stack/Body/Albedo/Stack/Body/Rows/AlbedoImageRow" unique_id=1507565246]
+[node name="AlbedoIndex" type="OptionButton" parent="Stack/Body/Albedo/Stack/Body/Rows/AlbedoIndexRow" unique_id=1507565246]
 unique_name_in_owner = true
 layout_mode = 2
-rounded = true
-allow_greater = true
-script = ExtResource("props_spin_box")
+script = ExtResource("props_option_button")
 
 [node name="Metallic" type="PanelContainer" parent="Stack/Body" unique_id=902000006]
 layout_mode = 2
@@ -179,7 +161,7 @@ selected = 0
 item_count = 2
 popup/item_0/text = "Constant"
 popup/item_0/id = 0
-popup/item_1/text = "Texture"
+popup/item_1/text = "Map"
 popup/item_1/id = 1
 script = ExtResource("props_option_button")
 
@@ -193,22 +175,6 @@ layout_mode = 2
 text = "Constant"
 
 [node name="MetallicConstant" type="SpinBox" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicConstantRow" unique_id=971425478]
-unique_name_in_owner = true
-layout_mode = 2
-max_value = 1.0
-step = 0.01
-script = ExtResource("props_spin_box")
-
-[node name="MetallicFactorRow" type="Container" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=1115391915]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("row")
-
-[node name="MetallicFactorLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicFactorRow" unique_id=901000003]
-layout_mode = 2
-text = "Factor"
-
-[node name="MetallicFactor" type="SpinBox" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicFactorRow" unique_id=901000004]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 1.0
@@ -238,42 +204,18 @@ access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="MetallicImageRow" type="Container" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=1145223864]
+[node name="MetallicIndexRow" type="Container" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=1145223864]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("row")
 
-[node name="MetallicImageLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicImageRow" unique_id=119684899]
+[node name="MetallicIndexLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicIndexRow" unique_id=119684899]
 layout_mode = 2
-text = "Image"
+text = "Index"
 
-[node name="MetallicImage" type="SpinBox" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicImageRow" unique_id=413285924]
+[node name="MetallicIndex" type="OptionButton" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicIndexRow" unique_id=413285924]
 unique_name_in_owner = true
 layout_mode = 2
-rounded = true
-allow_greater = true
-script = ExtResource("props_spin_box")
-
-[node name="MetallicChannelRow" type="Container" parent="Stack/Body/Metallic/Stack/Body/Rows" unique_id=1352152126]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("row")
-
-[node name="MetallicChannelLabel" type="Label" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicChannelRow" unique_id=1999775596]
-layout_mode = 2
-text = "Channel"
-
-[node name="MetallicChannel" type="OptionButton" parent="Stack/Body/Metallic/Stack/Body/Rows/MetallicChannelRow" unique_id=1183422541]
-unique_name_in_owner = true
-layout_mode = 2
-selected = 0
-item_count = 3
-popup/item_0/text = "Red"
-popup/item_0/id = 0
-popup/item_1/text = "Green"
-popup/item_1/id = 1
-popup/item_2/text = "Blue"
-popup/item_2/id = 2
 script = ExtResource("props_option_button")
 
 [node name="Roughness" type="PanelContainer" parent="Stack/Body" unique_id=902000011]
@@ -315,7 +257,7 @@ selected = 0
 item_count = 2
 popup/item_0/text = "Constant"
 popup/item_0/id = 0
-popup/item_1/text = "Texture"
+popup/item_1/text = "Map"
 popup/item_1/id = 1
 script = ExtResource("props_option_button")
 
@@ -329,22 +271,6 @@ layout_mode = 2
 text = "Constant"
 
 [node name="RoughnessConstant" type="SpinBox" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessConstantRow" unique_id=31683741]
-unique_name_in_owner = true
-layout_mode = 2
-max_value = 1.0
-step = 0.01
-script = ExtResource("props_spin_box")
-
-[node name="RoughnessFactorRow" type="Container" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=645630353]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("row")
-
-[node name="RoughnessFactorLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessFactorRow" unique_id=901000005]
-layout_mode = 2
-text = "Factor"
-
-[node name="RoughnessFactor" type="SpinBox" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessFactorRow" unique_id=901000006]
 unique_name_in_owner = true
 layout_mode = 2
 max_value = 1.0
@@ -374,42 +300,18 @@ access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="RoughnessImageRow" type="Container" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=820083340]
+[node name="RoughnessIndexRow" type="Container" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=820083340]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("row")
 
-[node name="RoughnessImageLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessImageRow" unique_id=1874149221]
+[node name="RoughnessIndexLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessIndexRow" unique_id=1874149221]
 layout_mode = 2
-text = "Image"
+text = "Index"
 
-[node name="RoughnessImage" type="SpinBox" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessImageRow" unique_id=1439108933]
+[node name="RoughnessIndex" type="OptionButton" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessIndexRow" unique_id=1439108933]
 unique_name_in_owner = true
 layout_mode = 2
-rounded = true
-allow_greater = true
-script = ExtResource("props_spin_box")
-
-[node name="RoughnessChannelRow" type="Container" parent="Stack/Body/Roughness/Stack/Body/Rows" unique_id=713081195]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("row")
-
-[node name="RoughnessChannelLabel" type="Label" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessChannelRow" unique_id=1628250698]
-layout_mode = 2
-text = "Channel"
-
-[node name="RoughnessChannel" type="OptionButton" parent="Stack/Body/Roughness/Stack/Body/Rows/RoughnessChannelRow" unique_id=1916468523]
-unique_name_in_owner = true
-layout_mode = 2
-selected = 0
-item_count = 3
-popup/item_0/text = "Red"
-popup/item_0/id = 0
-popup/item_1/text = "Green"
-popup/item_1/id = 1
-popup/item_2/text = "Blue"
-popup/item_2/id = 2
 script = ExtResource("props_option_button")
 
 [node name="Emissive" type="PanelContainer" parent="Stack/Body" unique_id=902000016]
@@ -451,7 +353,7 @@ selected = 0
 item_count = 2
 popup/item_0/text = "Constant"
 popup/item_0/id = 0
-popup/item_1/text = "Texture"
+popup/item_1/text = "Map"
 popup/item_1/id = 1
 script = ExtResource("props_option_button")
 
@@ -465,22 +367,6 @@ layout_mode = 2
 text = "Constant"
 
 [node name="EmissiveConstant" type="ColorPickerButton" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveConstantRow" unique_id=221697403]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(90, 0)
-layout_mode = 2
-edit_alpha = false
-script = ExtResource("props_color_picker_button")
-
-[node name="EmissiveFactorRow" type="Container" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=192901660]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("row")
-
-[node name="EmissiveFactorLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveFactorRow" unique_id=901000007]
-layout_mode = 2
-text = "Factor"
-
-[node name="EmissiveFactor" type="ColorPickerButton" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveFactorRow" unique_id=901000008]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
@@ -510,19 +396,34 @@ access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="EmissiveImageRow" type="Container" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=1000687316]
+[node name="EmissiveIndexRow" type="Container" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=1000687316]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("row")
 
-[node name="EmissiveImageLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveImageRow" unique_id=676696305]
+[node name="EmissiveIndexLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveIndexRow" unique_id=676696305]
 layout_mode = 2
-text = "Image"
+text = "Index"
 
-[node name="EmissiveImage" type="SpinBox" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveImageRow" unique_id=1555059943]
+[node name="EmissiveIndex" type="OptionButton" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveIndexRow" unique_id=1555059943]
 unique_name_in_owner = true
 layout_mode = 2
-rounded = true
+script = ExtResource("props_option_button")
+
+[node name="EmissiveStrengthRow" type="Container" parent="Stack/Body/Emissive/Stack/Body/Rows" unique_id=903000001]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("row")
+
+[node name="EmissiveStrengthLabel" type="Label" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveStrengthRow" unique_id=903000002]
+layout_mode = 2
+text = "Strength"
+
+[node name="EmissiveStrength" type="SpinBox" parent="Stack/Body/Emissive/Stack/Body/Rows/EmissiveStrengthRow" unique_id=903000003]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 64.0
+step = 0.1
 allow_greater = true
 script = ExtResource("props_spin_box")
 
@@ -572,21 +473,19 @@ access = 2
 filters = PackedStringArray("*.glb", "*.png", "*.jpg", "*.jpeg")
 use_native_dialog = true
 
-[node name="NormalImageRow" type="Container" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=229977382]
+[node name="NormalIndexRow" type="Container" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=229977382]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("row")
 
-[node name="NormalImageLabel" type="Label" parent="Stack/Body/Normal/Stack/Body/Rows/NormalImageRow" unique_id=365484368]
+[node name="NormalIndexLabel" type="Label" parent="Stack/Body/Normal/Stack/Body/Rows/NormalIndexRow" unique_id=365484368]
 layout_mode = 2
-text = "Image"
+text = "Index"
 
-[node name="NormalImage" type="SpinBox" parent="Stack/Body/Normal/Stack/Body/Rows/NormalImageRow" unique_id=887984515]
+[node name="NormalIndex" type="OptionButton" parent="Stack/Body/Normal/Stack/Body/Rows/NormalIndexRow" unique_id=887984515]
 unique_name_in_owner = true
 layout_mode = 2
-rounded = true
-allow_greater = true
-script = ExtResource("props_spin_box")
+script = ExtResource("props_option_button")
 
 [node name="NormalScaleRow" type="Container" parent="Stack/Body/Normal/Stack/Body/Rows" unique_id=402151551]
 unique_name_in_owner = true

@@ -18,8 +18,7 @@ func _build() -> void:
 		row.visible = kind == SceneGeometry.Kind.TRIANGLE
 
 	%SourceRow.visible = from_file
-	%MeshRow.visible = from_file
-	%SurfaceRow.visible = from_file
+	%IndexRow.visible = from_file
 
 	match kind:
 		SceneGeometry.Kind.SPHERE:
@@ -37,9 +36,7 @@ func _build() -> void:
 			bind(%CY, model, ^"c:y")
 			bind(%CZ, model, ^"c:z")
 		SceneGeometry.Kind.MESH:
-			bind(%Source, model, ^"source")
-			bind(%Mesh, model, ^"mesh")
-			bind(%Surface, model, ^"surface")
+			asset_picker(%SourceRow, %IndexRow, model, ^"index", SceneAssets.Kind.MESH)
 
 	%Transform.bind(self, geometry)
 	%Material.bind(self, geometry.material)

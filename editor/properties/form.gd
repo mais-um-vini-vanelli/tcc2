@@ -50,20 +50,66 @@ func bind(control: Node, object: Object, property: NodePath) -> void:
 		_sync.append(func(): menu.selected = object.get_indexed(property))
 
 	elif control is PropsColorPickerButton:
-		var picker := control as PropsColorPickerButton
-		picker.color = object.get_indexed(property)
-		picker.color_changed.connect(func(c: Color): object.set_indexed(property, c))
-		_sync.append(func(): picker.color = object.get_indexed(property))
-
-	elif control is PropsButton:
-		var button := control as PropsButton
-		button.path = object.get_indexed(property)
-		button.path_selected.connect(func(path: String):
-			object.set_indexed(property, path))
-		_sync.append(func(): button.path = object.get_indexed(property))
+		var color_button := control as PropsColorPickerButton
+		color_button.color = object.get_indexed(property)
+		color_button.color_changed.connect(func(c: Color): object.set_indexed(property, c))
+		_sync.append(func(): color_button.color = object.get_indexed(property))
 
 	else:
 		push_error("%s cannot carry %s" % [control.name, property])
+
+func asset_picker(source: Row, index: Row, object: Object, property: NodePath,
+		kind: SceneAssets.Kind) -> Callable:
+	var source_button := source.value() as PropsButton
+	var index_button := index.value() as PropsOptionButton
+
+	if source_button == null or index_button == null:
+		push_error("%s is not an asset picker" % source.name)
+		return func(): pass
+
+	var show_ := func():
+		var scene: SceneRoot = node.find_scene() if node != null else null
+		var assets := scene.assets if scene != null else null
+
+		if assets == null:
+			return
+
+		var index_: int = object.get_indexed(property)
+		var siblings := assets.siblings(kind, index_)
+
+		source_button.label = assets.file(kind, index_)
+		index_button.clear()
+
+		for i in siblings.size():
+			index_button.add_item(assets.entry(kind, siblings[i]))
+			index_button.set_item_id(i, siblings[i])
+
+			if siblings[i] == index_:
+				index_button.selected = i
+
+		index.visible = source.visible and siblings.size() > 1
+
+	index_button.item_selected.connect(func(at: int):
+		object.set_indexed(property, index_button.get_item_id(at)))
+
+	source_button.path_selected.connect(func(path: String):
+		var scene: SceneRoot = node.find_scene() if node != null else null
+		var assets := scene.assets if scene != null else null
+
+		if assets == null:
+			return
+
+		var index_: int = Import.images(path, assets) \
+			if kind == SceneAssets.Kind.IMAGE else Import.meshes(path, assets)
+
+		if index_ >= 0:
+			object.set_indexed(property, index_)
+			show_.call())
+
+	show_.call()
+	_sync.append(show_)
+
+	return show_
 
 func _holds(object: Object, property: NodePath) -> bool:
 	if object.get_indexed(property) != null:

@@ -2,7 +2,7 @@ use godot::classes::ArrayMesh;
 use godot::classes::mesh::{ArrayType, PrimitiveType};
 use godot::prelude::*;
 
-use tcc2::prelude::{Geometry, Mesh as Tcc2Mesh, Vec3};
+use tcc2::prelude::{Geometry, Mesh as Tcc2Mesh, Rgb, Vec3};
 
 struct Tcc2Godot;
 
@@ -72,4 +72,45 @@ fn surface(mesh: &Tcc2Mesh) -> Gd<ArrayMesh> {
     let mut mesh = ArrayMesh::new_gd();
     mesh.add_surface_from_arrays(PrimitiveType::TRIANGLES, &arrays);
     mesh
+}
+
+#[derive(GodotClass)]
+#[class(no_init, base = Object)]
+struct Tcc2Bake;
+
+#[godot_api]
+impl Tcc2Bake {
+    #[func]
+    fn apply_rgb_factor(data: PackedByteArray, factor: Color) -> PackedByteArray {
+        let source = data.as_slice();
+        let factor = Rgb::new(factor.r, factor.g, factor.b);
+
+        let mut result = Vec::with_capacity(source.len());
+
+        for texel in source.chunks_exact(4) {
+            let color = Rgb::from_srgb([texel[0], texel[1], texel[2]]) * factor;
+
+            result.extend_from_slice(&color.to_srgb());
+            result.push(texel[3]);
+        }
+
+        PackedByteArray::from(result.as_slice())
+    }
+
+    #[func]
+    fn apply_scalar_factor(data: PackedByteArray, channel: i64, factor: f32) -> PackedByteArray {
+        let source = data.as_slice();
+        let mut result = Vec::with_capacity(source.len() / 4);
+
+        for texel in source.chunks_exact(4) {
+            let level = match channel {
+                0..=3 => texel[channel as usize] as u32,
+                _ => (texel[0] as u32 + texel[1] as u32 + texel[2] as u32) / 3,
+            };
+
+            result.push(((level as f32 / 255.0 * factor).clamp(0.0, 1.0) * 255.0 + 0.5) as u8);
+        }
+
+        PackedByteArray::from(result.as_slice())
+    }
 }

@@ -7,25 +7,17 @@ edition = "2024"
 members = ["godot"]
 
 [features]
-glb = ["dep:gltf", "dep:serde_json", "dep:image"]
+format = ["dep:serde_json", "dep:image"]
 
 [dependencies]
-gltf = { version = "1.4.1", optional = true, features = [
-    "extensions",
-    "KHR_lights_punctual",
-    "KHR_materials_transmission",
-    "KHR_materials_ior",
-    "KHR_materials_emissive_strength",
-] }
 serde_json = { version = "1", optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = [
     "png",
 ] }
 
 [dev-dependencies]
-gltf = { version = "1.4.1", features = ["KHR_materials_transmission", "KHR_materials_ior"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 [[example]]
 name = "formato"
-required-features = ["glb"]
+required-features = ["format"]

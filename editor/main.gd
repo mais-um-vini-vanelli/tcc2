@@ -84,7 +84,7 @@ func _ready() -> void:
 	save_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	save_dialog.title = "Save scene"
 	save_dialog.use_native_dialog = true
-	save_dialog.add_filter("*.tcc2.glb", "glTF binary")
+	save_dialog.add_filter("*.tcc2", "tcc2 scene")
 	save_dialog.file_selected.connect(_save_scene)
 	add_child(save_dialog)
 
@@ -93,12 +93,12 @@ func _ready() -> void:
 	open_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	open_dialog.title = "Open scene"
 	open_dialog.use_native_dialog = true
-	open_dialog.add_filter("*.tcc2.glb", "glTF binary")
+	open_dialog.add_filter("*.tcc2", "tcc2 scene")
 	open_dialog.file_selected.connect(_open_scene)
 	add_child(open_dialog)
 
 	var on_save_pressed := func() -> void:
-		save_dialog.current_file = root.name + ".tcc2.glb"
+		save_dialog.current_file = root.name + ".tcc2"
 		save_dialog.popup_centered_ratio(0.6)
 
 	save.pressed.connect(on_save_pressed)
@@ -179,11 +179,11 @@ func _on_pixel_picked(x: int, y: int) -> void:
 	toast.report("PICKED PIXEL", picked)
 
 func _save_scene(path: String) -> void:
-	if path.get_extension().to_lower() != "glb":
-		path += ".glb"
+	if path.get_extension().to_lower() != "tcc2":
+		path += ".tcc2"
 
 	var warnings: Array[String] = []
-	var bytes := Export.glb(root, warnings)
+	var bytes := Write.to_tcc2(root, warnings)
 
 	var file := FileAccess.open(path, FileAccess.WRITE)
 
@@ -197,14 +197,16 @@ func _save_scene(path: String) -> void:
 
 	toast.report("SAVE WARNINGS", warnings)
 
-	root.name = path.get_file().get_basename().trim_suffix(".tcc2")
+	root.name = path.get_file().get_basename()
 	hierarchy.rename(root)
 
 func _open_scene(path: String) -> void:
 	var warnings: Array[String] = []
-	var opened := Import.glb(path, true, warnings)
+	var opened := SceneRoot.new()
+	opened.name = path.get_file().get_basename()
 
-	if opened == null:
+	if not Read.from_tcc2(path, opened, warnings):
+		opened.free()
 		return
 
 	toast.report("OPEN WARNINGS", warnings)
@@ -213,16 +215,8 @@ func _open_scene(path: String) -> void:
 	scene_view.remove_child(root)
 	root.queue_free()
 
-	root = SceneRoot.new()
-	root.name = path.get_file().get_basename().trim_suffix(".tcc2")
+	root = opened
 	scene_view.add_child(root)
-
-	for child in opened.get_children():
-		opened.remove_child(child)
-		root.add_child(child)
-
-	opened.free()
-	Import.parameters(path, root)
 
 	_rebuild()
 	hierarchy.select(root)
@@ -234,7 +228,7 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 		if file.get_extension().to_lower() != "glb":
 			continue
 
-		var group := Import.glb(file, true, warnings)
+		var group := Import.glb(file, true, root.assets, warnings)
 
 		if group == null:
 			continue

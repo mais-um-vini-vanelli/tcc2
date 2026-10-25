@@ -15,7 +15,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             Object::camera(
                 Camera::Perspective {
                     fov: 60.0,
-                    aspect: 4.0 / 3.0,
                     near: 0.1,
                     far: 100.0,
                 },

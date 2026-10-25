@@ -1,8 +1,8 @@
 mod bvh;
 mod overlay;
 
-#[cfg(feature = "glb")]
-pub mod glb;
+#[cfg(feature = "format")]
+pub mod format;
 
 pub mod color;
 pub mod geometry;

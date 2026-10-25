@@ -110,11 +110,9 @@ static func _exports_mesh(node: SceneGeometry) -> bool:
 	if node.kind != SceneGeometry.Kind.MESH:
 		return true
 
-	if node.mesh.source.is_empty():
-		return false
+	var scene := node.find_scene()
 
-	return Assets.surface(node.mesh.source, node.mesh.mesh,
-		node.mesh.surface) != null
+	return scene != null and scene.assets.mesh(node.mesh.index) != null
 
 ## The nearest mesh face along the ray, as {"node": ..., "face": ...}.
 func _pick(mouse: Vector2) -> Dictionary:
