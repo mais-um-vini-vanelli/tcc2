@@ -2,12 +2,13 @@ class_name ViewportPane extends SubViewportContainer
 
 const HANDLE_HALF := 0.15
 
-enum Mode {EDIT, POV, PICK_TRIANGLE, PICK_PIXEL}
+enum Mode {EDIT, POV, PICK_TRIANGLE, BVH, TRACE_RAY}
 
 signal scene_object_selected(node: SceneObject)
 signal gizmo_moved
-signal triangle_picked(node: SceneGeometry, instance: int, face: int)
-signal pixel_picked(x: int, y: int)
+signal triangle_reported(lines: Array[String])
+signal bvh_reported(lines: Array[String])
+signal rays_reported(lines: Array[String])
 
 @onready var camera_3d: Camera3D = $SceneView/Camera3D
 @onready var scene_view: SubViewport = $SceneView
@@ -15,10 +16,13 @@ signal pixel_picked(x: int, y: int)
 
 var _gizmo: TransformGizmo
 var _picker: TrianglePicker
+var _steps: TriangleSteps
 var _target: SceneObject
 var _pov: CameraPov
 var _pixels: PixelPicker
 var _nav: CameraNav
+var _bvh: BvhBoxes
+var _rays: RayTrace
 var _mode := Mode.EDIT
 
 var overlay: Control
@@ -36,8 +40,13 @@ func _ready() -> void:
 	_picker = TrianglePicker.new()
 	_picker.camera = camera_3d
 	_picker.scene_view = scene_view
-	_picker.picked.connect(triangle_picked.emit)
+	_picker.picked.connect(_on_picker_picked)
 	scene_view.add_child(_picker)
+
+	_steps = TriangleSteps.new()
+	_steps.scene_view = scene_view
+	_steps.reported.connect(triangle_reported.emit)
+	scene_view.add_child(_steps)
 
 	_pov = CameraPov.new()
 	_pov.scene_view = scene_view
@@ -48,13 +57,23 @@ func _ready() -> void:
 	_pixels = PixelPicker.new()
 	_pixels.container = self
 	_pixels.scene_view = scene_view
-	_pixels.picked.connect(pixel_picked.emit)
+	_pixels.picked.connect(_on_pixels_picked)
 	add_child(_pixels)
 
 	_nav = CameraNav.new()
 	_nav.camera = camera_3d
 	_nav.container = self
 	add_child(_nav)
+
+	_bvh = BvhBoxes.new()
+	_bvh.scene_view = scene_view
+	_bvh.reported.connect(bvh_reported.emit)
+	scene_view.add_child(_bvh)
+
+	_rays = RayTrace.new()
+	_rays.scene_view = scene_view
+	_rays.reported.connect(rays_reported.emit)
+	scene_view.add_child(_rays)
 
 func _input(event: InputEvent) -> void:
 	var over := _over_viewport()
@@ -67,14 +86,19 @@ func _input(event: InputEvent) -> void:
 			focused.release_focus()
 
 	match _mode:
-		Mode.PICK_PIXEL:
-			_pixel_input(event, over)
 		Mode.PICK_TRIANGLE:
 			_triangle_input(event, over)
 		Mode.POV:
 			pass # The render camera owns the pane: the mouse does nothing.
+		Mode.BVH:
+			_bvh_input(event, over)
+		Mode.TRACE_RAY:
+			_trace_input(event, over)
 		Mode.EDIT:
 			_edit_input(event, over)
+
+	if button != null and over and _mode != Mode.EDIT:
+		get_viewport().set_input_as_handled()
 
 func _pixel_input(event: InputEvent, over: bool) -> void:
 	if event is InputEventMouseMotion:
@@ -90,6 +114,10 @@ func _pixel_input(event: InputEvent, over: bool) -> void:
 			get_viewport().set_input_as_handled()
 
 func _triangle_input(event: InputEvent, over: bool) -> void:
+	if not _picker.is_active():
+		_nav_input(event, over)
+		return
+
 	if event is InputEventMouseMotion:
 		if over:
 			_picker.hover(get_local_mouse_position())
@@ -101,6 +129,27 @@ func _triangle_input(event: InputEvent, over: bool) -> void:
 		if over and button.button_index == MOUSE_BUTTON_LEFT and button.pressed:
 			_picker.click(get_local_mouse_position())
 			get_viewport().set_input_as_handled()
+
+func _bvh_input(event: InputEvent, over: bool) -> void:
+	if get_viewport().gui_get_focus_owner() == null and _bvh.handle(event):
+		get_viewport().set_input_as_handled()
+		return
+
+	_nav_input(event, over)
+
+func _trace_input(event: InputEvent, over: bool) -> void:
+	if _pixels.is_active():
+		_pixel_input(event, over)
+		return
+
+	_nav_input(event, over)
+
+func _on_picker_picked(_node: SceneGeometry, instance: int, face: int) -> void:
+	_steps.show_triangle(instance, face)
+
+func _on_pixels_picked(x: int, y: int) -> void:
+	_pov.set_active(false)
+	_rays.trace(x, y)
 
 func _edit_input(event: InputEvent, over: bool) -> void:
 	if _nav_input(event, over):
@@ -173,17 +222,20 @@ func set_mode(mode: Mode) -> void:
 	_mode = mode
 	_cancel_mouse()
 
-	var pov := mode == Mode.POV or mode == Mode.PICK_PIXEL
+	var pov := mode == Mode.POV or mode == Mode.TRACE_RAY
 
 	_pov.set_active(pov)
 	_picker.set_active(mode == Mode.PICK_TRIANGLE)
-	_pixels.set_active(mode == Mode.PICK_PIXEL)
+	_steps.set_active(mode == Mode.PICK_TRIANGLE)
+	_pixels.set_active(mode == Mode.TRACE_RAY)
+	_bvh.set_active(mode == Mode.BVH)
+	_rays.set_active(mode == Mode.TRACE_RAY)
 	outline.set_enabled(not pov)
 
 	set_target(_target)
 
 func refresh_pov() -> void:
-	if _mode == Mode.POV or _mode == Mode.PICK_PIXEL:
+	if _mode == Mode.POV:
 		_pov.set_active(true)
 
 func set_target(node: SceneObject) -> void:

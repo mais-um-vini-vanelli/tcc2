@@ -7,5 +7,5 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-tcc2 = { path = ".." }
+tcc2 = { path = "..", features = ["format"] }
 godot = "0.5"

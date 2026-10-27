@@ -501,14 +501,8 @@ static func parameters(path: String, scene: SceneRoot) -> bool:
 	scene.shadows = tracing.get("shadows", scene.shadows)
 	scene.reflections = tracing.get("reflections", scene.reflections)
 	scene.refractions = tracing.get("refractions", scene.refractions)
-
-	var acceleration: Dictionary = tracing.get("acceleration", {})
-	scene.bvh_enabled = acceleration.get("enabled", scene.bvh_enabled)
-	scene.bvh_split = pick.call(["median", "sah"], acceleration.get("bvh_split"),
-		scene.bvh_split)
-
-	var wireframe: Variant = acceleration.get("wireframe")
-	scene.bvh_wireframe = int(wireframe) if wireframe != null else scene.bvh_wireframe
+	scene.acceleration = pick.call(["brute_force", "bvh_median", "bvh_sah"],
+		tracing.get("acceleration"), scene.acceleration)
 
 	var output: Dictionary = preset.get("output", {})
 	scene.width = int(output.get("width", scene.width))

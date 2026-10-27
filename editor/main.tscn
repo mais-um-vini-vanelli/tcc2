@@ -8,7 +8,8 @@
 [ext_resource type="Texture2D" uid="uid://ctshpsj27tbhc" path="res://icons/Save.svg" id="6_save"]
 [ext_resource type="Texture2D" uid="uid://b2l7jbc35yr0l" path="res://icons/Preview.svg" id="8_5vw27"]
 [ext_resource type="Texture2D" uid="uid://bqk3f7x2pickt" path="res://icons/PickTriangle.svg" id="9_pick"]
-[ext_resource type="Texture2D" uid="uid://cwm5r8t3pixel" path="res://icons/PickPixel.svg" id="10_pixel"]
+[ext_resource type="Texture2D" path="res://icons/Bvh.svg" id="16_bvh"]
+[ext_resource type="Texture2D" path="res://icons/TraceRay.svg" id="17_ray"]
 [ext_resource type="Script" uid="uid://d8wcuot44any" path="res://viewport/selection_outline.gd" id="11_outline"]
 [ext_resource type="Shader" uid="uid://cawc737o78bm0" path="res://viewport/selection_outline.gdshader" id="12_outline"]
 [ext_resource type="Script" uid="uid://cdrfivfqwl5dj" path="res://hierarchy/hierarchy.gd" id="13_hier"]
@@ -19,6 +20,7 @@
 background_mode = 1
 background_color = Color(0.050980393, 0.06666667, 0.078431375, 1)
 ambient_light_source = 2
+ssr_enabled = true
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_grid"]
 material = ExtResource("3_lquwl")
@@ -257,23 +259,27 @@ theme_type_variation = &"OverlayButton"
 toggle_mode = true
 icon = ExtResource("9_pick")
 
-[node name="PickPixel" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=1450977786]
+[node name="Bvh" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=1450977787]
 layout_mode = 2
-tooltip_text = "Pick a pixel of the render"
+tooltip_text = "Draw the BVH boxes"
 mouse_default_cursor_shape = 2
 theme_type_variation = &"OverlayButton"
 toggle_mode = true
-icon = ExtResource("10_pixel")
+icon = ExtResource("16_bvh")
+
+[node name="TraceRay" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=1450977788]
+layout_mode = 2
+tooltip_text = "Trace the rays through a pixel of the render"
+mouse_default_cursor_shape = 2
+theme_type_variation = &"OverlayButton"
+toggle_mode = true
+icon = ExtResource("17_ray")
 
 [node name="Help" type="Button" parent="Layout/Viewport/Overlay/Panel/VBoxContainer" unique_id=1612316582]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
-tooltip_text = "	LMB: select
-RMB hold + WASD/QE: fly
-Space + LMB drag: pan
-Drag and drop .glb file: import"
+tooltip_text = "Controls"
 theme_type_variation = &"OverlayButton"
-disabled = true
 text = "?"
 
 [node name="Toast" type="PanelContainer" parent="Layout/Viewport/Overlay" unique_id=1612316590]

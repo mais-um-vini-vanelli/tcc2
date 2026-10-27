@@ -3,7 +3,7 @@ class_name SceneRoot extends SceneObject
 enum TransformMethod {STEPWISE}
 enum TextureFilter {NEAREST, BILINEAR, MIPMAP_BILINEAR, TRILINEAR}
 enum ReflectanceModel {BLINN_PHONG}
-enum BvhSplit {MEDIAN, SAH}
+enum Acceleration {BRUTE_FORCE, BVH_MEDIAN, BVH_SAH}
 enum Tonemap {NONE, REINHARD}
 
 var assets := SceneAssets.new()
@@ -25,11 +25,7 @@ var max_depth := 5
 var shadows := true
 var reflections := true
 var refractions := true
-
-# RayTracingOptions::acceleration
-var bvh_enabled := true
-var bvh_split := BvhSplit.SAH
-var bvh_wireframe := 0
+var acceleration := Acceleration.BVH_SAH
 
 # OutputOptions
 var width := 800

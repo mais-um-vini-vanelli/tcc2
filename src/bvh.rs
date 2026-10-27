@@ -3,13 +3,11 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::color::Rgb;
 use crate::geometry::{Geometry, Hit};
 use crate::math::{Aabb, Ray, Vec3};
-use crate::overlay;
-use crate::parameters::{BvhSplit, TransformMethod};
-use crate::render::{ColorBuffer, RayTracingResult};
-use crate::scene::{CameraInstance, GeometryInstance};
+use crate::parameters::{Acceleration, TransformMethod};
+use crate::render::RayTracingResult;
+use crate::scene::GeometryInstance;
 
 const BOX_COST: f32 = 0.5;
 const PRIMITIVE_COST: f32 = 1.0;
@@ -23,7 +21,7 @@ pub struct AccelerationStructures {
 impl AccelerationStructures {
     pub fn build(
         geometry_instances: &[GeometryInstance],
-        bvh_split: BvhSplit,
+        acceleration: Acceleration,
         transform_method: TransformMethod,
         stats: &RefCell<RayTracingResult>,
     ) -> AccelerationStructures {
@@ -52,7 +50,7 @@ impl AccelerationStructures {
                                         })
                                     })
                                     .collect(),
-                                bvh_split,
+                                acceleration,
                             ))
                         }),
                 ))
@@ -78,7 +76,7 @@ impl AccelerationStructures {
             .collect();
 
         let acceleration_structures = AccelerationStructures {
-            tlas: Bvh::build(items, bvh_split),
+            tlas: Bvh::build(items, acceleration),
             blas,
         };
 
@@ -100,34 +98,6 @@ impl AccelerationStructures {
             .unwrap_or(0);
 
         (self.tlas.depth(), blas)
-    }
-
-    /// Desenha as caixas da TLAS e das BLAS até `profundidade`, uma cor por nível.
-    pub fn wireframe(
-        &self,
-        camera_instance: &CameraInstance,
-        geometry_instances: &[GeometryInstance],
-        transform_method: TransformMethod,
-        max_depth: u32,
-        buffer: &mut ColorBuffer,
-    ) {
-        const COLORS: [Rgb; 6] = [
-            Rgb::new(1.0, 1.00, 1.0),
-            Rgb::new(1.0, 0.85, 0.2),
-            Rgb::new(0.3, 1.00, 0.4),
-            Rgb::new(0.3, 0.80, 1.0),
-            Rgb::new(0.8, 0.40, 1.0),
-            Rgb::new(1.0, 0.40, 0.4),
-        ];
-
-        for (level, corners) in self.aabbs(geometry_instances, transform_method, max_depth) {
-            overlay::draw_box(
-                camera_instance,
-                corners,
-                COLORS[(level.max(1) - 1) as usize % COLORS.len()],
-                buffer,
-            );
-        }
     }
 
     pub fn closest_hit(
@@ -181,7 +151,7 @@ impl AccelerationStructures {
     }
 
     /// As AABBs dos nós da TLAS e da BLAS até `profundidade`.
-    fn aabbs(
+    pub fn aabbs(
         &self,
         geometry_instances: &[GeometryInstance],
         transform_method: TransformMethod,
@@ -265,7 +235,7 @@ impl Bucket {
 }
 
 impl Bvh {
-    fn build(mut items: Vec<BvhNodeItem>, split: BvhSplit) -> Bvh {
+    fn build(mut items: Vec<BvhNodeItem>, split: Acceleration) -> Bvh {
         let mut nodes = Vec::new();
 
         if !items.is_empty() {
@@ -275,14 +245,19 @@ impl Bvh {
         Bvh { nodes }
     }
 
-    fn subdivide(nodes: &mut Vec<BvhNode>, items: &mut [BvhNodeItem], split: BvhSplit) -> usize {
+    fn subdivide(
+        nodes: &mut Vec<BvhNode>,
+        items: &mut [BvhNodeItem],
+        split: Acceleration,
+    ) -> usize {
         let bounds = items
             .iter()
             .fold(Aabb::EMPTY, |bounds, item| bounds.union(item.bounds));
 
         let split_index = match split {
-            BvhSplit::Median => Self::median_split(items),
-            BvhSplit::Sah => Self::sah_split(items, bounds),
+            Acceleration::BvhMedian => Self::median_split(items),
+            Acceleration::BvhSah => Self::sah_split(items, bounds),
+            Acceleration::BruteForce => unreachable!(),
         };
 
         let node = match split_index {

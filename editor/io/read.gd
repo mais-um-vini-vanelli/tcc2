@@ -31,7 +31,7 @@ static func from_tcc2(path: String, scene: SceneRoot,
 	if version != Write.VERSION:
 		push_error("%s is version %d, not %d" % [path, version, Write.VERSION])
 		return false
-	else if 12 + length > bytes.size():
+	elif 12 + length > bytes.size():
 		push_error("%s has a truncated header" % path)
 		return false
 
@@ -308,14 +308,8 @@ func _read_parameters() -> void:
 	_scene.shadows = tracing.get("shadows", _scene.shadows)
 	_scene.reflections = tracing.get("reflections", _scene.reflections)
 	_scene.refractions = tracing.get("refractions", _scene.refractions)
-
-	var acceleration: Dictionary = tracing.get("acceleration", {})
-	_scene.bvh_enabled = acceleration.get("enabled", _scene.bvh_enabled)
-	_scene.bvh_split = pick.call(["median", "sah"],
-		acceleration.get("bvh_split"), _scene.bvh_split)
-
-	var wireframe: Variant = acceleration.get("wireframe")
-	_scene.bvh_wireframe = int(wireframe) if wireframe != null else _scene.bvh_wireframe
+	_scene.acceleration = pick.call(["brute_force", "bvh_median", "bvh_sah"],
+		tracing.get("acceleration"), _scene.acceleration)
 
 	var output: Dictionary = preset.get("output", {})
 	_scene.width = int(output.get("width", _scene.width))

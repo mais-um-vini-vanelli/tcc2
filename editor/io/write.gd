@@ -251,7 +251,7 @@ func _image(at: int) -> int:
 func _parameters(scene: SceneRoot) -> Dictionary:
 	const TEXTURE_FILTER := ["nearest", "bilinear", "mipmap_bilinear", "trilinear"]
 	const REFLECTANCE := ["blinn_phong"]
-	const SPLIT := ["median", "sah"]
+	const ACCELERATION := ["brute_force", "bvh_median", "bvh_sah"]
 	const TONEMAP := ["none", "reinhard"]
 
 	return {
@@ -270,11 +270,7 @@ func _parameters(scene: SceneRoot) -> Dictionary:
 			"shadows": scene.shadows,
 			"reflections": scene.reflections,
 			"refractions": scene.refractions,
-			"acceleration": {
-				"enabled": scene.bvh_enabled,
-				"bvh_split": SPLIT[scene.bvh_split],
-				"wireframe": scene.bvh_wireframe if scene.bvh_wireframe > 0 else null,
-			},
+			"acceleration": ACCELERATION[scene.acceleration],
 		},
 		"output": {
 			"width": scene.width,

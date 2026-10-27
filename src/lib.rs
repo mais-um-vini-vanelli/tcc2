@@ -1,5 +1,4 @@
-mod bvh;
-mod overlay;
+pub mod bvh;
 
 #[cfg(feature = "format")]
 pub mod format;
@@ -17,18 +16,20 @@ pub mod texture;
 pub mod transform;
 
 pub mod prelude {
+    pub use crate::bvh::AccelerationStructures;
     pub use crate::color::Rgb;
     pub use crate::geometry::{Geometry, Mesh};
     pub use crate::math::{Aabb, Baricentrics, Plane, Ray, Tangent, Vec2, Vec3, Vertex};
     pub use crate::parameters::{
-        AccelerationOptions, BvhSplit, OutputOptions, Parameters, RasterizationOptions,
-        RayTracingOptions, ReflectanceModel, ShadingOptions, TextureFilter, Tonemap,
-        TransformMethod, TransformOptions,
+        Acceleration, OutputOptions, Parameters, RasterizationOptions, RayTracingOptions,
+        ReflectanceModel, ShadingOptions, TextureFilter, Tonemap, TransformMethod,
+        TransformOptions,
     };
     pub use crate::rasterizer::Rasterizer;
     pub use crate::raytracer::RayTracer;
     pub use crate::render::{
-        ColorBuffer, RasterizationResult, RayTracingResult, RenderResult, Renderer, ScalarBuffer,
+        ColorBuffer, RasterizationResult, RayKind, RaySegment, RaySegmentHit, RayTracingResult,
+        RenderResult, Renderer, ScalarBuffer,
     };
     pub use crate::scene::{
         Camera, CameraInstance, Channel, GeometryInstance, Light, LightInstance, Material,

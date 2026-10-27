@@ -1,13 +1,16 @@
-#[derive(Debug, Clone, Default)]
-pub struct Parameters {
+use crate::render::RaySegment;
+
+#[derive(Clone, Default)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
+pub struct Parameters<'a> {
     pub transform: TransformOptions,
     pub rasterization: RasterizationOptions,
     pub shading: ShadingOptions,
-    pub ray_tracing: RayTracingOptions,
+    pub ray_tracing: RayTracingOptions<'a>,
     pub output: OutputOptions,
 }
 
-impl Parameters {
+impl Parameters<'_> {
     /// Parâmetros padrão com a resolução informada.
     pub fn with_resolution(width: u32, height: u32) -> Self {
         Parameters {
@@ -22,11 +25,14 @@ impl Parameters {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
 pub struct TransformOptions {
     pub method: TransformMethod,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize))]
+#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
 pub enum TransformMethod {
     /// Escala, depois uma rotação por eixo (Euler X, Y, Z), depois translação.
     #[default]
@@ -34,6 +40,7 @@ pub enum TransformMethod {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
 pub struct RasterizationOptions {
     /// Descarta triângulos de costas para câmera.
     pub backface_cull: bool,
@@ -43,10 +50,12 @@ pub struct RasterizationOptions {
     pub depth_test: bool,
     /// Chamado pra cada fragmento, antes do depth test. Não faz nada no
     /// render: existe só como lugar pra colocar um breakpoint.
+    #[cfg_attr(feature = "format", serde(skip))]
     pub on_fragment: Option<fn(u32, u32)>,
     /// Chamado pra cada triângulo dos objetos com geometria, no começo da pipeline. A
     /// função recebe (index da instância conforme `Scene::flatten`, index da
     /// face na malha que `Geometry::tessellate` devolve).
+    #[cfg_attr(feature = "format", serde(skip))]
     pub on_triangle: Option<fn(usize, usize)>,
 }
 
@@ -63,6 +72,8 @@ impl Default for RasterizationOptions {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize))]
+#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
 pub enum TextureFilter {
     /// Texel mais próximo, no miplevel 0. Barato, visivelmente serrilhado.
     Nearest,
@@ -78,6 +89,7 @@ pub enum TextureFilter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
 pub struct ShadingOptions {
     pub reflectance_model: ReflectanceModel,
     pub texture_filter: TextureFilter,
@@ -85,43 +97,30 @@ pub struct ShadingOptions {
 
 /// Qual BRDF usar. Uma BRDF converte a luz que chega em luz que sai.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize))]
+#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
 pub enum ReflectanceModel {
     #[default]
     BlinnPhong,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AccelerationOptions {
-    /// Usar BVHs para economizar testes de interseção dos raios com a geometria.
-    pub enabled: bool,
-    /// Como dividir os itens entre os nós da BVH.
-    pub bvh_split: BvhSplit,
-    /// Desenhar as caixas dos nós da BVH até esta profundidade. `None` = não desenha nada.
-    pub wireframe: Option<u32>,
-}
-
-impl Default for AccelerationOptions {
-    fn default() -> Self {
-        AccelerationOptions {
-            enabled: true,
-            bvh_split: BvhSplit::default(),
-            wireframe: None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum BvhSplit {
-    /// Metade dos itens pra cada lado, no eixo mais comprido.
-    Median,
-    /// O corte de menor custo esperado pela *Surface Area Heuristic*
+#[cfg_attr(feature = "format", derive(serde::Deserialize))]
+#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
+pub enum Acceleration {
+    /// Testa cada raio contra todos os triângulos de todas os objetos.
+    BruteForce,
+    /// BVH com metade dos itens pra cada lado, no eixo mais comprido.
+    BvhMedian,
+    /// BVH com o corte de menor custo esperado pela *Surface Area Heuristic*
     /// (MacDonald e Booth, 1990).
     #[default]
-    Sah,
+    BvhSah,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct RayTracingOptions {
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
+pub struct RayTracingOptions<'a> {
     /// Profundidade máxima da recursão de reflexão/refração.
     pub max_depth: u32,
     /// Lançar raios de sombra.
@@ -130,26 +129,33 @@ pub struct RayTracingOptions {
     pub reflections: bool,
     /// Lançar raios secundários de refração.
     pub refractions: bool,
-    pub acceleration: AccelerationOptions,
+    pub acceleration: Acceleration,
     /// Chamado uma vez por pixel, antes do raio primário. Não faz nada no
-    /// render: existe só como lugar pra colocar um breakpoint.
-    pub on_ray: Option<fn(u32, u32)>,
+    /// render.
+    #[cfg_attr(feature = "format", serde(skip))]
+    pub on_ray: Option<&'a dyn Fn(u32, u32)>,
+    /// Chamado pra cada raio lançado, depois do teste de interseção. Não faz
+    /// nada no render.
+    #[cfg_attr(feature = "format", serde(skip))]
+    pub on_segment: Option<&'a dyn Fn(RaySegment)>,
 }
 
-impl Default for RayTracingOptions {
+impl Default for RayTracingOptions<'_> {
     fn default() -> Self {
         RayTracingOptions {
             max_depth: 5,
             shadows: true,
             reflections: true,
             refractions: true,
-            acceleration: AccelerationOptions::default(),
+            acceleration: Acceleration::default(),
             on_ray: None,
+            on_segment: None,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
 pub struct OutputOptions {
     pub width: u32,
     pub height: u32,
@@ -171,6 +177,8 @@ impl Default for OutputOptions {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "format", derive(serde::Deserialize))]
+#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
 pub enum Tonemap {
     /// Nada: o que passa de 1 é cortado canal por canal na gravação.
     #[default]

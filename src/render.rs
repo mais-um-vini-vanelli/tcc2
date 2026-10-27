@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::color::Rgb;
+use crate::math::{Ray, Vec3};
 use crate::parameters::{OutputOptions, Parameters, Tonemap};
 use crate::scene::Scene;
 
@@ -164,6 +165,33 @@ impl RayTracingResult {
             bvh_build_time: Duration::ZERO,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RaySegment {
+    pub kind: RayKind,
+    pub ray: Ray,
+    /// Onde o raio parou, se parou em algo.
+    pub hit: Option<RaySegmentHit>,
+    /// Profundidade da recursão: 0 no raio primário.
+    pub depth: u32,
+    /// Até onde o raio foi testado. Infinito nos secundários.
+    pub t_max: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RaySegmentHit {
+    pub point: Vec3,
+    /// A normal que o shading usou.
+    pub normal: Vec3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RayKind {
+    Primary,
+    Shadow,
+    Reflection,
+    Refraction,
 }
 
 #[derive(Debug, Clone)]

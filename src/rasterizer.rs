@@ -227,13 +227,13 @@ impl Renderer for Rasterizer {
 }
 
 struct State<'a> {
-    params: &'a Parameters,
+    params: &'a Parameters<'a>,
     camera: &'a CameraInstance,
     lights: &'a [LightInstance],
 }
 
 impl Rasterizer {
-    fn clip(
+    pub fn clip(
         triangle: [Vertex; 3],
         frustum: &[Plane; 6],
         stats: &mut RasterizationResult,

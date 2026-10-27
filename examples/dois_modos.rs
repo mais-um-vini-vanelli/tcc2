@@ -196,21 +196,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     for (acceleration, nome) in [
-        (AccelerationOptions::default(), "bvh pelo sah"),
-        (
-            AccelerationOptions {
-                bvh_split: BvhSplit::Median,
-                ..AccelerationOptions::default()
-            },
-            "bvh pela mediana",
-        ),
-        (
-            AccelerationOptions {
-                enabled: false,
-                ..AccelerationOptions::default()
-            },
-            "sem bvh",
-        ),
+        (Acceleration::BvhSah, "bvh pelo sah"),
+        (Acceleration::BvhMedian, "bvh pela mediana"),
+        (Acceleration::BruteForce, "sem bvh"),
     ] {
         let params = Parameters {
             ray_tracing: RayTracingOptions {
@@ -232,28 +220,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             stats.blas_depth,
             stats.bvh_build_time,
         );
-    }
-
-    for (split, nome) in [(BvhSplit::Sah, "sah"), (BvhSplit::Median, "mediana")] {
-        let params = Parameters {
-            ray_tracing: RayTracingOptions {
-                acceleration: AccelerationOptions {
-                    bvh_split: split,
-                    wireframe: Some(6),
-                    ..AccelerationOptions::default()
-                },
-                ..params.ray_tracing
-            },
-            ..params.clone()
-        };
-
-        let resultado = RayTracer.render(&scene, &params);
-
-        comum::grava_textura(
-            &format!("./renders/bvh_{nome}_wireframe.png"),
-            &resultado.color,
-            Rgb::to_srgb,
-        )?;
     }
 
     Ok(())

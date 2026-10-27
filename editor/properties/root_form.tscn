@@ -178,88 +178,29 @@ unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("check_box")
 
-[node name="Acceleration" type="PanelContainer" parent="RayTracing/Stack/Body" unique_id=968783311]
-layout_mode = 2
-theme_type_variation = &"Subsection"
-script = ExtResource("3_mnwxo")
-
-[node name="Stack" type="VBoxContainer" parent="RayTracing/Stack/Body/Acceleration" unique_id=1272775875]
-layout_mode = 2
-
-[node name="Header" type="Button" parent="RayTracing/Stack/Body/Acceleration/Stack" unique_id=2089053537]
-layout_mode = 2
-focus_mode = 0
-mouse_default_cursor_shape = 2
-theme_type_variation = &"SectionHeader"
-toggle_mode = true
-button_pressed = true
-text = "ACCELERATION"
-flat = true
-alignment = 0
-
-[node name="Body" type="VBoxContainer" parent="RayTracing/Stack/Body/Acceleration/Stack" unique_id=14118837]
-layout_mode = 2
-
-[node name="Rows" type="VBoxContainer" parent="RayTracing/Stack/Body/Acceleration/Stack/Body" unique_id=300747170]
-layout_mode = 2
-theme_type_variation = &"Rows"
-theme_type_variation = &"Rows"
-
-[node name="BvhEnabledRow" type="Container" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=615584234]
+[node name="AccelerationRow" type="Container" parent="RayTracing/Stack/Body/Rows" unique_id=1552951122]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("row")
 
-[node name="BvhEnabledLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhEnabledRow" unique_id=1897204587]
+[node name="AccelerationLabel" type="Label" parent="RayTracing/Stack/Body/Rows/AccelerationRow" unique_id=958651471]
 layout_mode = 2
-text = "enabled"
+text = "acceleration"
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="BvhEnabled" type="CheckBox" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhEnabledRow" unique_id=152059144]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("check_box")
-
-[node name="BvhSplitRow" type="Container" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=1552951122]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("row")
-
-[node name="BvhSplitLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhSplitRow" unique_id=958651471]
-layout_mode = 2
-text = "split"
-clip_text = true
-text_overrun_behavior = 3
-
-[node name="BvhSplit" type="OptionButton" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhSplitRow" unique_id=861835382]
+[node name="Acceleration" type="OptionButton" parent="RayTracing/Stack/Body/Rows/AccelerationRow" unique_id=861835382]
 unique_name_in_owner = true
 layout_mode = 2
 selected = 0
-item_count = 2
-popup/item_0/text = "Median"
+item_count = 3
+popup/item_0/text = "brute_force"
 popup/item_0/id = 0
-popup/item_1/text = "Sah"
+popup/item_1/text = "bvh_median"
 popup/item_1/id = 1
+popup/item_2/text = "bvh_sah"
+popup/item_2/id = 2
 script = ExtResource("props_option_button")
-
-[node name="BvhWireframeRow" type="Container" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows" unique_id=1342992235]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("row")
-
-[node name="BvhWireframeLabel" type="Label" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhWireframeRow" unique_id=417802355]
-layout_mode = 2
-text = "wireframe depth"
-clip_text = true
-text_overrun_behavior = 3
-
-[node name="BvhWireframe" type="SpinBox" parent="RayTracing/Stack/Body/Acceleration/Stack/Body/Rows/BvhWireframeRow" unique_id=1304958726]
-unique_name_in_owner = true
-layout_mode = 2
-max_value = 32.0
-rounded = true
-script = ExtResource("props_spin_box")
 
 [node name="TransformOptions" type="PanelContainer" parent="." unique_id=1707858146]
 layout_mode = 2
@@ -304,7 +245,7 @@ unique_name_in_owner = true
 layout_mode = 2
 selected = 0
 item_count = 1
-popup/item_0/text = "Stepwise"
+popup/item_0/text = "stepwise"
 popup/item_0/id = 0
 script = ExtResource("props_option_button")
 
@@ -351,7 +292,7 @@ unique_name_in_owner = true
 layout_mode = 2
 selected = 0
 item_count = 1
-popup/item_0/text = "BlinnPhong"
+popup/item_0/text = "blinn_phong"
 popup/item_0/id = 0
 script = ExtResource("props_option_button")
 
@@ -371,13 +312,13 @@ unique_name_in_owner = true
 layout_mode = 2
 selected = 0
 item_count = 4
-popup/item_0/text = "Nearest"
+popup/item_0/text = "nearest"
 popup/item_0/id = 0
-popup/item_1/text = "Bilinear"
+popup/item_1/text = "bilinear"
 popup/item_1/id = 1
-popup/item_2/text = "MipmapBilinear"
+popup/item_2/text = "mipmap_bilinear"
 popup/item_2/id = 2
-popup/item_3/text = "Trilinear"
+popup/item_3/text = "trilinear"
 popup/item_3/id = 3
 script = ExtResource("props_option_button")
 
@@ -482,8 +423,8 @@ unique_name_in_owner = true
 layout_mode = 2
 selected = 0
 item_count = 2
-popup/item_0/text = "None"
+popup/item_0/text = "none"
 popup/item_0/id = 0
-popup/item_1/text = "Reinhard"
+popup/item_1/text = "reinhard"
 popup/item_1/id = 1
 script = ExtResource("props_option_button")

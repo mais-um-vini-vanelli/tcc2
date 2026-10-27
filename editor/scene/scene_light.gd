@@ -73,6 +73,7 @@ var environment := Environment_.new()
 var _icon: Sprite3D
 var _gizmo: MeshInstance3D
 var _preview: Light3D
+var _shadows := true
 
 func _init() -> void:
 	point.light = self
@@ -106,6 +107,12 @@ func model():
 
 	return point
 
+func sync_preview(scene: SceneRoot) -> void:
+	_shadows = scene == null or scene.shadows
+
+	if _preview != null:
+		_preview.shadow_enabled = _shadows
+
 func set_selected(value: bool) -> void:
 	if _icon != null:
 		_set_icon_selected(_icon, value, ICON_COLOR)
@@ -131,6 +138,8 @@ func _rebuild_preview() -> void:
 
 	_preview.light_color = mod.color
 	_preview.light_energy = mod.intensity
+	_preview.shadow_enabled = _shadows
+	_preview.light_cull_mask = 1
 
 	add_child(_preview, false, Node.INTERNAL_MODE_FRONT)
 

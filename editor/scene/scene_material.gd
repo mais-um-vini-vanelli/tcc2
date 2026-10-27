@@ -96,3 +96,6 @@ func apply_to(mat: StandardMaterial3D, assets: SceneAssets) -> void:
 
 	mat.transparency = (BaseMaterial3D.TRANSPARENCY_ALPHA if transparency > 0.0
 		else BaseMaterial3D.TRANSPARENCY_DISABLED)
+
+	mat.refraction_enabled = transparency > 0.0
+	mat.refraction_scale = (refractive_index - 1.0) * 0.3

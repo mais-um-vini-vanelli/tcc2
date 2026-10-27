@@ -285,6 +285,22 @@ impl Camera {
         ))
     }
 
+    pub fn from_screen_space(&self, point: Vec3, width: u32, height: u32) -> Vec3 {
+        let (ndc_x, ndc_y) = (
+            point.x / width as f32 * 2.0 - 1.0,
+            1.0 - point.y / height as f32 * 2.0,
+        );
+
+        let aspect = width as f32 / height as f32;
+
+        let half_height = match *self {
+            Camera::Perspective { fov, .. } => (fov.to_radians() * 0.5).tan() * point.z,
+            Camera::Orthographic { height, .. } => height * 0.5,
+        };
+
+        Vec3::new(ndc_x * half_height * aspect, ndc_y * half_height, point.z)
+    }
+
     pub fn clip_planes(&self) -> (f32, f32) {
         match *self {
             Camera::Perspective { near, far, .. } | Camera::Orthographic { near, far, .. } => {
@@ -329,6 +345,33 @@ impl Camera {
             sides[2],
             sides[3],
         ]
+    }
+
+    pub fn frustum_corners(&self, aspect: f32) -> [Vec3; 8] {
+        let (near, far) = self.clip_planes();
+
+        let mut corners = [Vec3::ZERO; 8];
+
+        for (i, z) in [near, far].into_iter().enumerate() {
+            let (half_width, half_height) = match *self {
+                Camera::Perspective { fov, .. } => {
+                    let half_height = (fov.to_radians() * 0.5).tan() * z;
+                    (half_height * aspect, half_height)
+                }
+                Camera::Orthographic { height, .. } => {
+                    let half_height = height * 0.5;
+                    (half_height * aspect, half_height)
+                }
+            };
+
+            for (j, y) in [-half_height, half_height].into_iter().enumerate() {
+                for (k, x) in [-half_width, half_width].into_iter().enumerate() {
+                    corners[i * 4 + j * 2 + k] = Vec3::new(x, y, z);
+                }
+            }
+        }
+
+        corners
     }
 }
 

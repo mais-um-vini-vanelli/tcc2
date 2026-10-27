@@ -72,6 +72,7 @@ func _sync() -> void:
 		return
 
 	_environment.background_color = _environment_color()
+	_environment.ssr_enabled = scene.reflections
 	_environment.tonemap_exposure = pow(2.0, scene.exposure)
 	_environment.tonemap_mode = (Environment.TONE_MAPPER_REINHARDT
 		if scene.tonemap == SceneRoot.Tonemap.REINHARD

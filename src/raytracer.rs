@@ -2,8 +2,8 @@ use std::cell::RefCell;
 
 use crate::color::Rgb;
 use crate::math::{Ray, Vec3};
-use crate::parameters::Parameters;
-use crate::render::{RayTracingResult, RenderResult, Renderer};
+use crate::parameters::{Acceleration, Parameters};
+use crate::render::{RayKind, RaySegment, RaySegmentHit, RayTracingResult, RenderResult, Renderer};
 use crate::scene::{Camera, CameraInstance, GeometryInstance, Light, LightInstance, Scene};
 use crate::shading::{self, Surface};
 
@@ -27,14 +27,15 @@ impl Renderer for RayTracer {
 
         let ray_tracing = RefCell::new(RayTracingResult::new(width, height));
 
-        let acceleration_structures = params.ray_tracing.acceleration.enabled.then(|| {
-            AccelerationStructures::build(
-                &geometry_instances,
-                params.ray_tracing.acceleration.bvh_split,
-                params.transform.method,
-                &ray_tracing,
-            )
-        });
+        let acceleration_structures = (params.ray_tracing.acceleration != Acceleration::BruteForce)
+            .then(|| {
+                AccelerationStructures::build(
+                    &geometry_instances,
+                    params.ray_tracing.acceleration,
+                    params.transform.method,
+                    &ray_tracing,
+                )
+            });
 
         let state = State {
             lights: light_instances,
@@ -61,9 +62,11 @@ impl Renderer for RayTracer {
                 let ray = Self::primary_ray(&camera_instance, x, y, width, height);
                 state.ray_tracing.borrow_mut().rays += 1;
 
-                result
-                    .color
-                    .set(x, y, Self::trace(&state, ray, near, far, 0));
+                result.color.set(
+                    x,
+                    y,
+                    Self::trace(&state, ray, near, far, 0, RayKind::Primary),
+                );
 
                 let mut stats = state.ray_tracing.borrow_mut();
 
@@ -78,19 +81,6 @@ impl Renderer for RayTracer {
         }
 
         self.apply_output(&mut result, &params.output);
-
-        if let (Some(max_depth), Some(acceleration_structures)) = (
-            params.ray_tracing.acceleration.wireframe,
-            &state.acceleration_structures,
-        ) {
-            acceleration_structures.wireframe(
-                &camera_instance,
-                &state.geometry_instances,
-                params.transform.method,
-                max_depth,
-                &mut result.color,
-            );
-        }
 
         result.ray_tracing = state.ray_tracing.into_inner();
 
@@ -109,8 +99,12 @@ impl RayTracer {
     ///   + F(v, n) · L(raio refletido)            <- recursão
     ///   + kt      · L(raio refratado)            <- recursão
     /// ```
-    fn trace(state: &State, ray: Ray, t_min: f32, t_max: f32, max_depth: u32) -> Rgb {
-        let Some(hit) = Self::closest_hit(state, ray, t_min, t_max, false) else {
+    fn trace(state: &State, ray: Ray, t_min: f32, t_max: f32, depth: u32, kind: RayKind) -> Rgb {
+        let hit = Self::closest_hit(state, ray, t_min, t_max, false);
+
+        Self::on_segment(state, kind, ray, hit.as_ref(), depth, t_max);
+
+        let Some(hit) = hit else {
             return state.environment;
         };
 
@@ -126,11 +120,9 @@ impl RayTracer {
                     return 1.0;
                 }
 
-                let shadow_dir = Self::shadow_ray_dir(surface.point, light_instance);
-
-                if shadow_dir.is_some() {
-                    let (shadow_dir, t_max) =
-                        Self::shadow_ray_dir(surface.point, light_instance).unwrap();
+                if let Some((shadow_dir, t_max)) =
+                    Self::shadow_ray_dir(surface.point, light_instance)
+                {
                     let shadow_ray = Ray::new(
                         Self::offset_ray_origin(surface.point, hit.geometric_normal, shadow_dir),
                         shadow_dir,
@@ -138,7 +130,18 @@ impl RayTracer {
 
                     state.ray_tracing.borrow_mut().rays += 1;
 
-                    if Self::closest_hit(state, shadow_ray, Self::EPSILON, t_max, true).is_some() {
+                    let blocker = Self::closest_hit(state, shadow_ray, Self::EPSILON, t_max, true);
+
+                    Self::on_segment(
+                        state,
+                        RayKind::Shadow,
+                        shadow_ray,
+                        blocker.as_ref(),
+                        depth,
+                        t_max,
+                    );
+
+                    if blocker.is_some() {
                         return 0.0;
                     }
                 }
@@ -155,7 +158,7 @@ impl RayTracer {
             )
         };
 
-        if max_depth >= state.params.ray_tracing.max_depth {
+        if depth >= state.params.ray_tracing.max_depth {
             return direct_color;
         }
 
@@ -179,7 +182,8 @@ impl RayTracer {
                 reflection_ray,
                 Self::EPSILON,
                 f32::INFINITY,
-                max_depth + 1,
+                depth + 1,
+                RayKind::Reflection,
             );
 
             result = result + fresnel * reflection_color;
@@ -204,7 +208,8 @@ impl RayTracer {
                 refraction_ray,
                 Self::EPSILON,
                 f32::INFINITY,
-                max_depth + 1,
+                depth + 1,
+                RayKind::Refraction,
             );
 
             // Desconsiderar a luz que foi refletida (fresnel) e a luz que voltou como brilho difuso
@@ -216,6 +221,28 @@ impl RayTracer {
         result
     }
 
+    fn on_segment(
+        state: &State,
+        kind: RayKind,
+        ray: Ray,
+        hit: Option<&SurfaceHit>,
+        depth: u32,
+        t_max: f32,
+    ) {
+        if let Some(callback) = state.params.ray_tracing.on_segment {
+            callback(RaySegment {
+                kind,
+                ray,
+                hit: hit.map(|hit| RaySegmentHit {
+                    point: hit.surface.point,
+                    normal: hit.surface.normal,
+                }),
+                depth,
+                t_max,
+            });
+        }
+    }
+
     /// O acerto mais próximo da origem do raio, entre `t_min` e `t_max`.
     fn closest_hit(
         state: &State,
@@ -224,20 +251,16 @@ impl RayTracer {
         t_max: f32,
         in_shadow_ray: bool,
     ) -> Option<SurfaceHit> {
-        let (i, hit) = if state.params.ray_tracing.acceleration.enabled {
-            state
-                .acceleration_structures
-                .as_ref()
-                .unwrap()
-                .closest_hit(
-                    &state.geometry_instances,
-                    ray,
-                    in_shadow_ray,
-                    t_min,
-                    t_max,
-                    state.params.transform.method,
-                    &state.ray_tracing,
-                )?
+        let (i, hit) = if let Some(acceleration_structures) = &state.acceleration_structures {
+            acceleration_structures.closest_hit(
+                &state.geometry_instances,
+                ray,
+                in_shadow_ray,
+                t_min,
+                t_max,
+                state.params.transform.method,
+                &state.ray_tracing,
+            )?
         } else {
             let mut t_max = t_max;
             let mut closest = None;
@@ -394,7 +417,7 @@ impl RayTracer {
 }
 
 struct State<'a> {
-    params: &'a Parameters,
+    params: &'a Parameters<'a>,
     environment: Rgb,
     lights: Vec<LightInstance>,
     geometry_instances: Vec<GeometryInstance<'a>>,

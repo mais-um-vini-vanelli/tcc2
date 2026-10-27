@@ -11,7 +11,19 @@ extends Control
 @onready var properties := $Layout/Sidebar/Properties/VBoxContainer/MarginContainer/ScrollContainer/Padding/VBoxContainer
 @onready var camera_pov: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/CameraPOV
 @onready var pick_triangle: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/PickTriangle
-@onready var pick_pixel: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/PickPixel
+@onready var bvh: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/Bvh
+@onready var trace_ray: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/TraceRay
+@onready var help: Button = $Layout/Viewport/Overlay/Panel/VBoxContainer/Help
+
+@onready var modes: Array[Button] = [camera_pov, pick_triangle, bvh, trace_ray]
+
+const CONTROLS: Array[String] = [
+	"LMB: select",
+	"RMB hold + WASD/QE: fly",
+	"Space + LMB drag: pan",
+	"Esc: leave the current mode",
+	"Drag and drop .glb file: import",
+]
 
 const CURSORS: Array = [
 	[preload("res://icons/Arrow.svg"), Input.CURSOR_ARROW, Vector2(6, 4)],
@@ -74,10 +86,13 @@ func _ready() -> void:
 	sub_viewport_container.overlay = overlay
 
 	pick_triangle.toggled.connect(_on_pick_triangle_toggled)
-	sub_viewport_container.triangle_picked.connect(_on_triangle_picked)
+	sub_viewport_container.triangle_reported.connect(_on_triangle_reported)
 
-	pick_pixel.toggled.connect(_on_pick_pixel_toggled)
-	sub_viewport_container.pixel_picked.connect(_on_pixel_picked)
+	bvh.toggled.connect(_on_bvh_toggled)
+	sub_viewport_container.bvh_reported.connect(_on_bvh_reported)
+
+	trace_ray.toggled.connect(_on_trace_ray_toggled)
+	sub_viewport_container.rays_reported.connect(_on_rays_reported)
 
 	save_dialog = FileDialog.new()
 	save_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
@@ -104,6 +119,21 @@ func _ready() -> void:
 	save.pressed.connect(on_save_pressed)
 	open.pressed.connect(open_dialog.popup_centered_ratio.bind(0.6))
 
+	help.pressed.connect(_show_controls)
+	_show_controls()
+
+func _show_controls() -> void:
+	toast.report("CONTROLS", CONTROLS)
+
+func _shortcut_input(event: InputEvent) -> void:
+	if not event.is_action_pressed("ui_cancel"):
+		return
+
+	for button in modes:
+		if button.button_pressed:
+			button.button_pressed = false
+			get_viewport().set_input_as_handled()
+
 func _rebuild() -> void:
 	hierarchy.rebuild(root)
 	_on_scene_changed()
@@ -111,7 +141,7 @@ func _rebuild() -> void:
 func _on_scene_changed() -> void:
 	if sub_viewport_container.render_camera() == null:
 		camera_pov.button_pressed = false
-	elif camera_pov.button_pressed or pick_pixel.button_pressed:
+	elif camera_pov.button_pressed:
 		sub_viewport_container.refresh_pov()
 
 	_refresh_modes()
@@ -130,12 +160,15 @@ func _on_camera_pov_toggled(pressed: bool) -> void:
 func _on_pick_triangle_toggled(pressed: bool) -> void:
 	_mode(pick_triangle, pressed)
 
-func _on_pick_pixel_toggled(pressed: bool) -> void:
-	_mode(pick_pixel, pressed)
+func _on_bvh_toggled(pressed: bool) -> void:
+	_mode(bvh, pressed)
+
+func _on_trace_ray_toggled(pressed: bool) -> void:
+	_mode(trace_ray, pressed)
 
 func _mode(entering: Button, pressed: bool) -> void:
 	if pressed:
-		for button in [camera_pov, pick_triangle, pick_pixel]:
+		for button in modes:
 			if button != entering and button.button_pressed:
 				button.button_pressed = false
 
@@ -145,38 +178,35 @@ func _mode(entering: Button, pressed: bool) -> void:
 	_refresh_modes.call_deferred()
 
 func _apply_mode() -> void:
-	if pick_pixel.button_pressed:
-		sub_viewport_container.set_mode(ViewportPane.Mode.PICK_PIXEL)
-	elif pick_triangle.button_pressed:
+	if pick_triangle.button_pressed:
 		sub_viewport_container.set_mode(ViewportPane.Mode.PICK_TRIANGLE)
 	elif camera_pov.button_pressed:
 		sub_viewport_container.set_mode(ViewportPane.Mode.POV)
+	elif bvh.button_pressed:
+		sub_viewport_container.set_mode(ViewportPane.Mode.BVH)
+	elif trace_ray.button_pressed:
+		sub_viewport_container.set_mode(ViewportPane.Mode.TRACE_RAY)
 	else:
 		sub_viewport_container.set_mode(ViewportPane.Mode.EDIT)
 
 func _refresh_modes() -> void:
-	var busy := (camera_pov.button_pressed or pick_triangle.button_pressed
-		or pick_pixel.button_pressed)
+	var busy := modes.any(func(button: Button) -> bool: return button.button_pressed)
 	var blind := sub_viewport_container.render_camera() == null
 
 	camera_pov.disabled = blind
 	pick_triangle.disabled = blind
-	pick_pixel.disabled = blind
+	trace_ray.disabled = blind
 
 	hierarchy.set_editable(not busy)
 
-func _on_triangle_picked(_node: SceneGeometry, instance: int, face: int) -> void:
-	pick_triangle.button_pressed = false
+func _on_triangle_reported(lines: Array[String]) -> void:
+	toast.report("PICKED TRIANGLE", lines)
 
-	var picked: Array[String] = ["instance: %d" % instance, "face: %d" % face]
+func _on_bvh_reported(lines: Array[String]) -> void:
+	toast.report("BVH", lines)
 
-	toast.report("PICKED TRIANGLE", picked)
-
-func _on_pixel_picked(x: int, y: int) -> void:
-	pick_pixel.button_pressed = false
-
-	var picked: Array[String] = ["pixel: (%d, %d)" % [x, y]]
-	toast.report("PICKED PIXEL", picked)
+func _on_rays_reported(lines: Array[String]) -> void:
+	toast.report("TRACE RAY", lines)
 
 func _save_scene(path: String) -> void:
 	if path.get_extension().to_lower() != "tcc2":
@@ -222,6 +252,13 @@ func _open_scene(path: String) -> void:
 	hierarchy.select(root)
 
 func _on_files_dropped(files: PackedStringArray) -> void:
+	var importing: Array[String] = ["processando..."]
+	toast.report("IMPORT", importing)
+
+	# The import blocks everything: let the toast land first.
+	await get_tree().process_frame
+	await get_tree().process_frame
+
 	var warnings: Array[String] = []
 
 	for file in files:
