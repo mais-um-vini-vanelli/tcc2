@@ -4,7 +4,7 @@ use godot::classes::ArrayMesh;
 use godot::classes::mesh::{ArrayType, PrimitiveType};
 use godot::prelude::*;
 
-use tcc2::format::Reader;
+use tcc2::io::Reader;
 use tcc2::prelude::{
     Acceleration, AccelerationStructures, Geometry, Mesh as Tcc2Mesh, Rasterizer, RayKind,
     RaySegment, RayTracer, RayTracingResult, RenderResult, Renderer, Rgb, Vec2, Vec3, Vertex,
@@ -204,24 +204,27 @@ impl Tcc2Rays {
                 RayKind::Refraction => &mut refraction,
             };
 
+            let end = segment.ray.at(if segment.t_max.is_finite() {
+                segment.t_max
+            } else {
+                far
+            });
+
             match segment.hit {
                 Some(hit) => {
-                    if segment.kind != RayKind::Shadow {
+                    if segment.kind == RayKind::Shadow {
+                        lines.hit.push(vector3(segment.ray.origin));
+                        lines.hit.push(vector3(end));
+                    } else {
                         normals.push(vector3(hit.point));
                         normals.push(vector3(hit.point + hit.normal));
-                    }
 
-                    lines.hit.push(vector3(segment.ray.origin));
-                    lines.hit.push(vector3(hit.point));
+                        lines.hit.push(vector3(segment.ray.origin));
+                        lines.hit.push(vector3(hit.point));
+                    }
                 }
 
                 None => {
-                    let end = segment.ray.at(if segment.t_max.is_finite() {
-                        segment.t_max
-                    } else {
-                        far
-                    });
-
                     lines.miss.push(vector3(segment.ray.origin));
                     lines.miss.push(vector3(end));
                 }

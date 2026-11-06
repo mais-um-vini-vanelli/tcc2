@@ -1,7 +1,9 @@
+pub type Error = Box<dyn std::error::Error>;
+
 pub mod bvh;
 
-#[cfg(feature = "format")]
-pub mod format;
+#[cfg(feature = "io")]
+pub mod io;
 
 pub mod color;
 pub mod geometry;
@@ -36,6 +38,6 @@ pub mod prelude {
         MaterialSample, Object, ObjectKind, Primitive, Scene,
     };
     pub use crate::shading::{Surface, shade};
-    pub use crate::texture::{Footprint, Mipmaps, Texture, TextureError, TextureWrap};
+    pub use crate::texture::{Encoding, Footprint, Mipmaps, Texture, TextureError, TextureWrap};
     pub use crate::transform::{Transform, TransformChain};
 }

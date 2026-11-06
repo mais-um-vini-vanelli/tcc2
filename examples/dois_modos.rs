@@ -144,7 +144,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ],
     };
 
-    let params = Parameters::with_resolution(320, 240);
+    let params = Parameters::with_resolution(480, 320);
 
     renderiza(&Rasterizer, &scene, &params, "raster")?;
     renderiza(&RayTracer, &scene, &params, "raytracer")?;

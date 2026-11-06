@@ -30,7 +30,7 @@ impl Renderer for Rasterizer {
                 .into_iter()
                 .flatten()
                 {
-                    tex.generate_mipmaps();
+                    tex.mipmaps();
                 }
             }
         }

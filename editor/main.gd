@@ -272,8 +272,5 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 
 		root.add_child(group)
 
-		if Import.parameters(file, root):
-			properties.refresh_values()
-
 	toast.report("IMPORT WARNINGS", warnings)
 	_rebuild()

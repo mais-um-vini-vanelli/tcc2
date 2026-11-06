@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!(
         "pirâmide: {} níveis, de {}x{} a 1x1",
-        textura.mipmaps(),
+        textura.mipmaps().levels().len() + 1,
         textura.width(),
         textura.height(),
     );

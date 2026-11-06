@@ -19,6 +19,12 @@ pub enum TextureWrap {
     Clamp,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Encoding {
+    Srgb,
+    Linear,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mipmaps {
     levels: Vec<ColorBuffer>,
@@ -61,12 +67,18 @@ impl Texture {
         self.base.get(x, y)
     }
 
-    pub fn generate_mipmaps(&self) {
-        self.mipmaps.get_or_init(|| Mipmaps::build(&self.base));
+    pub fn map_texels(self, f: impl Fn(Rgb) -> Rgb) -> Self {
+        let texels = self.base.pixels().iter().map(|&texel| f(texel)).collect();
+
+        Texture {
+            base: ColorBuffer::from_pixels(self.base.width(), self.base.height(), texels).unwrap(),
+            mipmaps: OnceLock::new(),
+            wrap: self.wrap,
+        }
     }
 
-    pub fn mipmaps(&self) -> usize {
-        self.mipmaps.get().unwrap().levels.len() + 1
+    pub fn mipmaps(&self) -> &Mipmaps {
+        self.mipmaps.get_or_init(|| Mipmaps::build(&self.base))
     }
 
     pub fn sample(
@@ -154,6 +166,27 @@ impl Texture {
     }
 }
 
+#[cfg(feature = "io")]
+impl Texture {
+    pub fn open(
+        path: impl AsRef<std::path::Path>,
+        encoding: Encoding,
+    ) -> Result<Self, crate::Error> {
+        let decoded = image::load_from_memory(&std::fs::read(path)?)?.to_rgb8();
+        let (width, height) = decoded.dimensions();
+
+        let texels = decoded
+            .pixels()
+            .map(|texel| match encoding {
+                Encoding::Srgb => Rgb::from_srgb(texel.0),
+                Encoding::Linear => Rgb::from_linear(texel.0),
+            })
+            .collect();
+
+        Ok(Texture::new(width, height, texels)?)
+    }
+}
+
 impl Mipmaps {
     fn build(base: &ColorBuffer) -> Self {
         let mut levels: Vec<ColorBuffer> = Vec::new();
@@ -169,6 +202,11 @@ impl Mipmaps {
         }
 
         Mipmaps { levels }
+    }
+
+    /// Os miplevels, do maior pro menor.
+    pub fn levels(&self) -> &[ColorBuffer] {
+        &self.levels
     }
 
     fn level<'a>(&'a self, base: &'a ColorBuffer, i: usize) -> &'a ColorBuffer {

@@ -8,13 +8,13 @@ use crate::geometry::{Geometry, Mesh};
 use crate::math::{Tangent, Vec2, Vec3};
 use crate::parameters::Parameters;
 use crate::scene::{Camera, Channel, Light, Material, Object, ObjectKind, Primitive, Scene};
-use crate::texture::Texture;
+use crate::texture::{Encoding, Texture};
 use crate::transform::Transform;
 
 pub const MAGIC: u32 = 0x3243_4354;
 pub const VERSION: u32 = 1;
 
-pub type Error = Box<dyn std::error::Error>;
+use crate::Error;
 
 #[derive(Default, Deserialize)]
 #[serde(default)]
@@ -147,7 +147,7 @@ pub struct Reader<'a> {
     images_json: &'a [SliceJson],
     blob: &'a [u8],
     meshes: HashMap<usize, Arc<Mesh>>,
-    textures: HashMap<(usize, bool), Arc<Texture>>,
+    textures: HashMap<(usize, Encoding), Arc<Texture>>,
 }
 
 impl Reader<'_> {
@@ -366,7 +366,7 @@ impl Reader<'_> {
 
         let normal = match &json.normal {
             Some(normal) => Some((
-                self.texture(normal.map, false)?,
+                self.texture(normal.map, Encoding::Linear)?,
                 normal.scale.unwrap_or(default.normal_scale),
             )),
             None => None,
@@ -391,7 +391,7 @@ impl Reader<'_> {
         fallback: Rgb,
     ) -> Result<Channel<Rgb>, Error> {
         Ok(match json {
-            Some(ChannelJson::Map(index)) => Channel::Map(self.texture(*index, true)?),
+            Some(ChannelJson::Map(index)) => Channel::Map(self.texture(*index, Encoding::Srgb)?),
             Some(ChannelJson::Constant(channels)) => {
                 Channel::Constant(Rgb::new(channels[0], channels[1], channels[2]))
             }
@@ -405,41 +405,32 @@ impl Reader<'_> {
         fallback: f32,
     ) -> Result<Channel<f32>, Error> {
         Ok(match json {
-            Some(ChannelJson::Map(index)) => Channel::Map(self.texture(*index, false)?),
+            Some(ChannelJson::Map(index)) => Channel::Map(self.texture(*index, Encoding::Linear)?),
             Some(ChannelJson::Constant(constant)) => Channel::Constant(*constant),
             None => Channel::Constant(fallback),
         })
     }
 
-    fn texture(&mut self, index: usize, srgb: bool) -> Result<Arc<Texture>, Error> {
-        if let Some(cached) = self.textures.get(&(index, srgb)) {
+    fn texture(&mut self, index: usize, encoding: Encoding) -> Result<Arc<Texture>, Error> {
+        if let Some(cached) = self.textures.get(&(index, encoding)) {
             return Ok(cached.clone());
         }
 
-        let (images_json, blob) = (self.images_json, self.blob);
-        let slice = *images_json.get(index).ok_or("imagem fora da tabela")?;
-
-        let decoded = image::load_from_memory_with_format(
-            Self::slice(blob, slice)?,
-            image::ImageFormat::Png,
-        )?
-        .to_rgb8();
-
+        let slice = *self.images_json.get(index).ok_or("imagem fora da tabela")?;
+        let decoded = image::load_from_memory(Self::slice(self.blob, slice)?)?.to_rgb8();
         let (width, height) = decoded.dimensions();
 
         let texels = decoded
             .pixels()
-            .map(|texel| {
-                if srgb {
-                    Rgb::from_srgb(texel.0)
-                } else {
-                    Rgb::from_linear(texel.0)
-                }
+            .map(|texel| match encoding {
+                Encoding::Srgb => Rgb::from_srgb(texel.0),
+                Encoding::Linear => Rgb::from_linear(texel.0),
             })
             .collect();
 
         let texture = Arc::new(Texture::new(width, height, texels)?);
-        self.textures.insert((index, srgb), texture.clone());
+
+        self.textures.insert((index, encoding), texture.clone());
 
         Ok(texture)
     }

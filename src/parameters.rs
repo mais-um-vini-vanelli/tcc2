@@ -1,7 +1,7 @@
 use crate::render::RaySegment;
 
 #[derive(Clone, Default)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize), serde(default))]
 pub struct Parameters<'a> {
     pub transform: TransformOptions,
     pub rasterization: RasterizationOptions,
@@ -25,14 +25,14 @@ impl Parameters<'_> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize), serde(default))]
 pub struct TransformOptions {
     pub method: TransformMethod,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize))]
-#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize))]
+#[cfg_attr(feature = "io", serde(rename_all = "snake_case"))]
 pub enum TransformMethod {
     /// Escala, depois uma rotação por eixo (Euler X, Y, Z), depois translação.
     #[default]
@@ -40,7 +40,7 @@ pub enum TransformMethod {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize), serde(default))]
 pub struct RasterizationOptions {
     /// Descarta triângulos de costas para câmera.
     pub backface_cull: bool,
@@ -50,12 +50,12 @@ pub struct RasterizationOptions {
     pub depth_test: bool,
     /// Chamado pra cada fragmento, antes do depth test. Não faz nada no
     /// render: existe só como lugar pra colocar um breakpoint.
-    #[cfg_attr(feature = "format", serde(skip))]
+    #[cfg_attr(feature = "io", serde(skip))]
     pub on_fragment: Option<fn(u32, u32)>,
     /// Chamado pra cada triângulo dos objetos com geometria, no começo da pipeline. A
     /// função recebe (index da instância conforme `Scene::flatten`, index da
     /// face na malha que `Geometry::tessellate` devolve).
-    #[cfg_attr(feature = "format", serde(skip))]
+    #[cfg_attr(feature = "io", serde(skip))]
     pub on_triangle: Option<fn(usize, usize)>,
 }
 
@@ -72,8 +72,8 @@ impl Default for RasterizationOptions {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize))]
-#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize))]
+#[cfg_attr(feature = "io", serde(rename_all = "snake_case"))]
 pub enum TextureFilter {
     /// Texel mais próximo, no miplevel 0. Barato, visivelmente serrilhado.
     Nearest,
@@ -89,7 +89,7 @@ pub enum TextureFilter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize), serde(default))]
 pub struct ShadingOptions {
     pub reflectance_model: ReflectanceModel,
     pub texture_filter: TextureFilter,
@@ -97,16 +97,16 @@ pub struct ShadingOptions {
 
 /// Qual BRDF usar. Uma BRDF converte a luz que chega em luz que sai.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize))]
-#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize))]
+#[cfg_attr(feature = "io", serde(rename_all = "snake_case"))]
 pub enum ReflectanceModel {
     #[default]
     BlinnPhong,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize))]
-#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize))]
+#[cfg_attr(feature = "io", serde(rename_all = "snake_case"))]
 pub enum Acceleration {
     /// Testa cada raio contra todos os triângulos de todas os objetos.
     BruteForce,
@@ -119,7 +119,7 @@ pub enum Acceleration {
 }
 
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize), serde(default))]
 pub struct RayTracingOptions<'a> {
     /// Profundidade máxima da recursão de reflexão/refração.
     pub max_depth: u32,
@@ -132,11 +132,11 @@ pub struct RayTracingOptions<'a> {
     pub acceleration: Acceleration,
     /// Chamado uma vez por pixel, antes do raio primário. Não faz nada no
     /// render.
-    #[cfg_attr(feature = "format", serde(skip))]
+    #[cfg_attr(feature = "io", serde(skip))]
     pub on_ray: Option<&'a dyn Fn(u32, u32)>,
     /// Chamado pra cada raio lançado, depois do teste de interseção. Não faz
     /// nada no render.
-    #[cfg_attr(feature = "format", serde(skip))]
+    #[cfg_attr(feature = "io", serde(skip))]
     pub on_segment: Option<&'a dyn Fn(RaySegment)>,
 }
 
@@ -155,7 +155,7 @@ impl Default for RayTracingOptions<'_> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize), serde(default))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize), serde(default))]
 pub struct OutputOptions {
     pub width: u32,
     pub height: u32,
@@ -177,8 +177,8 @@ impl Default for OutputOptions {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "format", derive(serde::Deserialize))]
-#[cfg_attr(feature = "format", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "io", derive(serde::Deserialize))]
+#[cfg_attr(feature = "io", serde(rename_all = "snake_case"))]
 pub enum Tonemap {
     /// Nada: o que passa de 1 é cortado canal por canal na gravação.
     #[default]

@@ -160,7 +160,7 @@ M3".
   depois **removido**: o modo de busca a mais atravessava a travessia e a força
   bruta por ~1% dos testes desta cena; ver
   `teoria/bvh.md#a-sombra-so-precisaria-de-um`
-- [x] toggle `RayTracingOptions.acceleration.enabled` (ligado/desligado) pra
+- [x] `RayTracingOptions.acceleration` com `BruteForce` ao lado das BVHs, pra
   comparar tempo de render — o exemplo `dois_modos` imprime os dois
 - [x] `RenderPass::RayCount` e `RenderPass::BvhHeatmap`
 
@@ -186,7 +186,7 @@ Decisões e o que ficou de fora em [design_api.md](design_api.md), seção
 - [x] usar equações de plano pra ray-tracing de cubo; adicionar uvs
 
 - [x] SAH (*Surface Area Heuristic*) com baldes na construção da BVH, ao lado da
-  mediana, escolhido por `AccelerationOptions.bvh_split`; na TLAS, o custo de uma
+  mediana, escolhido por `RayTracingOptions.acceleration`; na TLAS, o custo de uma
   malha é o custo esperado da BLAS dela — ver `teoria/bvh.md#construcao-pelo-sah`
 
 - [x] `OutputOptions { exposure, tonemap: None | Reinhard }`

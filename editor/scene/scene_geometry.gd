@@ -125,7 +125,7 @@ func sync_preview(scene: SceneRoot) -> void:
 		if scene != null and not scene.backface_cull else BaseMaterial3D.CULL_BACK)
 	_preview_material.no_depth_test = scene != null and not scene.depth_test
 	_preview_material.refraction_enabled = (material.transparency > 0.0
-		and (scene == null or scene.refractions))
+		and scene != null and scene.refractions)
 
 	const TEXTURE_FILTER := {
 		SceneRoot.TextureFilter.NEAREST: BaseMaterial3D.TEXTURE_FILTER_NEAREST,
