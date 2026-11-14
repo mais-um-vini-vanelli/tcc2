@@ -71,12 +71,12 @@ watch(
   () => {
     if (grafico) Plotly.react(grafico, props.data, merge(theme(), props.layout))
   },
-  { deep: true }
+  { deep: true, flush: 'post' }
 )
 
 watch(isDark, () => {
   if (grafico) Plotly.relayout(grafico, merge(theme(), props.layout))
-})
+}, { flush: 'post' })
 </script>
 
 <template>

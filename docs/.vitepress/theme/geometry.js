@@ -52,7 +52,7 @@ export class Vec2 {
 export const vec2 = (x, y) => new Vec2(x, y)
 
 export function xy(pontos) {
-    return { x: pontos.map((p) => p.x), y: pontos.map((p) => p.y) }
+    return { x: pontos.map((p) => p && p.x), y: pontos.map((p) => p && p.y) }
 }
 
 export function linha2d(pontos, extra) {

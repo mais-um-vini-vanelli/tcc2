@@ -202,10 +202,7 @@ frente do triângulo, mas a convenção é usar a ordem dos vértices (winding
 order): os vértices das faces de fora de um objeto são informados em ordem
 anti-horária e as faces de dentro (por consequência) em ordem horária.
 
-::: warning 🚧 TODO
-Cubo com as faces transparentes, triângulo ABC + normal em uma das faces, slider
-pra rotacionar.
-:::
+<TrianguloWinding />
 
 Se o triângulo é formado pelos pontos A, B e C, tenho dois jeitos de avançar
 partindo de A:

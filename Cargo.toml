@@ -20,7 +20,12 @@ image = { version = "0.25", optional = true, default-features = false, features 
 
 [dev-dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
+minifb = "0.29.0"
 
 [[example]]
-name = "texturas"
+name = "normal_maps"
+required-features = ["io"]
+
+[[example]]
+name = "viewer"
 required-features = ["io"]

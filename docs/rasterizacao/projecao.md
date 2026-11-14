@@ -8,18 +8,7 @@ modos de câmera.
 ### Perspectiva
 
 A área visível é um cone saindo da câmera, e abrindo mais conforme se afasta no
-eixo `z`:
-
-```text
-                              ┌── topo da tela
-                     ┌─────────┘
-            ┌─────────┘
-  câmera ●──┴───────────────────────── eixo de visão (centro da tela)
-            └─────────┐
-                     └─────────┐
-                              └── base da tela
-         z=1        z=3        z=6
-```
+eixo `z`.
 
 Perto da câmera cabe pouco mundo na tela; longe cabe muito. Objetos próximos
 ficam maiores, objetos distantes ficam menores (as coordenadas `x`, `y` dos

@@ -94,15 +94,7 @@ sempre vem com uma ordem colada no nome, e a daqui é a mesma do Blender.
 O ponto e a normal **não passam pelo mesmo transform**. Achatando um paralelepípedo pela metade em 
 `y`, e olhando pra uma das faces:
 
-```text
-   antes                        depois
-
-        ^ n                             ^ n
-       /                               /     
-     _/                              _/         
-   /                               /
-   ----                        ---------
-```
+<NormalEscalada />
 
 A superfície e a normal achataram e ficaram mais deitadas. Mas a normal é perpendicular à 
 superfície, e deitar a superfície deveria ter levantado a normal pra manter a perpendicularidade: os 
@@ -190,9 +182,7 @@ p(t)       = o + t d              # no mundo
 p_local(t) = T⁻¹(o) + t · T⁻¹(d)  # no espaço local, mesmo t
 ```
 
-::: warning 🚧 TODO Médio
-Colocar plot.
-:::
+<RaioEspacoLocal />
 
 ## A cadeia da árvore
 

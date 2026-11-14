@@ -116,9 +116,7 @@ O brilho difuso de uma superfície de lambert se espalha igualmente por todas as
 mas isso não quer dizer que ela devolve a mesma quantidade de luz de todos os ângulos de visão:
 um quadrado fixo da superfície tem tamanhos diferentes quando se olha de cima e de lado.
 
-::: warning 🚧 TODO
-Plot de uma esfera, um pedaço no plano e um slider pra controlar o ângulo.
-:::
+<AreaAparente />
 
 A lei do cosseno diz quanto chega . A BRDF `f` diz quanto da luz que chega (a irradiância `E`) sai 
 por cada direção (a radiância `L`). Em uma superfície de Lambert esse brilho é o mesmo em todas as direções:

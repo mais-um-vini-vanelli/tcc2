@@ -22,6 +22,13 @@ import ParalelepipedoDet from './ParalelepipedoDet.vue'
 import CameraInclinada from './CameraInclinada.vue'
 import ConeDoSpot from './ConeDoSpot.vue'
 import TelaVirtual from './TelaVirtual.vue'
+import BvhCena from './BvhCena.vue'
+import TrianguloWinding from './TrianguloWinding.vue'
+import RaioEspacoLocal from './RaioEspacoLocal.vue'
+import AreaAparente from './AreaAparente.vue'
+import NormalEscalada from './NormalEscalada.vue'
+import RaioDeSombra from './RaioDeSombra.vue'
+import NivelDoMipmap from './NivelDoMipmap.vue'
 
 import './style.css'
 
@@ -70,5 +77,12 @@ export default {
         app.component('CameraInclinada', CameraInclinada)
         app.component('ConeDoSpot', ConeDoSpot)
         app.component('TelaVirtual', TelaVirtual)
+        app.component('BvhCena', BvhCena)
+        app.component('TrianguloWinding', TrianguloWinding)
+        app.component('RaioEspacoLocal', RaioEspacoLocal)
+        app.component('AreaAparente', AreaAparente)
+        app.component('NormalEscalada', NormalEscalada)
+        app.component('RaioDeSombra', RaioDeSombra)
+        app.component('NivelDoMipmap', NivelDoMipmap)
     }
 }

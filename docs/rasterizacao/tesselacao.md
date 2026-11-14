@@ -59,10 +59,7 @@ normal = (r · cos φ,  cos θ,  r · sen φ)
 uv     = (v, u)
 ```
 
-::: warning 🚧 TODO Médio
-Trazer a visualização de `teoria/figuras/esfera_uv.html`: esfera 3d à esquerda, vista de cima e de lado à direita,
-com sliders.
-:::
+<EsferaPhi />
 
 ### Os vértices repetidos
 

@@ -66,10 +66,6 @@ tan(fov_h / 2) = width / z
 
 Então o deslocamento horizontal é `direita * (u * meia_altura * aspect)`.
 
-::: warning 🚧 TODO Médio
-Desenho 2D da tela virtual com (u, v) à esquerda, desenho 3D com a tela no espaço à direita.
-:::
-
 Somando os três deslocamentos — 1 unidade pra frente, o vertical e o horizontal
 — sai um único vetor apontando da câmera pro pixel: a direção do raio. A origem
 é a posição da câmera, igual pra todos os pixels.

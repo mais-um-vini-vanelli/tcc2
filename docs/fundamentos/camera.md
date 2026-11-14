@@ -37,11 +37,6 @@ serve aqui: `d · eixo = |d| * |eixo| * cos(θ)`, e como o eixo é normalizado
 formado por `d` e pela sua projeção naquele eixo. Ou seja, exatamente o quanto o
 ponto anda naquela direção.
 
-::: warning 🚧 TODO Médio
-World space à esquerda, camera space à direita, 1 ponto e 1 câmera nas cenas, um
-vetor apontando da câmera pro ponto, posições do ponto e da câmera editáveis.
-:::
-
 Fazendo isso pros três eixos, o resultado é o mesmo ponto descrito por outras
 três coordenadas: quanto ele está à direita, quanto acima e quanto à frente da
 câmera. A cena não mudou de forma — nenhuma distância entre pontos foi alterada,

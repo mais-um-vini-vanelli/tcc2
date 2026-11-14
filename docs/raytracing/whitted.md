@@ -79,17 +79,7 @@ apareceria nas duas parcelas, e uma delas teria que sair.
 
 O `V(p, luz)` da fórmula responde: **existe alguma coisa entre este ponto e esta luz?**
 
-```text
-             luz
-              o
-             /
-            /  <- o raio de sombra: origem no ponto, direção para a luz
-      #########
-          /
-         /          o cubo está no caminho: o ponto está na sombra
-        /  
-    ---p---------
-```
+<RaioDeSombra />
 
 A direção e o alcance dependem do tipo da luz:
 

@@ -30,9 +30,7 @@ para cada raio:
   -> se intercepta uma folha, faz o teste de interseção com a geometria
 ```
 
-::: warning 🚧 TODO Alto, estático
-Desenho de uma BVH.
-:::
+<BvhCena />
 
 ## As bounding boxes
 
