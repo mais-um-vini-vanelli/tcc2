@@ -97,11 +97,10 @@
 - Na hora de ler a textura é escolhido o nível de tamanho mais parecido com o do triângulo na tela: 
   - Calculamos quanto a uv anda quando o pixel anda um passo em x e um em y (a footprint da uv)
   - Os dois deslocamentos são convertidos para texels, e o nível escolhido é o log₂ do maior: aquele em que um texel tem +/- o tamanho de um pixel
-  - O rasterizador consegue calcular fácil o footprint comparando os uvs em pixels visinhos do triângulo; o ray tracer precisaria de outras formas de conseguir essa diferença, que não implementamos
+  - O rasterizador consegue calcular fácil o footprint comparando os uvs em pixels vizinhos do triângulo; o ray tracer precisaria de outras formas de conseguir essa diferença, que não implementamos
 
 ## Cor e saída
 
-- Aplicar a `exposure` para controlar o quão clara é a cena, como a exposição de uma câmera
 - Se habilitado, aplicar o `tonemap`
 - Converter a imagem para sRGB para converter os componentes de float para byte
 
@@ -169,15 +168,15 @@ da caixa AABB dele
 
 ## Formato `.tcc2`
 
+- Segue a mesma ideia do glb: um arquivo binário com um cabeçalho JSON + blob para as meshes e texturas
+- O cabeçalho JSON espelha o scene graph: objetos com seus campos, transform e objetos filhos
+- Listas de `meshes` e `images` no JSON, referenciando o blob por offset + length
+
 - Tentamos usar o .glb como formato para persistência, mas tinha alguns problemas:
   - As primitivas da nossa lib precisavam ir em extensions, mesma coisa pra `Parameters`
   - Tem uma estrutura mais complexa, com accessors, buffer views, surfaces, samplers, que precisava ser interpretada em Rust e na lib
   - Compatibilidade com o ecossistema glTF não é objetivo do trabalho, e usar o padrão glb indicava que os arquivos gerados podem ser lidos por editores que reconhecem o padrão
 - No final, um formato próprio e simplificado ficou melhor, com menos código pra gerar e interpretar e mais fácil de personalizar
-
-- Segue a mesma ideia do glb: um arquivo binário com um cabeçalho JSON + blob para as meshes e texturas
-- O cabeçalho JSON espelha o scene graph: objetos com seus campos, transform e objetos filhos
-- Listas de `meshes` e `images` no JSON, referenciando o blob por offset + length
 
 ---
 
@@ -193,17 +192,6 @@ da caixa AABB dele
 ---
 
 # Conclusão
-
-## Pré-projeto x projeto
-
-- Atendidos
-- Alterados
-- Adicionados
-
-- Requisitos atendidos: rasterização, ray tracing, objeto/câmera/luz, textura com mipmaps, Rust, núcleo sem dependência
-- Trocado: LBVH (Apetrei, 2014), um dos quatro correlatos, por BVH em dois níveis com SAH — o LBVH existe para construção paralela em GPU, e a lib é CPU em uma thread
-- Cresceu: metallic/roughness, normal mapping, spot, exposição e tonemap
-- Fora do escopo original: editor, formato próprio e documentação
 
 ## 23. Pré-projeto x projeto
 

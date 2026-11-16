@@ -249,24 +249,23 @@ impl Rasterizer {
 
             poligon = Self::sutherland_and_hodgman(&poligon, *plane);
             clipped = true;
-
-            if poligon.len() < 3 {
-                // Se todos os pontos do triângulo estão fora do plano.
-                break;
-            }
         }
 
         if clipped {
             stats.polygons_clipped += 1;
         }
 
-        let mut triangles = Vec::with_capacity(poligon.len() - 2);
+        if poligon.len() >= 3 {
+            let mut triangles = Vec::with_capacity(poligon.len() - 2);
 
-        for i in 1..poligon.len().saturating_sub(1) {
-            triangles.push([poligon[0], poligon[i], poligon[i + 1]]);
+            for i in 1..poligon.len() - 1 {
+                triangles.push([poligon[0], poligon[i], poligon[i + 1]]);
+            }
+
+            triangles
+        } else {
+            Vec::new()
         }
-
-        triangles
     }
 
     fn sutherland_and_hodgman(poligon: &[Vertex], plane: Plane) -> Vec<Vertex> {
