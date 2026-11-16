@@ -1,0 +1,32 @@
+name: examples
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release onde anexar o exemplos.zip, ex. v1.0.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  exemplos:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: cargo build --release --features io --examples
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download assets --pattern assets.zip
+          tar -xf assets.zip
+
+      - run: tar -a -c -f exemplos.zip examples/assets target/release/examples/*.exe
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload ${{ inputs.version }} exemplos.zip --clobber

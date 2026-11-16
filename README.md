@@ -16,24 +16,22 @@ partir do diretório atual.
 
 ### Docs
 
-Publicadas em `https://<projeto>.pages.dev`.
+Publicadas em `https://mais-um-vini-vanelli.github.io/tcc2/`.
 
 ### O pacote
 
 As cenas, as texturas e os exemplos já compilados não são versionados. Baixe
-`exemplos.zip` de `https://<dominio-r2>/exemplos.zip` e descompacte na raiz do
-repositório, que é onde os caminhos de dentro do zip se encaixam:
+`exemplos.zip` do release mais recente (aba *Releases*) e descompacte **na raiz do
+repositório**:
 
 ```powershell
 Expand-Archive exemplos.zip -DestinationPath .
 ```
 
-Aparecem `examples/assets/` e `target/release/examples/*.exe`.
-
 ### Editor
 
-Baixe `editor.zip`, descompacte em qualquer lugar e rode o `editor.exe`. Se a
-janela abrir preta, force o Vulkan:
+Baixe `editor.zip` do mesmo release, descompacte em qualquer lugar e rode o `editor.exe`.
+Se a janela abrir preta, force o Vulkan:
 
 ```powershell
 .\editor.exe --rendering-driver vulkan
@@ -112,49 +110,38 @@ cargo run --release --features io --example viewer -- --renderer raytracer
 ### Pré-requisitos
 
 - Rust estável (ver [Compilar e rodar a biblioteca localmente](#compilar-e-rodar-a-biblioteca-localmente)).
-- Node 18+, para as docs.
-- Godot 4.6 com os *export templates* da mesma versão
-  (Editor → Gerenciar Modelos de Exportação → Baixar e Instalar).
 
-### 1. Editor
+### 1. Assets (uma vez só)
 
-Compile a dll:
+As cenas e as texturas não são versionadas, e o workflow dos exemplos as pega de um release
+fixo na tag `assets`:
 
 ```powershell
-cargo build --release -p tcc2_godot
+tar -a -c -f assets.zip examples/assets
 ```
 
-Abra `editor/project.godot` e use Projeto → Exportar → Exportar Projeto, com o preset
-`Windows Desktop`.
-
-Confirme que a pasta tem `editor.exe`, `editor.pck` e `tcc2_godot.dll`.
+Crie o release na tag `assets` e anexe o zip. Depois, trocar cena ou textura é substituir
+esse arquivo.
 
 ### 2. Docs
 
-Da raiz do repositório:
+`.github/workflows/docs.yml` compila e publica no Pages. Rode em *Actions → docs → Run
+workflow*.
 
-```powershell
-npm run build --prefix docs
-```
+### 3. O release
 
-O site estático sai em `docs/.vitepress/dist`.
+Crie o release da versão no GitHub, com a tag (`v1.0.0`) e as notas: os dois workflows
+abaixo só anexam arquivos nele, nenhum cria tag.
 
-### 3. Pacote dos exemplos
+### 4. Exemplos
 
-Compile os exemplos:
+`.github/workflows/examples.yml` compila no Windows, baixa os assets, e anexa o
+`exemplos.zip` no release. Rode em *Actions → examples → Run workflow* e informe a versão.
 
-```powershell
-cargo build --release --features io --examples
-```
+### 5. Editor
 
-Gerar exemplo.zip com os arquivos não versionados:
+`.github/workflows/editor.yml` compila a dll, exporta com o preset `Windows Desktop` e
+anexa o `editor.zip` no mesmo release. Rode em *Actions → editor → Run workflow*.
 
-```powershell
-tar -a -c -f exemplos.zip examples/assets target/release/examples/*.exe
-```
-
-### 4. Upload
-
-- `docs/.vitepress/dist` → Cloudflare Pages, *Create project* → *Direct upload*: arraste a
-  pasta (nas atualizações, arraste de novo).
-- `exemplos.zip` e `editor.zip` → bucket do R2, com *Public Development URL* habilitada.
+Na primeira rodada ele baixa os *export templates* (~1,3 GB) e demora bem mais que os
+outros; depois eles vêm do cache, até a versão do Godot mudar.

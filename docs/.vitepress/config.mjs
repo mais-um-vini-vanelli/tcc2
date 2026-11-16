@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
+  base: process.env.GITHUB_ACTIONS ? '/tcc2/' : '/',
+
   lang: 'pt-BR',
   title: 'TCC2',
   description: 'Rasterização e ray tracing em Rust, com a teoria de cada estágio',

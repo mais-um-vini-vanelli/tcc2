@@ -1,0 +1,59 @@
+name: editor
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release onde anexar o editor.zip, ex. v1.0.0'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  GODOT: 4.6-stable
+
+jobs:
+  editor:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: cargo build --release -p tcc2_godot
+
+      - run: |
+          $url = "https://github.com/godotengine/godot/releases/download/$env:GODOT"
+          curl -L -f -o godot.zip "$url/Godot_v${env:GODOT}_win64.exe.zip"
+          tar -xf godot.zip
+
+      - id: templates
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Roaming/Godot/export_templates
+          key: godot-templates-${{ env.GODOT }}
+
+      - if: steps.templates.outputs.cache-hit != 'true'
+        run: |
+          $url = "https://github.com/godotengine/godot/releases/download/$env:GODOT"
+          curl -L -f -o templates.tpz "$url/Godot_v${env:GODOT}_export_templates.tpz"
+          tar -xf templates.tpz
+          $dir = "$env:APPDATA\Godot\export_templates\$($env:GODOT -replace '-', '.')"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Move-Item templates\* $dir
+          Get-ChildItem $dir -Exclude 'windows_*', 'version.txt' | Remove-Item -Recurse -Force
+
+      # A primeira importação é a que registra a GDExtension; as classes do `main.tscn` só
+      # resolvem na segunda.
+      - run: |
+          $godot = ".\Godot_v${env:GODOT}_win64.exe"
+          New-Item -ItemType Directory -Force build | Out-Null
+          & $godot --headless --import --path editor
+          & $godot --headless --import --path editor
+          & $godot --headless --path editor --export-release "Windows Desktop" "$env:GITHUB_WORKSPACE\build\editor.exe"
+
+      - run: tar -a -c -f "$env:GITHUB_WORKSPACE\editor.zip" -C build editor.exe editor.pck tcc2_godot.dll
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload ${{ inputs.version }} editor.zip --clobber
