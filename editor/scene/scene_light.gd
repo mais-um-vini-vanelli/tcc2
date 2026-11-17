@@ -84,7 +84,7 @@ func _init() -> void:
 func _ready() -> void:
 	super()
 
-	_icon = _add_icon(preload("res://icons/Light.svg"))
+	_icon = _add_icon(preload("res://icons/light.svg"))
 
 	_gizmo = MeshInstance3D.new()
 	_gizmo.layers = ICONS_LAYER
