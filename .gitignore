@@ -3,14 +3,7 @@
 /examples/assets
 /examples/renders
 
-/editor/.godot/*
-!/editor/.godot/imported/
-/editor/.godot/imported/*
-!/editor/.godot/imported/*.fontdata
-!/editor/.godot/imported/*.ttf-*.md5
-!/editor/.godot/uid_cache.bin
-!/editor/.godot/global_script_class_cache.cfg
-!/editor/.godot/extension_list.cfg
+/editor/.godot
 
 /docs/node_modules
 /docs/.vitepress/dist
