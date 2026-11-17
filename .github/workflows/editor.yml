@@ -43,12 +43,9 @@ jobs:
           Move-Item templates\* $dir
           Get-ChildItem $dir -Exclude 'windows_*', 'version.txt' | Remove-Item -Recurse -Force
 
-      # A primeira importação é a que registra a GDExtension; as classes do `main.tscn` só
-      # resolvem na segunda.
       - run: |
           $godot = ".\Godot_v${env:GODOT}_win64.exe"
           New-Item -ItemType Directory -Force build | Out-Null
-          & $godot --headless --import --path editor
           & $godot --headless --import --path editor
           & $godot --headless --path editor --export-release "Windows Desktop" "$env:GITHUB_WORKSPACE\build\editor.exe"
 
