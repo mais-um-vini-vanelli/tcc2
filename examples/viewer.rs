@@ -8,8 +8,7 @@ use minifb::{Key, Window, WindowOptions};
 use tcc2::io::Reader;
 use tcc2::prelude::*;
 
-const DEFAULT_SCENE: &str = "examples/assets/Scene.tcc2";
-const USAGE: &str = "usage: viewer [scene.tcc2] [--renderer rasterizer|raytracer]";
+const USAGE: &str = "usage: viewer <scene.tcc2> [--renderer rasterizer|raytracer]";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut path = None;
@@ -28,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let path = path.unwrap_or(DEFAULT_SCENE.into());
+    let path: String = path.ok_or(USAGE)?;
     let bytes = fs::read(&path).map_err(|err| format!("{path}: {err}"))?;
     let (scene, params) = Reader::read(&bytes)?;
 

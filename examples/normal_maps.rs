@@ -5,14 +5,14 @@ use std::sync::Arc;
 
 use tcc2::prelude::*;
 
-const BRICK: &str = "examples/assets/BrickWall/1K/Poliigon_BrickWallReclaimed_8320";
-const BARK: &str = "examples/assets/Bark/BarkPoplar001";
+const BRICK: &str = "examples/assets/textures/BrickWall/BrickWall";
+const BARK: &str = "examples/assets/textures/TreeWood/TreeWood";
 const WET: f32 = 0.45;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let brick = Material {
         albedo: Channel::Map(Arc::new(Texture::open(
-            format!("{BRICK}_BaseColor.jpg"),
+            format!("{BRICK}_Albedo.jpg"),
             Encoding::Srgb,
         )?)),
         roughness: Channel::Map(Arc::new(
@@ -28,16 +28,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let bark = Material {
         albedo: Channel::Map(Arc::new(Texture::open(
-            format!("{BARK}_COL_1K.jpg"),
+            format!("{BARK}_Albedo.jpg"),
             Encoding::Srgb,
         )?)),
-        // O conjunto da casca traz glossiness, que é a roughness invertida.
         roughness: Channel::Map(Arc::new(
-            Texture::open(format!("{BARK}_GLOSS_1K.jpg"), Encoding::Linear)?
-                .map_texels(|c| (Rgb::WHITE - c) * WET),
+            Texture::open(format!("{BARK}_Roughness.png"), Encoding::Linear)?
+                .map_texels(|c| c * WET),
         )),
         normal: Some(Arc::new(Texture::open(
-            format!("{BARK}_NRM_1K.jpg"),
+            format!("{BARK}_Normal.jpg"),
             Encoding::Linear,
         )?)),
         ..Material::default()
