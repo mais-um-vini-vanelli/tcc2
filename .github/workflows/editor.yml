@@ -51,6 +51,10 @@ jobs:
           New-Item -ItemType Directory -Force build | Out-Null
           & $godot --headless --import --path editor
           & $godot --headless --path editor --export-release "Windows Desktop" "$env:GITHUB_WORKSPACE\build\editor.exe"
+          Write-Host "exit do export: $LASTEXITCODE"
+
+      # Temporário: achar onde o export escreveu.
+      - run: Get-ChildItem . -Recurse -Include editor.exe, editor.pck, editor.zip, tcc2_godot.dll | Select-Object -ExpandProperty FullName
 
       - run: tar -a -c -f "$env:GITHUB_WORKSPACE\editor.zip" -C build editor.exe editor.pck tcc2_godot.dll
 
