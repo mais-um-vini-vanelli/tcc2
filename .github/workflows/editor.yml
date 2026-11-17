@@ -46,15 +46,13 @@ jobs:
           Move-Item templates\* $dir
           Get-ChildItem $dir -Exclude 'windows_*', 'version.txt' | Remove-Item -Recurse -Force
 
+      # O `_console.exe` é o mesmo editor, mas de subsistema console: o `Godot_..._win64.exe`
+      # é GUI e o PowerShell não espera ele terminar, então o passo acabava antes do export.
       - run: |
-          $godot = ".\Godot_v${env:GODOT}_win64.exe"
+          $godot = ".\Godot_v${env:GODOT}_win64_console.exe"
           New-Item -ItemType Directory -Force build | Out-Null
           & $godot --headless --import --path editor
           & $godot --headless --path editor --export-release "Windows Desktop" "$env:GITHUB_WORKSPACE\build\editor.exe"
-          Write-Host "exit do export: $LASTEXITCODE"
-
-      # Temporário: achar onde o export escreveu.
-      - run: Get-ChildItem . -Recurse -Include editor.exe, editor.pck, editor.zip, tcc2_godot.dll | Select-Object -ExpandProperty FullName
 
       - run: tar -a -c -f "$env:GITHUB_WORKSPACE\editor.zip" -C build editor.exe editor.pck tcc2_godot.dll
 
